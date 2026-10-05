@@ -1,0 +1,47 @@
+---
+# roles/geopos_validation/tasks/java_processes.yml
+# Valida 0..N procesos Java de GeoPOS mediante un patrón específico por
+# componente (nunca "java" a secas), evitando falsos positivos.
+
+- name: Registrar categoría "java_processes" deshabilitada
+  ansible.builtin.set_fact:
+    _geopos_category_java_processes:
+      enabled: false
+      items: []
+      category_status: NOT_CHECKED
+  when: not (geopos_validation.java_processes.enabled | default(false))
+
+- name: Buscar procesos Java de GeoPOS mediante patrón específico (pgrep -f)
+  ansible.builtin.command:
+    cmd: "pgrep -f -c -- '{{ item.match }}'"
+  register: _geopos_java_raw
+  loop: "{{ geopos_validation.java_processes['items'] | default([]) }}"
+  loop_control:
+    label: "{{ item.name }}"
+  changed_when: false
+  failed_when: false
+  when: geopos_validation.java_processes.enabled | default(false)
+
+- name: Consolidar resultados de la categoría "java_processes"
+  ansible.builtin.set_fact:
+    _geopos_category_java_processes:
+      enabled: true
+      items: "{{ _java_items }}"
+      category_status: >-
+        {{
+          'OK' if (geopos_validation.java_processes['items'] | default([])) | length == 0
+          else ('FAILED' if (_java_items | selectattr('status', 'equalto', 'FAILED') | list | length > 0)
+          else ('WARNING' if (_java_items | selectattr('status', 'equalto', 'WARNING') | list | length > 0)
+          else 'OK'))
+        }}
+  vars:
+    _java_items: |-
+      {% set result = [] %}
+      {% for res in _geopos_java_raw.results | default([]) %}
+      {% set match_count = (res.stdout | default('0')) | int %}
+      {% set is_critical = res.item.critical | default(true) %}
+      {% set item_status = 'OK' if match_count > 0 else ('FAILED' if is_critical else 'WARNING') %}
+      {% set _ = result.append({'name': res.item.name, 'critical': is_critical, 'match_count': match_count, 'pattern': res.item.match, 'status': item_status}) %}
+      {% endfor %}
+      {{ result }}
+  when: geopos_validation.java_processes.enabled | default(false)

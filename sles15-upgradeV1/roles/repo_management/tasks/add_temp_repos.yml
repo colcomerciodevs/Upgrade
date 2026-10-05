@@ -1,0 +1,99 @@
+---
+# roles/repo_management/tasks/add_temp_repos.yml
+#
+# Agrega repositorios Foreman/Katello temporales para UNA fase de la
+# migración (origen -> updatestack, o destino -> dup) y refresca metadata.
+# Se llama dos veces por etapa con vars distintas; acumula en la lista
+# `repos_temporary_created` (debe inicializarse en [] al comenzar la etapa).
+#
+# Vars requeridas:
+#   repo_management_phase_sp           : "sp5"|"sp6"|"sp7" (SP que representan estos repos)
+#   repo_management_alias_suffix       : "src" (origen/updatestack) | "dst" (destino/dup)
+#   repo_management_phase_repositories : lista [{name, url}, ...] de katello.*
+#   repo_management_phase_releasever   : "" | "15-SP7" (solo aplica al refresh de esta fase)
+
+- name: "Validar que hay repositorios Foreman/Katello configurados para la fase {{ repo_management_alias_suffix }}"
+  ansible.builtin.assert:
+    that:
+      - (repo_management_phase_repositories | default([])) | length > 0
+    fail_msg: >-
+      No hay repositorios definidos en katello.{{ repo_management_phase_sp }}_repositories.
+      Complete este dato real (CHANGE_ME) antes de ejecutar una migración real.
+    success_msg: "Repositorios Foreman/Katello definidos para {{ repo_management_phase_sp }} ({{ repo_management_alias_suffix }}): {{ repo_management_phase_repositories | length }}"
+
+- name: "Asegurar que la CA interna esté instalada antes de usar repos Foreman reales ({{ repo_management_alias_suffix }})"
+  ansible.builtin.include_tasks: ensure_ca_trusted.yml
+
+- name: Calcular alias de los repositorios temporales de esta fase
+  ansible.builtin.set_fact:
+    _phase_temp_aliases: |-
+      {% set result = [] %}
+      {% for idx in range(0, repo_management_phase_repositories | length) %}
+      {% set _ = result.append(temporary_repo_prefix ~ repo_management_phase_sp ~ '-' ~ repo_management_alias_suffix ~ '-' ~ '%02d' | format(idx + 1)) %}
+      {% endfor %}
+      {{ result }}
+
+- name: "Agregar repositorios temporales Foreman/Katello ({{ repo_management_alias_suffix }})"
+  # EVIDENCIA PARCIAL: si el repo N falla, los repos 1..N-1 ya agregados
+  # deben quedar registrados en repos_temporary_created de todos modos. El
+  # loop nunca aborta a mitad de camino (failed_when: false); el fallo se
+  # reporta explícitamente DESPUÉS de consolidar la evidencia real.
+  ansible.builtin.command:
+    cmd: >-
+      zypper --non-interactive addrepo -f -n "{{ item.name }}"
+      "{{ item.url }}"
+      "{{ _phase_temp_aliases[idx] }}"
+  loop: "{{ repo_management_phase_repositories }}"
+  loop_control:
+    index_var: idx
+    label: "{{ item.name }}"
+  become: true
+  register: _addrepo_result
+  changed_when: true
+  failed_when: false
+
+- name: Registrar los alias EFECTIVAMENTE creados y los que fallaron en esta fase (según rc real)
+  ansible.builtin.set_fact:
+    _phase_created_aliases: |-
+      {% set result = [] %}
+      {% for pair in _phase_temp_aliases | zip(_addrepo_result.results) %}
+      {% if pair[1].rc | default(1) == 0 %}{% set _ = result.append(pair[0]) %}{% endif %}
+      {% endfor %}
+      {{ result }}
+    _phase_failed_aliases: |-
+      {% set result = [] %}
+      {% for pair in _phase_temp_aliases | zip(_addrepo_result.results) %}
+      {% if pair[1].rc | default(1) != 0 %}{% set _ = result.append(pair[0]) %}{% endif %}
+      {% endfor %}
+      {{ result }}
+
+- name: Registrar en el acumulado de la etapa los alias temporales que SÍ se crearon
+  ansible.builtin.set_fact:
+    repos_temporary_created: "{{ repos_temporary_created + _phase_created_aliases }}"
+
+- name: "Fallar explícitamente si algún repositorio temporal no pudo agregarse en esta fase {{ repo_management_alias_suffix }}"
+  ansible.builtin.fail:
+    msg: >-
+      No se pudieron agregar los siguientes repositorios temporales:
+      {{ _phase_failed_aliases | join(', ') }}. Los que sí se agregaron
+      correctamente antes del fallo quedaron registrados:
+      {{ _phase_created_aliases | join(', ') or 'ninguno' }}.
+  when: _phase_failed_aliases | length > 0
+
+- name: "Refrescar ÚNICAMENTE los alias temporales Foreman de esta fase (con --releasever si aplica)"
+  # Explícitamente SIN "-s"/"--services": este proyecto no usa servicios de
+  # Zypper para descubrir repositorios, y "-s" refresca TODOS los servicios
+  # del sistema (pudiendo introducir repos ajenos al conjunto controlado).
+  # Se listan los alias exactos recién creados para que el refresh no
+  # alcance a ningún otro repositorio (ni siquiera otros ya deshabilitados).
+  ansible.builtin.command:
+    argv: >-
+      {{
+        ['zypper', '--non-interactive']
+        + (['--releasever=' ~ repo_management_phase_releasever] if (repo_management_phase_releasever | default('')) | length > 0 else [])
+        + ['refresh', '-f']
+        + _phase_created_aliases
+      }}
+  become: true
+  register: repo_refresh_result
+  changed_when: true

@@ -1,0 +1,86 @@
+---
+# roles/precheck/tasks/sp_version.yml
+#
+# Determina el Service Pack actual (cruzando /etc/os-release y evidencia
+# de Zypper), calcula cuál es la etapa objetivo efectiva y valida que el
+# sistema esté en el Service Pack de origen correcto para esa etapa.
+# Referencia: CLAUDE.md exige fallar explícitamente si continuar no es
+# seguro; aquí se aplica a la secuencia obligatoria SP4 -> SP5 -> SP6 -> SP7
+# (SP4 -> SP5 es una etapa independiente, no se encadena dentro de "full").
+#
+# NOTA: este archivo solo se incluye cuando roles/precheck/tasks/main.yml
+# ya confirmó ansible_facts['distribution'] == 'SLES' (gate de seguridad
+# de sistema operativo); por eso no repite esa verificación aquí.
+
+- name: Capturar fotografía de estado actual (pre-etapa)
+  ansible.builtin.include_tasks: capture_state.yml
+
+- name: Conservar la fotografía "antes" explícitamente (nunca se sobrescribe)
+  ansible.builtin.set_fact:
+    system_state_snapshot_before: "{{ system_state_snapshot }}"
+
+- name: Calcular etapa objetivo efectiva (siguiente SP tras el actual, si no se especificó una)
+  ansible.builtin.set_fact:
+    precheck_effective_target_sp: >-
+      {{
+        precheck_target_sp
+        if (precheck_target_sp is defined and precheck_target_sp | length > 0)
+        else {'sp4': 'sp5', 'sp5': 'sp6', 'sp6': 'sp7'}.get(system_state_snapshot_before.current_sp_id, '')
+      }}
+
+- name: Calcular Service Pack de origen esperado para la etapa objetivo
+  ansible.builtin.set_fact:
+    precheck_expected_current_sp: "{{ {'sp5': 'sp4', 'sp6': 'sp5', 'sp7': 'sp6'}.get(precheck_effective_target_sp, '') }}"
+
+- name: Calcular detalle de información básica del sistema
+  ansible.builtin.set_fact:
+    _system_info_detail: >-
+      host={{ system_state_snapshot_before.hostname }}
+      arch={{ system_state_snapshot_before.architecture }}
+      kernel={{ system_state_snapshot_before.kernel }}
+      uptime_s={{ system_state_snapshot_before.uptime_seconds }}
+
+- name: Registrar arquitectura, hostname, kernel y uptime (informativo)
+  ansible.builtin.set_fact:
+    precheck_checks: "{{ precheck_checks + [{'name': 'informacion_sistema', 'status': 'OK', 'detail': _system_info_detail}] }}"
+
+- name: Validar que el Service Pack actual coincide con el esperado para esta etapa
+  ansible.builtin.set_fact:
+    precheck_checks: "{{ precheck_checks + [{'name': 'service_pack_actual', 'status': (
+        'NOT_CHECKED' if precheck_expected_current_sp == ''
+        else ('OK' if system_state_snapshot_before.current_sp_id == precheck_expected_current_sp else 'FAILED')
+      ), 'detail': 'actual=' ~ system_state_snapshot_before.current_sp_id ~ ' esperado=' ~ (precheck_expected_current_sp if precheck_expected_current_sp != '' else 'N/A (sin etapa objetivo determinada)') ~ ' objetivo=' ~ (precheck_effective_target_sp if precheck_effective_target_sp != '' else 'N/A')}] }}"
+
+- name: Validar consistencia entre /etc/os-release y la evidencia de Zypper (segunda fuente)
+  ansible.builtin.set_fact:
+    precheck_checks: "{{ precheck_checks + [{'name': 'service_pack_doble_evidencia', 'status': (
+        'NOT_CHECKED' if system_state_snapshot_before.zypper_sles_version == 'NOT_CHECKED'
+        else ('OK' if system_state_snapshot_before.sp_cross_check_consistent else 'WARNING')
+      ), 'detail': 'os-release VERSION_ID=' ~ system_state_snapshot_before.os_release_version_id ~ ' / zypper products version=' ~ system_state_snapshot_before.zypper_sles_version}] }}"
+
+- name: Verificar conectividad Ansible/SSH (informativo; ya validada por gather_facts)
+  ansible.builtin.set_fact:
+    precheck_checks: "{{ precheck_checks + [{'name': 'conectividad_ansible', 'status': 'OK', 'detail': 'gather_facts exitoso'}] }}"
+
+- name: Verificar privilegios de escalamiento (become/sudo)
+  ansible.builtin.command:
+    cmd: whoami
+  become: true
+  register: _whoami_result
+  changed_when: false
+  failed_when: false
+
+- name: Registrar resultado de verificación de privilegios
+  ansible.builtin.set_fact:
+    precheck_checks: "{{ precheck_checks + [{'name': 'privilegios_escalamiento', 'status': ('OK' if _whoami_result.stdout | default('') == 'root' else 'FAILED'), 'detail': 'usuario efectivo=' ~ (_whoami_result.stdout | default('desconocido'))}] }}"
+
+- name: Verificar disponibilidad de Zypper
+  ansible.builtin.command:
+    cmd: which zypper
+  register: _zypper_which
+  changed_when: false
+  failed_when: false
+
+- name: Registrar disponibilidad de Zypper
+  ansible.builtin.set_fact:
+    precheck_checks: "{{ precheck_checks + [{'name': 'disponibilidad_zypper', 'status': ('OK' if _zypper_which.rc == 0 else 'FAILED'), 'detail': _zypper_which.stdout | default('zypper no encontrado')}] }}"

@@ -1,0 +1,391 @@
+---
+# playbooks/tasks/run_stage.yml
+#
+# Ejecuta UNA etapa completa de migración de Service Pack:
+#
+#   precheck
+#   -> confirm_production_upgrade (assert, ANTES de tocar nada)
+#   -> backup + inventario (repos_enabled_before / repos_disabled_before)
+#   -> deshabilitar preexistentes que estaban enabled (repos_disabled_by_upgrade)
+#   -> agregar Foreman ORIGEN temporal (alias "-src-")
+#   -> zypper patch --updatestack-only (SOLO con los repos Foreman de origen)
+#   -> retirar Foreman ORIGEN temporal
+#   -> agregar Foreman DESTINO temporal (alias "-dst-")
+#   -> dup -D (gate obligatorio) -> dup real -> reboot (obligatorio)
+#   -> validar (SP por doble evidencia, servicios críticos, GeoPOS)
+#   -> retirar Foreman DESTINO temporal (solo si la etapa fue exitosa)
+#   -> inventario final (repos_enabled_after)
+#
+# Ningún repositorio preexistente del servidor participa en updatestack ni
+# en dup: todo lo que estaba habilitado se deshabilita antes de migrar y
+# nunca se reactiva automáticamente.
+#
+# Vars requeridas: stage_current_sp, stage_target_sp, stage_releasever
+
+- name: "Inicializar estado de la etapa de migración {{ stage_target_sp }}"
+  ansible.builtin.set_fact:
+    _stage_started_at: "{{ lookup('pipe', 'date -u +%Y-%m-%dT%H:%M:%SZ') }}"
+    stage_status: "OK"
+    stage_failure_reason: ""
+    stage_validated: false
+    repos_enabled_before: []
+    repos_disabled_before: []
+    repos_disabled_by_upgrade: []
+    repos_temporary_created: []
+    repos_temporary_removed: []
+    repos_enabled_after: []
+    stage_migration_info: {}
+    stage_reboot_info: {}
+    sp_migration_dup_applied: false
+    sp_migration_reboot_completed: false
+    sp_migration_reconnected: false
+    system_state_snapshot_after: {}
+    critical_services_after: []
+    geopos_validation_after:
+      enabled: false
+      overall_status: NOT_CHECKED
+      critical_unhealthy: false
+      categories: {}
+
+- name: "Ejecutar precheck de la etapa {{ stage_target_sp }}"
+  ansible.builtin.include_role:
+    name: precheck
+  vars:
+    precheck_target_sp: "{{ stage_target_sp }}"
+
+- name: "Aplicar resultado del precheck al estado de la etapa {{ stage_target_sp }}"
+  ansible.builtin.set_fact:
+    stage_status: "{{ precheck_result.overall_status }}"
+    stage_failure_reason: "{{ 'precheck' if precheck_result.overall_status == 'FAILED' else '' }}"
+
+- name: "Preparar repos y migrar si el precheck no bloqueó la etapa {{ stage_target_sp }}"
+  when: stage_status != 'FAILED'
+  block:
+
+    - name: "Exigir confirmación explícita ANTES de tocar cualquier repositorio o paquete"
+      block:
+        - name: Verificar confirm_production_upgrade
+          ansible.builtin.assert:
+            that:
+              - confirm_production_upgrade | default(false)
+            fail_msg: >-
+              confirm_production_upgrade=false: no se ejecutará ningún cambio real.
+              Actívelo explícitamente (por ejemplo desde el Survey de AWX) para
+              autorizar una migración real en producción. No se modificó nada.
+            success_msg: "confirm_production_upgrade=true: autorizado para modificar el sistema"
+      rescue:
+        - name: Marcar la etapa como fallida por falta de confirmación
+          ansible.builtin.set_fact:
+            stage_status: "FAILED"
+            stage_failure_reason: "confirmacion_produccion: confirm_production_upgrade no está en true"
+
+    - name: "Respaldar, deshabilitar preexistentes y migrar con repos Foreman aislados"
+      when: stage_status != 'FAILED'
+      block:
+        - name: Respaldar e inventariar repositorios (enabled/disabled) antes de modificar nada
+          ansible.builtin.include_role:
+            name: repo_management
+            tasks_from: backup.yml
+          vars:
+            repo_management_target_sp: "{{ stage_target_sp }}"
+
+        - name: Deshabilitar únicamente los repositorios preexistentes que estaban habilitados
+          ansible.builtin.include_role:
+            name: repo_management
+            tasks_from: disable_preexisting.yml
+
+        - name: "Gate de seguridad: confirmar que ningún repositorio quedó habilitado tras deshabilitar preexistentes"
+          ansible.builtin.include_role:
+            name: repo_management
+            tasks_from: assert_enabled_repos.yml
+          vars:
+            repo_management_assert_expected_enabled_repos: []
+            repo_management_assert_context_label: "tras deshabilitar preexistentes"
+
+        - name: Seleccionar repos Foreman de origen y destino de esta etapa
+          ansible.builtin.set_fact:
+            _stage_origin_repositories: "{{ katello[stage_current_sp ~ '_repositories'] }}"
+            _stage_dest_repositories: "{{ katello[stage_target_sp ~ '_repositories'] }}"
+
+        - name: Agregar repos Foreman de ORIGEN (para updatestack)
+          ansible.builtin.include_role:
+            name: repo_management
+            tasks_from: add_temp_repos.yml
+          vars:
+            repo_management_phase_sp: "{{ stage_current_sp }}"
+            repo_management_alias_suffix: "src"
+            repo_management_phase_repositories: "{{ _stage_origin_repositories }}"
+            repo_management_phase_releasever: ""
+
+        - name: "Gate de seguridad: confirmar que lo habilitado es exactamente el Foreman de origen"
+          ansible.builtin.include_role:
+            name: repo_management
+            tasks_from: assert_enabled_repos.yml
+          vars:
+            repo_management_assert_expected_enabled_repos: "{{ _phase_created_aliases }}"
+            repo_management_assert_context_label: "tras agregar Foreman origen"
+
+        - name: Actualizar la pila de gestión de paquetes con los repos Foreman de origen
+          ansible.builtin.include_role:
+            name: sp_migration
+            tasks_from: updatestack.yml
+
+        - name: Retirar los repos Foreman de ORIGEN (ya cumplieron su función)
+          ansible.builtin.include_role:
+            name: repo_management
+            tasks_from: cleanup.yml
+          vars:
+            repo_management_cleanup_prefix: "{{ temporary_repo_prefix }}{{ stage_current_sp }}-src-"
+
+        - name: "Gate de seguridad: confirmar que ningún repositorio quedó habilitado tras retirar Foreman origen"
+          ansible.builtin.include_role:
+            name: repo_management
+            tasks_from: assert_enabled_repos.yml
+          vars:
+            repo_management_assert_expected_enabled_repos: []
+            repo_management_assert_context_label: "tras retirar Foreman origen"
+
+        - name: Agregar repos Foreman de DESTINO (para dup)
+          ansible.builtin.include_role:
+            name: repo_management
+            tasks_from: add_temp_repos.yml
+          vars:
+            repo_management_phase_sp: "{{ stage_target_sp }}"
+            repo_management_alias_suffix: "dst"
+            repo_management_phase_repositories: "{{ _stage_dest_repositories }}"
+            repo_management_phase_releasever: "{{ stage_releasever }}"
+
+        - name: "Gate de seguridad: confirmar que lo habilitado es exactamente el Foreman de destino, antes de dup -D"
+          ansible.builtin.include_role:
+            name: repo_management
+            tasks_from: assert_enabled_repos.yml
+          vars:
+            repo_management_assert_expected_enabled_repos: "{{ _phase_created_aliases }}"
+            repo_management_assert_context_label: "tras agregar Foreman destino, antes de dup -D"
+
+        - name: Ejecutar dup -D (gate), dup real y reinicio obligatorio
+          ansible.builtin.include_role:
+            name: sp_migration
+          vars:
+            sp_migration_current_sp: "{{ stage_current_sp }}"
+            sp_migration_target_sp: "{{ stage_target_sp }}"
+            sp_migration_releasever: "{{ stage_releasever }}"
+
+        - name: Registrar información de la migración y el reinicio
+          ansible.builtin.set_fact:
+            stage_migration_info:
+              dup_applied: "{{ sp_migration_dup_applied | default(false) }}"
+              dry_run_gate_output: "{{ sp_migration_dry_run_output | default('') }}"
+              output_summary: "{{ sp_migration_dup_output | default('') }}"
+              orphaned_packages: "{{ sp_migration_orphaned_packages.stdout | default('') }}"
+            stage_reboot_info:
+              completed: "{{ sp_migration_reboot_completed | default(false) }}"
+              reconnected: "{{ sp_migration_reconnected | default(false) }}"
+      rescue:
+        - name: Marcar la etapa como fallida en la preparación/migración
+          ansible.builtin.set_fact:
+            stage_status: "FAILED"
+            stage_failure_reason: "migracion: {{ ansible_failed_result.msg | default('error al preparar repositorios o migrar') }}"
+
+    - name: "Marcar la etapa como fallida si el dup se aplicó pero el reinicio/reconexión falló"
+      ansible.builtin.set_fact:
+        stage_status: "FAILED"
+        stage_failure_reason: "reboot_fallido: dup_applied={{ sp_migration_dup_applied | default(false) }}, reboot_completed=false"
+      when:
+        - stage_status != 'FAILED'
+        - sp_migration_dup_applied | default(false)
+        - not (sp_migration_reboot_completed | default(false))
+
+    - name: "Validar sistema tras el reinicio (solo si dup se aplicó y el reinicio se completó)"
+      when:
+        - stage_status != 'FAILED'
+        - sp_migration_dup_applied | default(false)
+        - sp_migration_reboot_completed | default(false)
+      block:
+        - name: Releer hechos del sistema tras el reinicio
+          ansible.builtin.setup: {}
+
+        - name: Capturar fotografía del sistema post-migración
+          ansible.builtin.include_role:
+            name: precheck
+            tasks_from: capture_state.yml
+
+        - name: Conservar la fotografía "después" explícitamente (nunca se sobrescribe la de "antes")
+          ansible.builtin.set_fact:
+            system_state_snapshot_after: "{{ system_state_snapshot }}"
+
+        - name: Verificar servicios críticos tras la migración
+          ansible.builtin.include_role:
+            name: precheck
+            tasks_from: critical_services.yml
+
+        - name: Conservar servicios críticos "después"
+          ansible.builtin.set_fact:
+            critical_services_after: "{{ critical_services_status }}"
+
+        - name: Validar GeoPOS tras la migración
+          ansible.builtin.include_role:
+            name: geopos_validation
+          vars:
+            geopos_validation_phase: after
+
+        - name: Conservar validación GeoPOS "después"
+          ansible.builtin.set_fact:
+            geopos_validation_after: "{{ geopos_validation_result }}"
+
+        - name: Verificar el Service Pack alcanzado por DOBLE EVIDENCIA (os-release + zypper products)
+          # Las tres condiciones son obligatorias para dar por bueno el SP
+          # alcanzado — nunca basta con /etc/os-release solo:
+          #   1. os-release reporta el SP objetivo;
+          #   2. hay evidencia de zypper products disponible (el parser la
+          #      reconoció); si NO la hay, se trata como FAILED en vez de
+          #      continuar automáticamente solo con os-release — así, si el
+          #      formato real de un SLES de laboratorio no coincide con lo
+          #      esperado, queda evidencia clara para corregirlo en vez de
+          #      dejar pasar la migración sin la segunda fuente;
+          #   3. ambas evidencias son consistentes entre sí.
+          ansible.builtin.set_fact:
+            _sp_os_release_ok: "{{ system_state_snapshot_after.current_sp_id == stage_target_sp }}"
+            _sp_zypper_evidence_available: "{{ system_state_snapshot_after.zypper_sles_version != 'NOT_CHECKED' }}"
+            _sp_zypper_consistent: "{{ system_state_snapshot_after.sp_cross_check_consistent }}"
+
+        - name: Calcular estado final de la etapa (doble evidencia obligatoria; nunca basta con /etc/os-release solo)
+          ansible.builtin.set_fact:
+            stage_status: >-
+              {{
+                'FAILED' if (
+                  not _sp_os_release_ok
+                  or not _sp_zypper_evidence_available
+                  or not _sp_zypper_consistent
+                  or (critical_services_after | selectattr('status', 'equalto', 'FAILED') | list | length > 0)
+                  or geopos_validation_after.critical_unhealthy
+                )
+                else ('WARNING' if geopos_validation_after.overall_status == 'WARNING' else 'OK')
+              }}
+            stage_failure_reason: >-
+              {{
+                'service_pack_final_no_coincide' if not _sp_os_release_ok
+                else ('service_pack_sin_evidencia_zypper' if not _sp_zypper_evidence_available
+                else ('service_pack_evidencia_inconsistente' if not _sp_zypper_consistent
+                else ('servicios_criticos_post_migracion' if (critical_services_after | selectattr('status', 'equalto', 'FAILED') | list | length > 0)
+                else ('geopos_post_migracion' if geopos_validation_after.critical_unhealthy
+                else ''))))
+              }}
+
+        - name: "Establecer stage_validated (gate real hacia la siguiente etapa en modo full)"
+          ansible.builtin.set_fact:
+            stage_validated: "{{ stage_status in ['OK', 'WARNING'] }}"
+      rescue:
+        - name: Marcar la etapa como fallida en la validación post-migración
+          ansible.builtin.set_fact:
+            stage_status: "FAILED"
+            stage_failure_reason: "validacion_post_migracion: {{ ansible_failed_result.msg | default('error durante la validación posterior') }}"
+
+    - name: "Retirar repos Foreman de DESTINO tras una etapa exitosa"
+      when: stage_status in ['OK', 'WARNING']
+      block:
+        - name: Incluir cleanup de repo_management (destino)
+          ansible.builtin.include_role:
+            name: repo_management
+            tasks_from: cleanup.yml
+          vars:
+            repo_management_cleanup_prefix: "{{ temporary_repo_prefix }}{{ stage_target_sp }}-dst-"
+      rescue:
+        - name: Registrar advertencia si falló la limpieza de repos temporales de destino
+          ansible.builtin.set_fact:
+            stage_status: "{{ 'WARNING' if stage_status == 'OK' else stage_status }}"
+            stage_failure_reason: "{{ stage_failure_reason if stage_failure_reason | length > 0 else 'cleanup_repos_destino: fallo al limpiar, revisar manualmente' }}"
+
+# NOTA IMPORTANTE: las tres tareas siguientes están DELIBERADAMENTE fuera
+# del bloque anterior (que hereda `when: stage_status != 'FAILED'` desde
+# más arriba). El `when` de un `block:` en Ansible se aplica a cada tarea
+# interna y se reevalúa en el momento en que esa tarea corre — no solo al
+# entrar al bloque. Como stage_status puede pasar a "FAILED" DENTRO del
+# bloque (por ejemplo, dup exitoso pero reinicio fallido), dejar estas
+# tareas dentro haría que la condición heredada las saltara silenciosamente
+# aunque su propia condición pidiera justo lo contrario, perdiendo la
+# evidencia de qué repos quedaron habilitados tras un fallo.
+
+- name: "Conservar repos temporales tras fallo (diagnóstico por defecto)"
+  ansible.builtin.set_fact:
+    _stage_note_cleanup: "conservados para diagnóstico (cleanup_repositories_on_failure=false)"
+  when:
+    - stage_status == 'FAILED'
+    - not (cleanup_repositories_on_failure | default(false))
+
+- name: "Limpiar repos temporales pese al fallo (override explícito autorizado)"
+  when:
+    - stage_status == 'FAILED'
+    - cleanup_repositories_on_failure | default(false)
+  block:
+    - name: Retirar cualquier repo Foreman de origen que hubiera quedado
+      ansible.builtin.include_role:
+        name: repo_management
+        tasks_from: cleanup.yml
+      vars:
+        repo_management_cleanup_prefix: "{{ temporary_repo_prefix }}{{ stage_current_sp }}-src-"
+    - name: Retirar cualquier repo Foreman de destino que hubiera quedado
+      ansible.builtin.include_role:
+        name: repo_management
+        tasks_from: cleanup.yml
+      vars:
+        repo_management_cleanup_prefix: "{{ temporary_repo_prefix }}{{ stage_target_sp }}-dst-"
+    - name: Registrar limpieza forzada tras el fallo
+      ansible.builtin.set_fact:
+        _stage_note_cleanup: "forzado por cleanup_repositories_on_failure=true"
+  rescue:
+    - name: Registrar fallo de la limpieza forzada
+      ansible.builtin.set_fact:
+        _stage_note_cleanup: "FALLÓ el intento de limpieza forzada tras el fallo, revisar manualmente"
+
+- name: Inventariar repositorios habilitados al final de la etapa (siempre, independientemente del resultado)
+  ansible.builtin.include_role:
+    name: repo_management
+    tasks_from: final_inventory.yml
+
+- name: "Ensamblar reporte de la etapa {{ stage_target_sp }}"
+  ansible.builtin.set_fact:
+    stage_report:
+      hostname: "{{ inventory_hostname }}"
+      fqdn: "{{ ansible_facts['fqdn'] | default(inventory_hostname) }}"
+      crq: "{{ upgrade_crq | default('') }}"
+      lote: "{{ upgrade_lote | default('') }}"
+      ambiente: "{{ upgrade_ambiente | default('') }}"
+      action: "{{ upgrade_mode }}"
+      stage: "{{ stage_target_sp }}"
+      started_at: "{{ _stage_started_at }}"
+      finished_at: "{{ lookup('pipe', 'date -u +%Y-%m-%dT%H:%M:%SZ') }}"
+      sp_inicial: "{{ stage_current_sp }}"
+      sp_objetivo: "{{ stage_target_sp }}"
+      sp_final: "{{ system_state_snapshot_after.current_sp_id | default(system_state_snapshot_before.current_sp_id) }}"
+      kernel_antes: "{{ system_state_snapshot_before.kernel | default('N/D') }}"
+      kernel_despues: "{{ system_state_snapshot_after.kernel | default('N/A (sin migración real aplicada en esta etapa)') }}"
+      precheck: "{{ precheck_result }}"
+      preflight: {}
+      repos:
+        backup_dir: "{{ repo_backup_dir | default('N/A') }}"
+        repos_enabled_before: "{{ repos_enabled_before }}"
+        repos_disabled_before: "{{ repos_disabled_before }}"
+        repos_disabled_by_upgrade: "{{ repos_disabled_by_upgrade }}"
+        repos_temporary_created: "{{ repos_temporary_created }}"
+        repos_temporary_removed: "{{ repos_temporary_removed }}"
+        repos_enabled_after: "{{ repos_enabled_after }}"
+        final_inventory_status: "{{ _final_inventory_status | default('NOT_CHECKED') }}"
+        final_inventory_detail: "{{ _final_inventory_detail | default('N/A') }}"
+        cleanup_note: "{{ _stage_note_cleanup | default('N/A (etapa exitosa, limpieza normal ejecutada)') }}"
+      migration: "{{ stage_migration_info }}"
+      reboot: "{{ stage_reboot_info }}"
+      critical_services_before: "{{ critical_services_before | default([]) }}"
+      critical_services_after: "{{ critical_services_after | default([]) }}"
+      geopos_before: "{{ geopos_validation_before | default({}) }}"
+      geopos_after: "{{ geopos_validation_after | default({}) }}"
+      status: "{{ stage_status }}"
+      failure_stage: "{{ stage_failure_reason }}"
+
+- name: "Generar reporte de la etapa {{ stage_target_sp }}"
+  ansible.builtin.include_role:
+    name: reporting
+
+- name: "Propagar estado global del host tras la etapa {{ stage_target_sp }}"
+  ansible.builtin.set_fact:
+    host_overall_status: "{{ stage_status }}"

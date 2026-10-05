@@ -1,0 +1,131 @@
+---
+# roles/precheck/tasks/repos_reachability.yml
+#
+# Verifica, ANTES de modificar cualquier repositorio, que los repos
+# Foreman/Katello requeridos tanto para el Service Pack de ORIGEN
+# (updatestack) como para el de DESTINO (dup) de esta etapa estén:
+#   - configurados (no vacíos);
+#   - sin valores CHANGE_ME pendientes;
+#   - alcanzables por red (HTTP/HTTPS) con TLS/CA básico.
+#
+# Si falta cualquiera de los dos conjuntos, el precheck debe BLOQUEAR el
+# upgrade (FAILED) antes de que repo_management deshabilite ningún
+# repositorio preexistente — así se evita descubrir a mitad de camino que
+# falta el repo de origen o de destino.
+#
+# IMPORTANTE: esto es solo una prueba de "endpoint alcanzable", NO una
+# prueba de que el repositorio sea utilizable por Zypper. Un HTTP
+# 401/403/404 significa que el servidor respondió (la red/TLS funcionan),
+# pero NO demuestra que el contenido del repo sea válido — esa validación
+# real (metadata/GPG/TLS/solver) ocurre en `upgrade_mode: validate`
+# (roles/sp_migration/tasks/preflight.yml), no aquí.
+
+- name: Seleccionar Service Pack y repos Foreman de ORIGEN y DESTINO de esta etapa
+  ansible.builtin.set_fact:
+    _repo_phases: >-
+      {{
+        [
+          {
+            'label': 'origen',
+            'sp': precheck_expected_current_sp | default(''),
+            'repos': katello[(precheck_expected_current_sp) ~ '_repositories'] if (precheck_expected_current_sp | default('')) | length > 0 else []
+          },
+          {
+            'label': 'destino',
+            'sp': precheck_effective_target_sp | default(''),
+            'repos': katello[(precheck_effective_target_sp) ~ '_repositories'] if (precheck_effective_target_sp | default('')) | length > 0 else []
+          }
+        ]
+      }}
+
+- name: Validar que los repos Foreman de origen y destino estén configurados y sin CHANGE_ME
+  ansible.builtin.set_fact:
+    precheck_checks: "{{ precheck_checks + [{
+        'name': 'repos_foreman_configurados_' ~ phase.label,
+        'status': _phase_config_status,
+        'detail': _phase_config_detail
+      }] }}"
+  loop: "{{ _repo_phases }}"
+  loop_control:
+    loop_var: phase
+    label: "{{ phase.label }}"
+  vars:
+    _phase_has_changeme: "{{ phase.repos | selectattr('name', 'search', 'CHANGE_ME') | list | length > 0 or phase.repos | selectattr('url', 'search', 'CHANGE_ME') | list | length > 0 }}"
+    _phase_config_status: >-
+      {{
+        'NOT_CHECKED' if phase.sp | length == 0
+        else ('FAILED' if phase.repos | length == 0
+        else ('FAILED' if _phase_has_changeme
+        else 'OK'))
+      }}
+    _phase_config_detail: >-
+      {{
+        ('sin etapa de ' ~ phase.label ~ ' determinada') if phase.sp | length == 0
+        else (('katello.' ~ phase.sp ~ '_repositories está vacío') if phase.repos | length == 0
+        else (('katello.' ~ phase.sp ~ '_repositories contiene valores CHANGE_ME sin completar') if _phase_has_changeme
+        else ('katello.' ~ phase.sp ~ '_repositories: ' ~ (phase.repos | length | string) ~ ' repo(s) configurados')))
+      }}
+
+- name: Verificar si el archivo de ca_certificate_path ya existe en este host
+  # Evita pasarle a "uri" una ca_path inexistente (el módulo fallaría duro
+  # en vez de degradar limpiamente): si la CA interna todavía no se instaló
+  # en este host (ver ensure_ca_trusted.yml, que corre en VALIDATE/UPGRADE,
+  # no en PRECHECK), se omite y el sistema usa su almacén de confianza por
+  # defecto -- un fallo real de TLS se sigue clasificando correctamente más
+  # abajo (nunca se oculta).
+  ansible.builtin.stat:
+    path: "{{ katello.ca_certificate_path }}"
+  register: _ca_cert_stat
+  when: (katello.ca_certificate_path | default('')) | length > 0 and not (katello.ca_certificate_path is search('CHANGE_ME'))
+
+- name: Probar conectividad HTTP/HTTPS y TLS contra cada repositorio de origen y destino
+  ansible.builtin.uri:
+    url: "{{ item.1.url }}"
+    method: GET
+    validate_certs: true
+    ca_path: "{{ katello.ca_certificate_path if (_ca_cert_stat is defined and _ca_cert_stat.stat is defined and _ca_cert_stat.stat.exists | default(false)) else omit }}"
+    status_code: [200, 201, 204, 301, 302, 400, 401, 403, 404, 500, 502, 503]
+    timeout: "{{ precheck_repo_reachability_timeout }}"
+  register: _repo_reachability
+  loop: "{{ _repo_phases | subelements('repos', skip_missing=True) }}"
+  loop_control:
+    label: "{{ item.0.label }}:{{ item.1.name | default(item.1.url) }}"
+  # Captura explícita en lugar de ignore_errors: el resultado (incluido un
+  # fallo real de conexión) se clasifica manualmente en la tarea siguiente
+  # usando result.status, nunca se descarta silenciosamente.
+  failed_when: false
+  when: not (item.1.name is search('CHANGE_ME')) and not (item.1.url is search('CHANGE_ME'))
+
+- name: Registrar resultado de alcanzabilidad por repositorio de origen/destino (no es validación de uso)
+  ansible.builtin.set_fact:
+    precheck_checks: "{{ precheck_checks + [{
+        'name': 'endpoint_alcanzable_' ~ result.item.0.label ~ '_' ~ (result.item.1.name | default(result.item.1.url) | regex_replace('[^A-Za-z0-9_-]', '_')),
+        'status': _reach_status,
+        'detail': _reach_detail
+      }] }}"
+  loop: "{{ _repo_reachability.results | default([]) }}"
+  loop_control:
+    loop_var: result
+    label: "{{ result.item.0.label }}:{{ result.item.1.name | default('repo') }}"
+  vars:
+    # ansible.builtin.uri, ante un fallo real de conexión (DNS, rechazo,
+    # timeout, TLS), no deja "status" indefinido: lo establece en -1. Por
+    # eso la detección de fallo real comprueba status ausente O negativo,
+    # no solo ausente (se confirmó empíricamente contra un dominio que no
+    # resuelve, RFC 2606 "invalid").
+    _reach_no_response: "{{ (result.status is not defined) or ((result.status | int) < 0) }}"
+    _reach_status: >-
+      {{
+        'FAILED' if (result.skipped | default(false))
+        else ('FAILED' if _reach_no_response
+        else ('OK' if result.status in [200, 201, 204, 301, 302]
+        else 'WARNING'))
+      }}
+    _reach_detail: >-
+      {{
+        (result.item.1.url ~ ' -> contiene CHANGE_ME sin completar') if (result.skipped | default(false))
+        else ((result.item.1.url ~ ' -> sin respuesta HTTP: ' ~ (result.msg | default('error de conexión'))) if _reach_no_response
+        else (result.item.1.url ~ ' -> HTTP ' ~ result.status ~
+          (' (endpoint alcanzable; la validación real del repositorio ocurre en VALIDATE)' if result.status not in [200, 201, 204, 301, 302] else '')))
+      }}
+  when: (_repo_reachability.results | default([])) | length > 0

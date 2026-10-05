@@ -1,0 +1,4 @@
+---
+# roles/reporting/defaults/main.yml
+# Vars esperadas al incluir este rol: stage_report (dict con toda la
+# información de la etapa, ensamblada por playbooks/upgrade.yml).

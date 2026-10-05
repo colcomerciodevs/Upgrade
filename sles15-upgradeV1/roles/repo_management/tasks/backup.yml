@@ -1,0 +1,79 @@
+---
+# roles/repo_management/tasks/backup.yml
+#
+# Respalda /etc/zypp/repos.d e inventaría los repositorios activos ANTES
+# de modificar nada, distinguiendo cuáles estaban HABILITADOS y cuáles ya
+# estaban deshabilitados. El respaldo NUNCA se elimina por esta
+# automatización (ni en éxito ni en fallo): solo se retiran los repos
+# temporales creados por ella (ver cleanup.yml).
+
+- name: Calcular ruta de respaldo para esta etapa
+  ansible.builtin.set_fact:
+    repo_backup_dir: "{{ repo_management_backup_base_dir }}/{{ repo_management_target_sp }}-{{ lookup('pipe', 'date -u +%Y%m%dT%H%M%SZ') }}"
+
+- name: Crear directorio de respaldo
+  ansible.builtin.file:
+    path: "{{ repo_backup_dir }}"
+    state: directory
+    mode: "0700"
+  become: true
+
+- name: Respaldar /etc/zypp/repos.d completo
+  ansible.builtin.command:
+    cmd: cp -a /etc/zypp/repos.d "{{ repo_backup_dir }}/repos.d"
+  become: true
+  changed_when: true
+
+- name: Inventariar repositorios activos antes de modificar (evidencia XML)
+  ansible.builtin.command:
+    cmd: zypper --xmlout --non-interactive repos -u
+  register: _repos_before_xml
+  changed_when: false
+  failed_when: false
+  become: true
+
+- name: Guardar inventario de repositorios previo en el respaldo (sea o no confiable, para diagnóstico)
+  ansible.builtin.copy:
+    content: "{{ _repos_before_xml.stdout | default('') }}"
+    dest: "{{ repo_backup_dir }}/repos_before.xml"
+    mode: "0600"
+  become: true
+
+# FAIL-CLOSED: si no podemos determinar con certeza qué repositorios están
+# habilitados ANTES de modificar nada, no hay forma segura de calcular
+# repos_enabled_before/repos_disabled_before. Continuar asumiría
+# incorrectamente "ningún repo habilitado" y dejaría repositorios
+# preexistentes desconocidos participando en updatestack/dup. Se detiene
+# aquí, antes de deshabilitar o agregar ningún repositorio.
+- name: Verificar que el inventario previo de repositorios sea confiable antes de modificar nada
+  ansible.builtin.assert:
+    that:
+      - (_repos_before_xml.rc | default(1)) == 0
+      - "'<repo-list' in (_repos_before_xml.stdout | default(''))"
+    fail_msg: >-
+      No se pudo determinar con certeza qué repositorios están habilitados
+      antes de modificar el sistema: "zypper repos" falló
+      (rc={{ _repos_before_xml.rc | default('N/D') }}) o devolvió una salida
+      XML no interpretable. Se detiene la migración antes de deshabilitar o
+      agregar cualquier repositorio (evidencia guardada en
+      {{ repo_backup_dir }}/repos_before.xml para diagnóstico).
+    success_msg: "Inventario previo de repositorios confiable, se puede continuar"
+
+- name: Extraer alias, nombre y estado habilitado/deshabilitado antes de modificar
+  ansible.builtin.set_fact:
+    _repo_backup_tuples: "{{ _repos_before_xml.stdout | default('') | regex_findall('<repo\\s+alias=\"([^\"]+)\"\\s+name=\"([^\"]+)\"[^>]*?\\benabled=\"([^\"]+)\"') }}"
+
+- name: Clasificar repositorios preexistentes en habilitados/deshabilitados
+  ansible.builtin.set_fact:
+    repos_enabled_before: |-
+      {% set result = [] %}
+      {% for t in _repo_backup_tuples %}
+      {% if t[2] == '1' %}{% set _ = result.append(t[0]) %}{% endif %}
+      {% endfor %}
+      {{ result }}
+    repos_disabled_before: |-
+      {% set result = [] %}
+      {% for t in _repo_backup_tuples %}
+      {% if t[2] != '1' %}{% set _ = result.append(t[0]) %}{% endif %}
+      {% endfor %}
+      {{ result }}

@@ -1,0 +1,73 @@
+---
+# roles/repo_management/tasks/final_inventory.yml
+#
+# Inventaría los repositorios habilitados AL FINAL de la etapa (tras la
+# limpieza de temporales, o tras un fallo), para dejar evidencia honesta
+# en el reporte de qué quedó realmente activo. En una etapa exitosa esto
+# normalmente será una lista vacía (todo lo preexistente quedó
+# deshabilitado y los temporales ya se retiraron).
+#
+# FAIL-CLOSED: esta tarea se ejecuta SIEMPRE, incluso tras un fallo, para
+# dejar evidencia. Pero si "zypper repos" falla o el XML no es
+# interpretable aquí, NO se reporta "repos_enabled_after: []" (eso se
+# leería como "nada quedó habilitado", una afirmación que no podemos
+# respaldar). Se deja constancia explícita de que el inventario final no
+# es confiable y se escala la etapa a FAILED si no lo estaba ya, porque no
+# hay forma de certificar que no quedó un repositorio inesperado habilitado.
+
+- name: Inventariar repositorios habilitados al final de la etapa
+  ansible.builtin.command:
+    cmd: zypper --xmlout --non-interactive repos -u
+  register: _repos_after_xml
+  changed_when: false
+  failed_when: false
+  become: true
+
+- name: Determinar si el inventario final de repositorios es confiable
+  ansible.builtin.set_fact:
+    _final_inventory_reliable: >-
+      {{
+        (_repos_after_xml.rc | default(1)) == 0
+        and '<repo-list' in (_repos_after_xml.stdout | default(''))
+      }}
+
+- name: Extraer alias, nombre y estado habilitado/deshabilitado al final (solo si el inventario es confiable)
+  ansible.builtin.set_fact:
+    _repo_final_tuples: "{{ _repos_after_xml.stdout | regex_findall('<repo\\s+alias=\"([^\"]+)\"\\s+name=\"([^\"]+)\"[^>]*?\\benabled=\"([^\"]+)\"') }}"
+  when: _final_inventory_reliable
+
+- name: Calcular repositorios habilitados al final (inventario confiable)
+  ansible.builtin.set_fact:
+    repos_enabled_after: |-
+      {% set result = [] %}
+      {% for t in _repo_final_tuples | default([]) %}
+      {% if t[2] == '1' %}{% set _ = result.append(t[0]) %}{% endif %}
+      {% endfor %}
+      {{ result }}
+  when: _final_inventory_reliable
+
+- name: Registrar que el inventario final NO es confiable (sin asumir "ningún repo habilitado")
+  ansible.builtin.set_fact:
+    repos_enabled_after: []
+    _final_inventory_status: FAILED
+    _final_inventory_detail: >-
+      zypper repos falló (rc={{ _repos_after_xml.rc | default('N/D') }}) o devolvió una
+      salida XML no interpretable al final de la etapa; no se puede certificar
+      qué repositorios quedaron realmente habilitados.
+  when: not _final_inventory_reliable
+
+- name: Registrar que el inventario final sí es confiable
+  ansible.builtin.set_fact:
+    _final_inventory_status: OK
+    _final_inventory_detail: "inventario final confiable ({{ repos_enabled_after | length }} repo(s) habilitado(s))"
+  when: _final_inventory_reliable
+
+- name: Escalar la etapa a FAILED si el inventario final de repositorios no es confiable
+  ansible.builtin.set_fact:
+    stage_status: FAILED
+    stage_failure_reason: >-
+      {{
+        (stage_failure_reason ~ '; ' if (stage_failure_reason | default('')) | length > 0 else '')
+        ~ 'inventario_final_no_confiable: no se pudo determinar con certeza qué repositorios quedaron habilitados al final de la etapa'
+      }}
+  when: not _final_inventory_reliable

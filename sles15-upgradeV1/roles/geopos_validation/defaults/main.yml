@@ -1,0 +1,7 @@
+---
+# roles/geopos_validation/defaults/main.yml
+# Tiempo de espera por defecto para health checks HTTP/HTTPS (segundos).
+geopos_validation_health_check_timeout: 10
+
+# Fase de la validación: "before" o "after". La define quien invoca el rol.
+geopos_validation_phase: "before"

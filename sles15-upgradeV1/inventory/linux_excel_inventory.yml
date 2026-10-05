@@ -1,0 +1,70 @@
+---
+# inventory/linux_excel_inventory.yml
+#
+# Inventory Source dinámico INDEPENDIENTE para este proyecto
+# (ansible-sles-upgrade), adaptado del inventario corporativo de parchado
+# (mismo plugin "excel_inventory", mismo mecanismo SharePoint), pero con su
+# propio archivo Excel dedicado — no comparte archivo ni hoja con el
+# inventario general de parchado (que cubre toda la flota, física y
+# virtual, Linux y Windows).
+#
+# Alcance de este archivo Excel: ÚNICAMENTE los servidores físicos SLES 15
+# que ejecutan GeoPOS. Una sola hoja, sin columnas de virtualización
+# (VMware) — no aplican porque estos servidores son físicos.
+#
+# Uso en AWX: Inventory Source -> "Sourced from a Project", apuntando a
+# este archivo dentro del Project de este repositorio. Las credenciales
+# (tenant_id/client_id/client_secret) se inyectan como variables de
+# entorno mediante un Credential de AWX — NUNCA como archivo .env dentro
+# de este repositorio (ver README, sección 13, y docs/AWX_SETUP.html).
+#
+# Aun así, PRECHECK sigue validando ansible_facts['distribution'] == 'SLES'
+# como primer chequeo obligatorio (ver roles/precheck/tasks/main.yml): si
+# por error se agrega a esta hoja un host que no sea SLES, o el Limit
+# apunta a uno equivocado, el precheck falla explícito en vez de continuar.
+#
+# IMPORTANTE: las columnas CRQ/Lote/Ambiente de abajo (compose) son
+# metadatos del host según el ÚLTIMO ciclo de PARCHADO registrado en la
+# hoja — no tienen relación con el CRQ/Lote/Ambiente de ESTE upgrade.
+# Por eso el Survey de AWX de este proyecto usa variables con prefijo
+# "upgrade_" (upgrade_crq/upgrade_lote/upgrade_ambiente, ver
+# playbooks/group_vars/all.yml) para no colisionar con estos nombres de
+# variable de host ni heredar silenciosamente un dato de parchado.
+#
+# Plantilla lista para subir a SharePoint (mismas columnas que "compose"):
+# docs/references/plantilla_inventario_sles15_geopos.xlsx
+
+plugin: excel_inventory
+
+source_type: sharepoint
+sheet_name: "SLES15 GeoPOS"
+
+local_config:
+  file_path: ""
+
+sharepoint_config:
+  site_url: "https://colcomerciocom.sharepoint.com/sites/AreaInfraestructura"
+  folder_path: "/sites/AreaInfraestructura/Documentos compartidos/General/Inventario Infraestructura"
+  filename: "Inventario_SLES15_GeoPOS_Upgrade.xlsx"
+  tenant_id: "{{ lookup('env', 'TENANT_ID') }}"
+  client_id: "{{ lookup('env', 'CLIENT_ID') }}"
+  client_secret: "{{ lookup('env', 'CLIENT_SECRET') }}"
+
+hostname_column: "HostName"
+
+# Sin columnas de virtualización (ancho_banda, datacenter_vmware,
+# tipo_maquina, tipo_vmware, vcenter_vmware, vm_name): no aplican, todos
+# los servidores de esta hoja son físicos.
+compose:
+  ambiente: "Ambiente"
+  ansible_host: "IPv4Address"
+  crq: "CRQ"
+  hostname: "HostName"
+  ip: "IPv4Address"
+  location: "UBICACIÓN"
+  lote: "Lote"
+  os: "SISTEMA OPERATIVO"
+  type_os: "TIPO SO"
+
+keyed_groups:
+  - key: Lote

@@ -1,0 +1,26 @@
+---
+# roles/precheck/tasks/critical_services.yml
+#
+# Consulta el estado de los servicios base críticos del sistema
+# (critical_services). Reutilizable antes y después de la migración.
+# Produce el hecho `critical_services_status` (lista 0..N).
+
+- name: Consultar estado de los servicios críticos del sistema
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+  register: _critical_services_raw
+  loop: "{{ critical_services | default([]) }}"
+  loop_control:
+    label: "{{ item }}"
+  failed_when: false
+
+- name: Construir resultado de servicios críticos
+  ansible.builtin.set_fact:
+    critical_services_status: |-
+      {% set result = [] %}
+      {% for res in _critical_services_raw.results | default([]) %}
+      {% set active_state = res.status.ActiveState | default('desconocido') %}
+      {% set item_status = 'OK' if active_state == 'active' else 'FAILED' %}
+      {% set _ = result.append({'name': res.item, 'status': item_status, 'active_state': active_state}) %}
+      {% endfor %}
+      {{ result }}

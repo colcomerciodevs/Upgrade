@@ -1,0 +1,75 @@
+---
+# roles/repo_management/tasks/assert_enabled_repos.yml
+#
+# Gate de seguridad: verifica que el conjunto de repositorios ACTUALMENTE
+# HABILITADOS sea EXACTAMENTE el esperado (ni uno de más, ni uno de
+# menos) en un punto crítico de la transición de repos de la etapa. Se usa
+# después de deshabilitar preexistentes, después de agregar/retirar los
+# repos Foreman de origen, y después de agregar los repos Foreman de
+# destino (antes de dup -D).
+#
+# FAIL-CLOSED: si "zypper repos" falla o el XML no es interpretable, esto
+# se trata igual que un repositorio inesperado -- se FALLA explícitamente
+# en vez de asumir "ningún repo habilitado". No se intenta corregir el
+# estado automáticamente: la ejecución simplemente se detiene aquí.
+#
+# Reutiliza el mismo patrón de extracción (regex sobre "zypper --xmlout
+# repos -u") que backup.yml/final_inventory.yml, en vez de depender del
+# comportamiento exacto y no confirmado de "zypper repos -E" en un SLES
+# real; evita introducir una segunda forma de listar repos sin haberla
+# podido probar contra Zypper real.
+#
+# Vars requeridas:
+#   repo_management_assert_expected_enabled_repos : lista de aliases que DEBEN
+#       estar habilitados en este punto (puede ser [] si no se espera ninguno)
+#   repo_management_assert_context_label          : texto descriptivo del
+#       punto de control, usado en nombres de tarea y mensajes
+
+- name: "Listar repositorios para el gate de seguridad ({{ repo_management_assert_context_label }})"
+  ansible.builtin.command:
+    cmd: zypper --xmlout --non-interactive repos -u
+  register: _assert_repos_xml
+  changed_when: false
+  failed_when: false
+  become: true
+
+- name: "Verificar que el inventario sea confiable antes del gate ({{ repo_management_assert_context_label }})"
+  ansible.builtin.assert:
+    that:
+      - (_assert_repos_xml.rc | default(1)) == 0
+      - "'<repo-list' in (_assert_repos_xml.stdout | default(''))"
+    fail_msg: >-
+      Gate de seguridad de repositorios ({{ repo_management_assert_context_label }}): no se
+      pudo determinar con certeza qué repositorios están habilitados
+      ("zypper repos" falló con rc={{ _assert_repos_xml.rc | default('N/D') }}
+      o devolvió una salida XML no interpretable). Se detiene la migración
+      en vez de asumir que no hay ningún repositorio habilitado.
+
+- name: "Extraer repositorios habilitados actualmente ({{ repo_management_assert_context_label }})"
+  ansible.builtin.set_fact:
+    _assert_enabled_tuples: "{{ _assert_repos_xml.stdout | regex_findall('<repo\\s+alias=\"([^\"]+)\"\\s+name=\"([^\"]+)\"[^>]*?\\benabled=\"([^\"]+)\"') }}"
+
+- name: "Calcular aliases habilitados actualmente ({{ repo_management_assert_context_label }})"
+  ansible.builtin.set_fact:
+    _assert_enabled_now: |-
+      {% set result = [] %}
+      {% for t in _assert_enabled_tuples %}
+      {% if t[2] == '1' %}{% set _ = result.append(t[0]) %}{% endif %}
+      {% endfor %}
+      {{ result }}
+
+- name: "Comparar habilitados actuales contra lo esperado ({{ repo_management_assert_context_label }})"
+  ansible.builtin.set_fact:
+    _assert_unexpected_enabled: "{{ _assert_enabled_now | reject('in', repo_management_assert_expected_enabled_repos) | list }}"
+    _assert_missing_expected: "{{ repo_management_assert_expected_enabled_repos | reject('in', _assert_enabled_now) | list }}"
+
+- name: "Fallar si los repositorios habilitados no coinciden exactamente con lo esperado ({{ repo_management_assert_context_label }})"
+  ansible.builtin.fail:
+    msg: >-
+      Gate de seguridad de repositorios falló ({{ repo_management_assert_context_label }}).
+      Esperados: {{ repo_management_assert_expected_enabled_repos | join(', ') or 'ninguno' }}.
+      Habilitados encontrados: {{ _assert_enabled_now | join(', ') or 'ninguno' }}.
+      Inesperados: {{ _assert_unexpected_enabled | join(', ') or 'ninguno' }}.
+      Faltantes: {{ _assert_missing_expected | join(', ') or 'ninguno' }}.
+      No se continúa ni se intenta corregir el estado automáticamente.
+  when: (_assert_unexpected_enabled | length > 0) or (_assert_missing_expected | length > 0)

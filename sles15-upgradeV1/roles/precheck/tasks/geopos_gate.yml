@@ -1,0 +1,39 @@
+---
+# roles/precheck/tasks/geopos_gate.yml
+#
+# Ejecuta la validación de GeoPOS ANTES del upgrade y aplica la política
+# de bloqueo configurable: si un componente crítico no está saludable y
+# geopos_validation.fail_precheck_if_unhealthy es true, el precheck falla
+# para este host. La excepción operacional se autoriza poniendo
+# fail_precheck_if_unhealthy: false en group_vars/host_vars puntuales.
+
+- name: Ejecutar validación de GeoPOS (fase "before")
+  ansible.builtin.include_role:
+    name: geopos_validation
+  vars:
+    geopos_validation_phase: before
+
+- name: Conservar el resultado de GeoPOS "before" para el reporte
+  ansible.builtin.set_fact:
+    geopos_validation_before: "{{ geopos_validation_result }}"
+
+- name: Calcular estado del gate de precheck de GeoPOS
+  ansible.builtin.set_fact:
+    _geopos_gate_status: >-
+      {{
+        'NOT_CHECKED' if not (geopos_validation.enabled | default(false))
+        else ('FAILED' if (geopos_validation_before.critical_unhealthy and (geopos_validation.fail_precheck_if_unhealthy | default(true)))
+        else ('WARNING' if (geopos_validation_before.critical_unhealthy or geopos_validation_before.overall_status == 'WARNING')
+        else 'OK'))
+      }}
+    _geopos_gate_detail: >-
+      {{
+        'GeoPOS deshabilitado globalmente' if not (geopos_validation.enabled | default(false))
+        else ('Componente(s) crítico(s) insalubre(s) y fail_precheck_if_unhealthy=true: upgrade bloqueado' if (geopos_validation_before.critical_unhealthy and (geopos_validation.fail_precheck_if_unhealthy | default(true)))
+        else ('Componente(s) crítico(s) insalubre(s) pero fail_precheck_if_unhealthy=false (excepción operacional autorizada): continúa como WARNING' if geopos_validation_before.critical_unhealthy
+        else 'GeoPOS saludable u OK'))
+      }}
+
+- name: Registrar el gate de precheck de GeoPOS
+  ansible.builtin.set_fact:
+    precheck_checks: "{{ precheck_checks + [{'name': 'geopos_precheck_gate', 'status': _geopos_gate_status, 'detail': _geopos_gate_detail}] }}"

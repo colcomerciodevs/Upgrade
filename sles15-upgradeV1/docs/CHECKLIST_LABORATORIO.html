@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Checklist final antes del laboratorio SLES real</title>
+<style>
+  :root {
+    --navy: #1b2a4a;
+    --teal: #1f7a6c;
+    --gray-dark: #333;
+    --gray-mid: #666;
+    --light-bg: #f4f6f8;
+    --ok-green: #2e7d32;
+    --warn-amber: #b8860b;
+    --fail-red: #c62828;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Helvetica Neue", Arial, sans-serif;
+    color: var(--gray-dark);
+    font-size: 15px;
+    line-height: 1.55;
+    margin: 0;
+    background: #fff;
+  }
+  h1, h2, h3 { font-family: Arial, sans-serif; color: var(--navy); }
+
+  code {
+    font-family: "DejaVu Sans Mono", Consolas, monospace;
+    font-size: 0.88em;
+    background: var(--light-bg);
+    padding: 1px 5px;
+    border-radius: 3px;
+  }
+
+  .wrap { max-width: 880px; margin: 0 auto; padding: 0 24px 60px; }
+
+  /* ---------------- Encabezado ---------------- */
+  header.top {
+    background: var(--navy);
+    color: white;
+    padding: 36px 0 30px;
+    margin-bottom: 8px;
+  }
+  header.top .wrap { padding-top: 0; padding-bottom: 0; }
+  header.top .kicker {
+    color: #8fb3e8;
+    font-size: 12.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+  header.top h1 { color: white; font-size: 28px; margin: 0 0 8px 0; }
+  header.top .subtitle { color: #c9d6e8; font-size: 15px; max-width: 700px; }
+
+  .callout.top-note {
+    margin-top: 20px;
+    background: rgba(255,255,255,0.08);
+    border-left: 4px solid #7fd6c4;
+    padding: 10px 16px;
+    border-radius: 0 6px 6px 0;
+    font-size: 13.5px;
+    color: #dfe8f3;
+  }
+
+  /* ---------------- Navegación rápida ---------------- */
+  nav.quicknav {
+    background: var(--light-bg);
+    border-bottom: 1px solid #e0e3e7;
+    padding: 12px 0;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  nav.quicknav .wrap { display: flex; flex-wrap: wrap; gap: 6px 14px; padding-top:0; padding-bottom:0; }
+  nav.quicknav a {
+    color: var(--navy);
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: bold;
+    white-space: nowrap;
+  }
+  nav.quicknav a:hover { color: var(--teal); text-decoration: underline; }
+
+  /* ---------------- Secciones ---------------- */
+  section.main-section {
+    padding-top: 36px;
+    border-top: 1px solid #eceef1;
+    margin-top: 12px;
+  }
+  section.main-section:first-of-type { border-top: none; margin-top: 0; }
+
+  .section-head {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    border-bottom: 3px solid var(--navy);
+    padding-bottom: 10px;
+    margin-bottom: 18px;
+  }
+  .section-num {
+    background: var(--navy);
+    color: white;
+    font-weight: bold;
+    font-size: 17px;
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .section-head h2 { margin: 0; font-size: 20px; }
+
+  /* ---------------- Callouts ---------------- */
+  .callout {
+    border-left: 5px solid var(--gray-mid);
+    background: var(--light-bg);
+    padding: 12px 18px;
+    margin: 16px 0;
+    border-radius: 0 6px 6px 0;
+  }
+  .callout .label {
+    font-weight: bold;
+    font-size: 11.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    display: block;
+    margin-bottom: 6px;
+  }
+  .callout.risk { border-left-color: var(--warn-amber); background: #fdf6e8; }
+  .callout.risk .label { color: var(--warn-amber); }
+  .callout.note { border-left-color: var(--teal); }
+  .callout.note .label { color: var(--teal); }
+  .callout.decision { border-left-color: var(--navy); }
+  .callout.decision .label { color: var(--navy); }
+
+  /* ---------------- Checklist interactivo ---------------- */
+  ul.checklist { list-style: none; padding: 0; margin: 14px 0; }
+  ul.checklist li {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 9px 10px;
+    border-radius: 6px;
+    margin-bottom: 4px;
+  }
+  ul.checklist li:hover { background: var(--light-bg); }
+  ul.checklist input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    margin-top: 2px;
+    flex-shrink: 0;
+    accent-color: var(--ok-green);
+  }
+  ul.checklist label { font-size: 14.5px; cursor: pointer; }
+  ul.checklist .tag {
+    display: inline-block;
+    font-size: 10.5px;
+    font-weight: bold;
+    text-transform: uppercase;
+    background: var(--warn-amber);
+    color: white;
+    padding: 1px 7px;
+    border-radius: 8px;
+    margin-left: 6px;
+    vertical-align: middle;
+  }
+
+  /* ---------------- Tablas ---------------- */
+  table.clean {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 14px 0;
+    font-size: 13.5px;
+  }
+  table.clean th {
+    background: var(--navy);
+    color: white;
+    padding: 8px 10px;
+    text-align: left;
+  }
+  table.clean td {
+    padding: 8px 10px;
+    border-bottom: 1px solid #ddd;
+    vertical-align: top;
+  }
+  table.clean tr:nth-child(even) td { background: #fafbfc; }
+  .ok-tag { color: var(--ok-green); font-weight: bold; }
+
+  ol.steps { padding-left: 22px; }
+  ol.steps li { margin-bottom: 10px; }
+
+  ul.plain { padding-left: 20px; }
+  ul.plain li { margin-bottom: 6px; }
+
+  footer.page-footer {
+    text-align: center;
+    color: var(--gray-mid);
+    font-size: 12.5px;
+    padding: 30px 0 10px;
+  }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <div class="kicker">ansible-sles-upgrade · documento operativo</div>
+    <h1>Checklist final antes del laboratorio SLES real</h1>
+    <div class="subtitle">
+      Punto de partida operativo para la primera ejecución contra un SLES 15 real.
+      El código está congelado (ver <code>ARQUITECTURA_Y_DISENO_TECNICO.html</code> y
+      README, sección 16); lo que falta es exclusivamente <strong>información real
+      del ambiente</strong> y <strong>confirmar en laboratorio</strong> un número
+      acotado de comportamientos que solo se pudieron simular.
+    </div>
+    <div class="callout top-note">
+      No marcar un punto como resuelto sin haber verificado el valor/dato real,
+      nunca inventándolo (ver CLAUDE.md, "Nunca inventar"). Si todavía no existen
+      los objetos de AWX (Project, Inventory, Credential, Job Template, Survey),
+      crearlos primero siguiendo <code>docs/AWX_SETUP.html</code>.
+    </div>
+  </div>
+</header>
+
+<nav class="quicknav">
+  <div class="wrap">
+    <a href="#s0">0. Antes de tocar un host</a>
+    <a href="#s1">1. Prerrequisitos</a>
+    <a href="#s2">2. Variables a conseguir</a>
+    <a href="#s3">3. Qué observar</a>
+    <a href="#s4">4. Orden de ejecución</a>
+    <a href="#s5">5. Límites que no cambian</a>
+    <a href="#s6">6. Cierre</a>
+  </div>
+</nav>
+
+<div class="wrap">
+
+<section class="main-section" id="s0">
+  <div class="section-head"><div class="section-num">0</div><h2>Antes de tocar cualquier host</h2></div>
+  <ul class="checklist">
+    <li><input type="checkbox" id="c0-1"><label for="c0-1">Confirmar explícitamente con el responsable del ambiente <strong>qué host(s) de laboratorio</strong> están autorizados para esta prueba (nunca asumir "cualquier host disponible").</label></li>
+    <li><input type="checkbox" id="c0-2"><label for="c0-2">Confirmar que el/los host(s) de laboratorio <strong>no son productivos</strong> o, si lo son, que existe autorización explícita y ventana de cambio.</label></li>
+    <li><input type="checkbox" id="c0-3"><label for="c0-3">Confirmar que existe un mecanismo de recuperación real antes de aplicar un cambio real (ver sección 5, "Rollback real").</label></li>
+    <li><input type="checkbox" id="c0-4"><label for="c0-4">Decidir el orden: primero <code>precheck</code>, después <code>validate</code>, y solo después de revisar ambos reportes, considerar <code>sp5_to_sp6</code> real en un único host no crítico.</label></li>
+  </ul>
+</section>
+
+<section class="main-section" id="s1">
+  <div class="section-head"><div class="section-num">1</div><h2>Prerrequisitos de infraestructura y acceso</h2></div>
+  <ul class="checklist">
+    <li><input type="checkbox" id="c1-1"><label for="c1-1">Conectividad SSH desde el nodo de control (o Execution Environment de AWX) hacia el/los host(s) de laboratorio.</label></li>
+    <li><input type="checkbox" id="c1-2"><label for="c1-2">Usuario y método de <code>become</code> con privilegios suficientes para: <code>zypper</code>, lectura/escritura en <code>/etc/zypp/repos.d</code>, <code>systemctl</code>, reinicio del host.</label></li>
+    <li><input type="checkbox" id="c1-3"><label for="c1-3">El host de laboratorio puede alcanzar por red los repositorios Foreman/Katello reales (HTTP/HTTPS) — no solo que Foreman esté "up", sino que <strong>ese host concreto</strong> tenga la ruta de red habilitada.</label></li>
+    <li><input type="checkbox" id="c1-4"><label for="c1-4"><strong>GPG:</strong> probablemente no requiere acción. Katello <strong>no re-firma</strong> este contenido (verificado por API: <code>gpg_key_id: null</code> en productos y repos) — son las llaves originales de SUSE, que normalmente ya están en el keyring del SLES desde su instalación base. Las guías oficiales de SUSE para este procedimiento no mencionan un paso de importar GPG. No se automatiza nada preventivamente: si alguna llave nueva faltara, <code>zypper --non-interactive</code> fallará explícitamente (nunca en silencio) y el error completo queda en <code>output_summary</code> del reporte de <code>validate</code> — resolver puntualmente solo si aparece.</label></li>
+    <li><input type="checkbox" id="c1-7"><label for="c1-7">El host de laboratorio soporta el mecanismo estándar de confianza de SLES (<code>/etc/pki/trust/anchors/</code> + <code>update-ca-certificates</code>) — verificación rápida: <code>which update-ca-certificates</code>.</label></li>
+  </ul>
+  <div class="callout note">
+    <span class="label">Automatizado — nada que instalar a mano</span>
+    La CA interna real ("CAColdecom", válida hasta 2027-12-20) está versionada en
+    <code>roles/repo_management/files/coldecom-ca.crt</code> y se instala
+    <strong>automáticamente</strong> en <code>/etc/pki/trust/anchors/coldecom-ca.crt</code>
+    de cada host (vía <code>roles/repo_management/tasks/ensure_ca_trusted.yml</code>),
+    justo antes de que se agregue o use cualquier repo Foreman real — tanto en
+    <code>validate</code> como en los modos reales de <code>UPGRADE</code>. Operación
+    idempotente, no afecta servicios. Si <code>update-ca-certificates</code> no existe
+    en el host, esa tarea fallará explícitamente en ese punto.
+  </div>
+  <ul class="checklist">
+    <li><input type="checkbox" id="c1-5"><label for="c1-5">Si la raíz es Btrfs: confirmar que hay snapshots habilitados (<code>snapper list</code>) — es el único mecanismo de rollback real que existe para este procedimiento (sección 5).</label></li>
+    <li><input type="checkbox" id="c1-6"><label for="c1-6">Si la raíz es Btrfs: espacio libre disponible ≥ espacio actualmente usado (chequeo ya automatizado por <code>precheck_btrfs_double_space_check</code>, pero conviene confirmarlo manualmente antes de la primera corrida).</label></li>
+  </ul>
+</section>
+
+<section class="main-section" id="s2">
+  <div class="section-head"><div class="section-num">2</div><h2>Variables que debes conseguir</h2></div>
+
+  <p>Todo vive en <strong><code>playbooks/group_vars/all.yml</code></strong> (valores comunes) y,
+  cuando un host necesite diferir, en un archivo nuevo
+  <strong><code>playbooks/host_vars/&lt;inventory_hostname_real&gt;.yml</code></strong> (copiar la
+  plantilla <code>playbooks/host_vars/CHANGE_ME_HOSTNAME_1.yml.example</code>). Nunca
+  dupliques el mismo valor en ambos: solo declara en <code>host_vars</code> lo que
+  realmente difiere del <code>group_vars</code>.</p>
+
+  <h3>2.1 Foreman/Katello — obligatorio para cualquier modo que no sea <code>precheck</code></h3>
+  <table class="clean">
+    <tr><th>Variable</th><th>Archivo</th><th>Estado</th></tr>
+    <tr><td><code>katello.base_url</code></td><td><code>group_vars/all.yml</code></td><td><span class="ok-tag">✓ completado</span> (<code>ansibleforeman.coldecom.com</code>)</td></tr>
+    <tr><td><code>katello.ca_certificate_path</code></td><td><code>group_vars/all.yml</code></td><td>Pendiente — ruta a la CA interna en el host (o <code>null</code> si aún no existe)</td></tr>
+    <tr><td><code>katello.sp4_repositories</code></td><td><code>group_vars/all.yml</code></td><td><span class="ok-tag">✓ completado y verificado</span> (10 repos, sincronizados)</td></tr>
+    <tr><td><code>katello.sp5_repositories</code></td><td><code>group_vars/all.yml</code></td><td><span class="ok-tag">✓ completado y verificado</span></td></tr>
+    <tr><td><code>katello.sp6_repositories</code></td><td><code>group_vars/all.yml</code></td><td><span class="ok-tag">✓ completado y verificado</span></td></tr>
+    <tr><td><code>katello.sp7_repositories</code></td><td><code>group_vars/all.yml</code></td><td><span class="ok-tag">✓ completado y verificado</span></td></tr>
+  </table>
+
+  <div class="callout note">
+    <span class="label">Nota</span>
+    Cada lista trae 10 repos (SUSE Linux Enterprise Server, Basesystem Module,
+    Server Applications Module, Desktop Applications Module y Python 3 Module,
+    Pool + Updates cada uno), verificados por API contra Foreman/Katello
+    (solo lectura) el 2026-10-01, todos sincronizados sin errores. Si en algún
+    momento alguna de estas listas quedara vacía, el proyecto se detiene
+    explícitamente en PRECHECK (<code>repos_foreman_configurados_origen</code>/
+    <code>_destino</code>) antes de tocar nada — es el comportamiento esperado,
+    no un error.
+  </div>
+
+  <h3>2.2 GeoPOS — recomendado completar antes de la primera corrida real</h3>
+  <table class="clean">
+    <tr><th>Variable</th><th>Qué conseguir</th></tr>
+    <tr><td><code>geopos_validation.services.items[].name</code></td><td>Nombre(s) real(es) de unidad systemd de GeoPOS</td></tr>
+    <tr><td><code>geopos_validation.java_processes.items[].match</code></td><td>Patrón específico del proceso Java de GeoPOS (nunca solo <code>"java"</code>)</td></tr>
+    <tr><td><code>geopos_validation.tcp_ports.items[].port</code></td><td>Puerto(s) TCP real(es) que expone GeoPOS</td></tr>
+    <tr><td><code>geopos_validation.health_checks.items[].url</code></td><td>URL(s) de health check HTTP/HTTPS, si existen (puede quedar deshabilitado si no hay)</td></tr>
+    <tr><td><code>critical: true/false</code> por ítem</td><td>Confirmar con el dueño de la aplicación cuáles son realmente críticos (bloquean el precheck si fallan)</td></tr>
+  </table>
+  <div class="callout risk">
+    <span class="label">Si se deja vacío</span>
+    Cada categoría queda <code>NOT_CHECKED</code> (no <code>FAILED</code>) — es seguro
+    pero no valida nada de GeoPOS. <strong>No recomendado para una migración real</strong>,
+    aceptable para la primera corrida de <code>precheck</code>/<code>validate</code> de reconocimiento.
+  </div>
+
+  <h3>2.3 Sistema</h3>
+  <table class="clean">
+    <tr><th>Variable</th><th>Qué conseguir</th></tr>
+    <tr><td><code>critical_services</code></td><td>Lista real de servicios systemd base que deben seguir activos (vacía por defecto deliberadamente — no usar <code>sshd</code>/<code>chronyd</code> como ejemplo copiado literal)</td></tr>
+    <tr><td><code>precheck_disk_checks[].min_free_mb</code></td><td>Umbral real de espacio libre por filesystem relevante (<code>/</code>, <code>/var</code>, etc.) — no hay valor universal inventado</td></tr>
+  </table>
+
+  <h3>2.4 Reportes</h3>
+  <table class="clean">
+    <tr><th>Variable</th><th>Estado</th></tr>
+    <tr><td><code>report_destination</code></td><td><span class="ok-tag">✓ completado</span> (<code>/data/work/Salida_Upgrade</code>) — ver verificación pendiente abajo</td></tr>
+    <tr><td><code>report_local_dir</code></td><td>Valor por defecto (<code>{{ playbook_dir }}/../reports</code>), sin cambios necesarios</td></tr>
+  </table>
+  <div class="callout risk">
+    <span class="label">A confirmar en el AWX real (no verificable desde el desarrollo)</span>
+    1) Que <code>/data/work/Salida_Upgrade</code> exista con permisos de escritura
+    para el usuario del Job en el Execution Environment. 2) Que sea
+    <strong>realmente persistente</strong>: si ese Execution Environment es un
+    contenedor que se destruye al terminar el Job, esta ruta debe estar montada
+    desde fuera de él — si es solo una carpeta dentro del contenedor efímero, no
+    cumple su propósito. Confirmar revisando el bloque "Persistencia del reporte"
+    del primer reporte HTML real generado.
+  </div>
+
+  <h3>2.5 AWX (si se ejecuta desde AWX)</h3>
+  <table class="clean">
+    <tr><th>Objeto</th><th>Qué conseguir</th></tr>
+    <tr><td>Project</td><td>Apuntando a este repositorio real (rama/commit)</td></tr>
+    <tr><td>Inventory</td><td>Hosts/grupos reales de GeoPOS, con <code>ansible_host</code>/<code>ansible_user</code> si aplica</td></tr>
+    <tr><td>Credential</td><td>SSH + <code>become</code> con los privilegios de la sección 1</td></tr>
+    <tr><td>Job Template</td><td>Playbook <code>playbooks/upgrade.yml</code></td></tr>
+    <tr><td>Survey</td><td>Solo <code>upgrade_mode</code> y <code>confirm_production_upgrade</code> (ver README §13)</td></tr>
+    <tr><td>Limit</td><td>Mecanismo para seleccionar el host de laboratorio (no agregar selector propio en el Survey)</td></tr>
+  </table>
+
+  <h3>2.6 Parámetros técnicos con default razonable pero no medido</h3>
+  <table class="clean">
+    <tr><th>Variable</th><th>Default actual</th><th>Qué confirmar en laboratorio</th></tr>
+    <tr><td><code>sp_migration_reboot_timeout</code></td><td>1800s</td><td>Tiempo real de arranque del host de laboratorio</td></tr>
+    <tr><td><code>sp_migration_reboot_connect_timeout</code></td><td>30s</td><td>Tiempo real de disponibilidad de SSH tras el arranque</td></tr>
+    <tr><td><code>sp_migration_updatestack_retries</code> / <code>_delay</code></td><td>3 / 2s</td><td>Si <code>updatestack-only</code> con rc 103 necesita más reintentos en la práctica</td></tr>
+    <tr><td><code>precheck_repo_reachability_timeout</code></td><td>10s</td><td>Si la red hacia Foreman es más lenta, ajustar</td></tr>
+    <tr><td><code>repo_management_backup_base_dir</code></td><td><code>/var/backup/ansible-sles-upgrade</code></td><td>Que exista espacio y permisos ahí en el host real</td></tr>
+  </table>
+</section>
+
+<section class="main-section" id="s3">
+  <div class="section-head"><div class="section-num">3</div><h2>Comportamientos que solo se simularon</h2></div>
+  <p>Estos NO son defectos: son los puntos del diseño que dependen de un Zypper
+  real y que el proyecto está preparado para fallar de forma explícita
+  (<code>FAILED</code>/<code>NOT_CHECKED</code> con evidencia) si no coinciden con lo
+  esperado, en vez de continuar a ciegas.</p>
+
+  <ul class="checklist">
+    <li><input type="checkbox" id="c3-1"><label for="c3-1"><strong>Formato real de <code>zypper --xmlout --non-interactive products -i</code></strong><span class="tag">riesgo principal</span><br>
+      La doble evidencia de Service Pack es un gate obligatorio (ver <code>ARQUITECTURA_Y_DISENO_TECNICO.html</code>, sección 7). Si el formato real no coincide con lo esperado, la etapa quedará <code>FAILED</code> con causa <code>service_pack_sin_evidencia_zypper</code> o <code>service_pack_evidencia_inconsistente</code>. <strong>Acción si ocurre</strong>: capturar la salida real (queda en el reporte, <code>zypper_products_xml_evidence</code>) y ajustar el regex en <code>roles/precheck/tasks/capture_state.yml</code>.</label></li>
+    <li><input type="checkbox" id="c3-2"><label for="c3-2"><strong><code>--reposd-dir</code> aislando realmente a Zypper</strong><br>
+      (usado por <code>validate</code> en <code>roles/sp_migration/tasks/preflight.yml</code>, y por el gate de seguridad <code>roles/repo_management/tasks/assert_enabled_repos.yml</code> indirectamente a través de <code>zypper repos -u</code>). Ejecutar primero <code>upgrade_mode: validate</code> y revisar que el reporte muestre <code>preflight.supported: true</code> con datos coherentes.</label></li>
+    <li><input type="checkbox" id="c3-3"><label for="c3-3"><strong>Comportamiento y return codes reales de <code>zypper patch --updatestack-only</code></strong> (en particular el código 103 de autoactualización de Zypper).</label></li>
+    <li><input type="checkbox" id="c3-4"><label for="c3-4"><strong>Tiempos reales de <code>dup</code>, reinicio y reconexión</strong> — comparar contra los defaults de la sección 2.6.</label></li>
+    <li><input type="checkbox" id="c3-5"><label for="c3-5"><strong>Que ningún repositorio preexistente real tenga una configuración atípica</strong> (por ejemplo, un repo con alias que ya empiece con el prefijo <code>ansible-sles-upgrade-</code> por coincidencia, lo que confundiría la limpieza). Revisar <code>zypper repos -u</code> en el host antes de la primera corrida.</label></li>
+  </ul>
+</section>
+
+<section class="main-section" id="s4">
+  <div class="section-head"><div class="section-num">4</div><h2>Orden recomendado de ejecución en el laboratorio</h2></div>
+  <ol class="steps">
+    <li><strong>Solo si el host de laboratorio está en SP4</strong>: ejecutar primero <code>upgrade_mode: precheck</code> → <code>validate</code> → <code>sp4_to_sp5</code> con <code>confirm_production_upgrade: true</code>, siguiendo los mismos pasos siguientes pero para esa etapa. <code>sp4_to_sp5</code> es independiente — no continúa automáticamente a SP6/SP7. Una vez el host quede en SP5, seguir con los pasos normales.</li>
+    <li><code>upgrade_mode: precheck</code> sobre el host de laboratorio. Revisar el reporte completo antes de continuar — especialmente cualquier <code>FAILED</code> o <code>WARNING</code> en repos, GeoPOS o espacio en disco.</li>
+    <li><code>upgrade_mode: validate</code> sobre el mismo host (requiere los repos Foreman de origen y destino ya configurados). Confirmar <code>preflight.status: OK</code> con evidencia real de Zypper, no solo que el playbook termine sin error.</li>
+    <li>Solo si los pasos anteriores fueron satisfactorios: <code>upgrade_mode: sp5_to_sp6</code> con <code>confirm_production_upgrade: true</code> en <strong>un único host no crítico</strong>. Revisar el reporte de la etapa completo, incluida la sección "Inventario final confiable" y el gate de doble evidencia.</li>
+    <li>Repetir <code>validate</code> y luego <code>sp6_to_sp7</code> de la misma forma, de forma independiente, antes de intentar <code>full</code> encadenado.</li>
+    <li>Solo después de una corrida exitosa documentada, evaluar <code>serial_batch_size</code> mayor a 1 o un grupo de hosts — el valor por defecto sigue siendo 1.</li>
+  </ol>
+</section>
+
+<section class="main-section" id="s5">
+  <div class="section-head"><div class="section-num">5</div><h2>Seguridad y límites que no cambian</h2></div>
+  <ul class="plain">
+    <li>No existe rollback automático. El único mecanismo real es un snapshot Btrfs (<code>snapper rollback</code>) si la raíz lo soporta — bajo responsabilidad del operador, siguiendo el procedimiento oficial de SUSE.</li>
+    <li>Los repositorios preexistentes nunca se eliminan y nunca se reactivan automáticamente: queda a cargo del proceso corporativo de parchado.</li>
+    <li>Ante un fallo, por defecto se conserva todo (repos temporales, respaldo) para diagnóstico (<code>cleanup_repositories_on_failure: false</code>). No cambiar este valor salvo decisión explícita.</li>
+    <li><code>confirm_production_upgrade: false</code> por defecto: ningún modo real modifica el sistema sin activarlo explícitamente.</li>
+  </ul>
+</section>
+
+<section class="main-section" id="s6">
+  <div class="section-head"><div class="section-num">6</div><h2>Cierre de este checklist</h2></div>
+  <ul class="checklist">
+    <li><input type="checkbox" id="c6-1"><label for="c6-1">Todos los <code>CHANGE_ME</code> de la sección 2 fueron reemplazados por datos reales (o quedan deliberadamente vacíos/<code>false</code>, con el riesgo correspondiente entendido y aceptado).</label></li>
+    <li><input type="checkbox" id="c6-2"><label for="c6-2">Se ejecutó <code>precheck</code> y <code>validate</code> contra el host de laboratorio y ambos reportes fueron revisados por una persona.</label></li>
+    <li><input type="checkbox" id="c6-3"><label for="c6-3">Se tiene definido quién autoriza pasar de <code>validate</code> a un modo real.</label></li>
+    <li><input type="checkbox" id="c6-4"><label for="c6-4">Se entiende que, mientras algún punto de la sección 3 no se haya confirmado, es esperable que la primera corrida real falle de forma explícita y controlada (no silenciosa) hasta ajustar lo necesario.</label></li>
+  </ul>
+</section>
+
+<footer class="page-footer">ansible-sles-upgrade — Checklist de laboratorio</footer>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,58 @@
+---
+# roles/precheck/tasks/disk_space.yml
+#
+# Verifica espacio libre en los filesystems configurados en
+# precheck_disk_checks (0..N, sin umbrales inventados) y aplica la
+# recomendación de SUSE para raíz Btrfs con snapshots: disponer de al
+# menos tanto espacio libre como el actualmente usado (ver SLES 15
+# Upgrade Guide, "Checking disk space on Btrfs root file systems").
+
+- name: Registrar NOT_CHECKED si no hay filesystems configurados para validar
+  ansible.builtin.set_fact:
+    precheck_checks: "{{ precheck_checks + [{'name': 'espacio_disco_filesystems', 'status': 'NOT_CHECKED', 'detail': 'precheck_disk_checks vacío; definir umbrales reales por filesystem antes de producción'}] }}"
+  when: (precheck_disk_checks | default([])) | length == 0
+
+- name: Evaluar cada filesystem configurado en precheck_disk_checks
+  ansible.builtin.set_fact:
+    precheck_checks: "{{ precheck_checks + [{
+        'name': 'espacio_disco_' ~ (item.path | regex_replace('/', '_')),
+        'status': (
+          'WARNING' if _mount_match | length == 0
+          else ('OK' if (_mount_match[0].size_available / 1024 / 1024) >= (item.min_free_mb | float) else 'FAILED')
+        ),
+        'detail': (
+          'filesystem no encontrado en ansible_facts.mounts' if _mount_match | length == 0
+          else 'disponible_mb=' ~ ((_mount_match[0].size_available / 1024 / 1024) | round(0)) ~ ' minimo_requerido_mb=' ~ item.min_free_mb
+        )
+      }] }}"
+  loop: "{{ precheck_disk_checks | default([]) }}"
+  vars:
+    _mount_match: "{{ ansible_facts['mounts'] | selectattr('mount', 'equalto', item.path) | list }}"
+
+- name: Localizar el punto de montaje raíz
+  ansible.builtin.set_fact:
+    _root_mount: "{{ ansible_facts['mounts'] | selectattr('mount', 'equalto', '/') | list }}"
+
+- name: Registrar verificación Btrfs deshabilitada
+  ansible.builtin.set_fact:
+    precheck_checks: "{{ precheck_checks + [{'name': 'espacio_btrfs_doble', 'status': 'NOT_CHECKED', 'detail': 'verificación deshabilitada (precheck_btrfs_double_space_check: false)'}] }}"
+  when: not (precheck_btrfs_double_space_check | default(true))
+
+- name: Registrar verificación Btrfs no aplicable (raíz no es Btrfs)
+  ansible.builtin.set_fact:
+    precheck_checks: "{{ precheck_checks + [{'name': 'espacio_btrfs_doble', 'status': 'NOT_CHECKED', 'detail': 'la raíz no usa Btrfs (fstype=' ~ (_root_mount[0].fstype | default('desconocido')) ~ ')'}] }}"
+  when:
+    - precheck_btrfs_double_space_check | default(true)
+    - (_root_mount | length == 0) or (_root_mount[0].fstype | default('') != 'btrfs')
+
+- name: Evaluar recomendación de espacio doble en raíz Btrfs
+  ansible.builtin.set_fact:
+    precheck_checks: "{{ precheck_checks + [{
+        'name': 'espacio_btrfs_doble',
+        'status': ('OK' if _root_mount[0].size_available >= (_root_mount[0].size_total - _root_mount[0].size_available) else 'WARNING'),
+        'detail': 'disponible_bytes=' ~ _root_mount[0].size_available ~ ' usado_bytes=' ~ (_root_mount[0].size_total - _root_mount[0].size_available)
+      }] }}"
+  when:
+    - precheck_btrfs_double_space_check | default(true)
+    - _root_mount | length > 0
+    - _root_mount[0].fstype | default('') == 'btrfs'

@@ -1,0 +1,84 @@
+---
+# roles/precheck/tasks/capture_state.yml
+#
+# Captura una "fotografía" puntual del estado del sistema. Se usa antes y
+# después de cada etapa de migración para poder comparar en el reporte
+# (kernel, uptime, SP detectado, etc.). No decide nada por sí sola.
+#
+# IMPORTANTE: este archivo SIEMPRE escribe en la variable de trabajo
+# `system_state_snapshot`. Quien lo invoque debe copiar inmediatamente el
+# resultado a `system_state_snapshot_before` o `system_state_snapshot_after`
+# según corresponda, y usar SIEMPRE esos nombres explícitos en el resto
+# del código — nunca `system_state_snapshot` directamente — para no
+# arriesgarse a sobrescribir el estado "antes" si este archivo se vuelve a
+# invocar más adelante en la misma etapa.
+
+- name: Releer /etc/os-release actualizado
+  ansible.builtin.slurp:
+    src: /etc/os-release
+  register: _os_release_raw
+
+- name: Determinar Service Pack actual a partir de os-release
+  ansible.builtin.set_fact:
+    _os_release_content: "{{ _os_release_raw.content | b64decode }}"
+
+- name: Extraer VERSION_ID de os-release
+  ansible.builtin.set_fact:
+    _version_id: "{{ (_os_release_content | regex_search('VERSION_ID=\"?([0-9.]+)\"?', '\\1') | default([], true) | first) | default('', true) }}"
+
+- name: Calcular identificador interno de Service Pack (sp5/sp6/sp7/otro) según os-release
+  ansible.builtin.set_fact:
+    current_sp_id: >-
+      {{
+        {
+          '15.4': 'sp4',
+          '15.5': 'sp5',
+          '15.6': 'sp6',
+          '15.7': 'sp7'
+        }.get(_version_id, 'desconocido_' ~ _version_id)
+      }}
+
+- name: Obtener evidencia adicional de versión vía Zypper (segunda fuente)
+  ansible.builtin.command:
+    cmd: zypper --no-remote --no-refresh --xmlout --non-interactive products -i
+  register: _zypper_products_raw
+  changed_when: false
+  failed_when: false
+
+- name: Extraer la versión del producto SLES reportada por Zypper
+  ansible.builtin.set_fact:
+    _zypper_sles_version: >-
+      {{
+        (_zypper_products_raw.stdout | default('') | regex_search('<product\s+name="SLES"\s+version="([^"]+)"', '\1') | default([], true) | first) | default('', true)
+      }}
+
+- name: Comparar ambas evidencias de versión (os-release vs Zypper)
+  ansible.builtin.set_fact:
+    # NOTA: no se asume un formato exacto para el atributo "version" de
+    # Zypper en un Service Pack (solo se confirmó su forma para GA en la
+    # documentación oficial). Por eso la comparación es por coincidencia
+    # de subcadena, no por igualdad estricta, y una discrepancia se
+    # reporta como WARNING (ver sp_version.yml), no como fallo duro.
+    _sp_cross_check_consistent: >-
+      {{
+        (_zypper_sles_version | length == 0)
+        or (_version_id in _zypper_sles_version)
+        or (_zypper_sles_version in _version_id)
+      }}
+
+- name: Construir fotografía del estado del sistema
+  ansible.builtin.set_fact:
+    system_state_snapshot:
+      hostname: "{{ ansible_facts['hostname'] }}"
+      fqdn: "{{ ansible_facts['fqdn'] | default(ansible_facts['hostname']) }}"
+      distribution: "{{ ansible_facts['distribution'] }}"
+      distribution_version: "{{ ansible_facts['distribution_version'] }}"
+      os_release_version_id: "{{ _version_id }}"
+      current_sp_id: "{{ current_sp_id }}"
+      architecture: "{{ ansible_facts['architecture'] }}"
+      kernel: "{{ ansible_facts['kernel'] }}"
+      uptime_seconds: "{{ ansible_facts['uptime_seconds'] | default('NOT_CHECKED') }}"
+      zypper_products_xml_evidence: "{{ _zypper_products_raw.stdout | default('NOT_CHECKED') }}"
+      zypper_sles_version: "{{ _zypper_sles_version if _zypper_sles_version | length > 0 else 'NOT_CHECKED' }}"
+      sp_cross_check_consistent: "{{ _sp_cross_check_consistent }}"
+      captured_at: "{{ lookup('pipe', 'date -u +%Y-%m-%dT%H:%M:%SZ') }}"

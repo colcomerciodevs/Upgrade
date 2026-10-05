@@ -1,0 +1,50 @@
+---
+# roles/geopos_validation/tasks/health_checks.yml
+# Valida 0..N health checks HTTP/HTTPS opcionales de GeoPOS.
+# Deshabilitado por defecto: no se exige si el ambiente no los tiene.
+
+- name: Registrar categoría "health_checks" deshabilitada
+  ansible.builtin.set_fact:
+    _geopos_category_health_checks:
+      enabled: false
+      items: []
+      category_status: NOT_CHECKED
+  when: not (geopos_validation.health_checks.enabled | default(false))
+
+- name: Consultar health checks HTTP/HTTPS de GeoPOS
+  ansible.builtin.uri:
+    url: "{{ item.url }}"
+    method: GET
+    status_code: "{{ [item.expected_status | default(200)] }}"
+    timeout: "{{ geopos_validation_health_check_timeout }}"
+    validate_certs: "{{ item.validate_certs | default(true) }}"
+  register: _geopos_health_raw
+  loop: "{{ geopos_validation.health_checks['items'] | default([]) }}"
+  loop_control:
+    label: "{{ item.name }}"
+  ignore_errors: true
+  when: geopos_validation.health_checks.enabled | default(false)
+
+- name: Consolidar resultados de la categoría "health_checks"
+  ansible.builtin.set_fact:
+    _geopos_category_health_checks:
+      enabled: true
+      items: "{{ _health_items }}"
+      category_status: >-
+        {{
+          'OK' if (geopos_validation.health_checks['items'] | default([])) | length == 0
+          else ('FAILED' if (_health_items | selectattr('status', 'equalto', 'FAILED') | list | length > 0)
+          else ('WARNING' if (_health_items | selectattr('status', 'equalto', 'WARNING') | list | length > 0)
+          else 'OK'))
+        }}
+  vars:
+    _health_items: |-
+      {% set result = [] %}
+      {% for res in _geopos_health_raw.results | default([]) %}
+      {% set is_healthy = not (res.failed | default(false)) %}
+      {% set is_critical = res.item.critical | default(true) %}
+      {% set item_status = 'OK' if is_healthy else ('FAILED' if is_critical else 'WARNING') %}
+      {% set _ = result.append({'name': res.item.name, 'critical': is_critical, 'url': res.item.url, 'status': item_status}) %}
+      {% endfor %}
+      {{ result }}
+  when: geopos_validation.health_checks.enabled | default(false)

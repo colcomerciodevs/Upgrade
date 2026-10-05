@@ -1,0 +1,27 @@
+---
+# playbooks/host_vars/CHANGE_ME_HOSTNAME_1.yml.example
+#
+# Ejemplo de excepción por host. Renombrar el archivo con el hostname
+# real (sin ".example") solamente cuando ese host necesite diferir de
+# playbooks/group_vars/all.yml.
+#
+# UBICACIÓN DELIBERADA: junto al playbook, no junto al inventario — ver
+# playbooks/group_vars/all.yml y README, sección 6, para el porqué (así
+# se sigue cargando igual cuando AWX sustituye el inventario local).
+#
+# No crear archivos host_vars para hosts que no tienen excepciones:
+# la herencia desde group_vars ya cubre el caso general. El hostname del
+# archivo debe coincidir con el `inventory_hostname` real que use el
+# Inventory de AWX (revisar cómo lo nombra ese Inventory concreto).
+
+# Ejemplo: este host no expone health checks, pero sí tiene procesos
+# Java adicionales respecto al resto del grupo.
+# geopos_validation:
+#   enabled: true
+#   fail_precheck_if_unhealthy: true
+#   java_processes:
+#     enabled: true
+#     items:
+#       - name: CHANGE_ME_COMPONENT_EXTRA
+#         match: CHANGE_ME_PROCESS_PATTERN_EXTRA
+#         critical: false

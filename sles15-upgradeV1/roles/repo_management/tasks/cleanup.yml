@@ -1,0 +1,62 @@
+---
+# roles/repo_management/tasks/cleanup.yml
+#
+# Elimina ÚNICAMENTE los repositorios temporales creados por esta
+# automatización que coincidan con el prefijo indicado. Se usa DOS veces
+# por etapa: justo después de updatestack (para retirar los repos Foreman
+# de origen) y al final, en una migración exitosa (para retirar los repos
+# Foreman de destino). Nunca reactiva repositorios preexistentes: eso
+# queda a cargo del proceso corporativo de parchado.
+#
+# Requiere: repo_management_cleanup_prefix (por ejemplo
+# "ansible-sles-upgrade-sp6-dst-"). Acumula en `repos_temporary_removed`
+# (debe inicializarse en [] al comenzar la etapa).
+#
+# EVIDENCIA PARCIAL: si el repo N falla al eliminarse, los repos 1..N-1 ya
+# eliminados deben quedar registrados en repos_temporary_removed de todos
+# modos. El loop nunca aborta a mitad de camino (failed_when: false); el
+# fallo se reporta explícitamente DESPUÉS de consolidar la evidencia real.
+
+- name: Listar repositorios actuales para localizar los temporales a eliminar
+  ansible.builtin.command:
+    cmd: zypper --xmlout --non-interactive repos -u
+  register: _repos_current_xml
+  changed_when: false
+  become: true
+
+- name: Calcular alias de repositorios temporales presentes con este prefijo
+  ansible.builtin.set_fact:
+    _repos_to_remove: >-
+      {{
+        _repos_current_xml.stdout | default('')
+        | regex_findall('alias=\"([^\"]+)\"')
+        | select('match', '^' ~ repo_management_cleanup_prefix)
+        | list
+      }}
+
+- name: Eliminar repositorios temporales de esta automatización
+  ansible.builtin.command:
+    cmd: "zypper --non-interactive removerepo {{ item }}"
+  loop: "{{ _repos_to_remove }}"
+  become: true
+  register: _removerepo_result
+  changed_when: true
+  failed_when: false
+
+- name: Registrar los alias EFECTIVAMENTE eliminados y los que fallaron (según rc real)
+  ansible.builtin.set_fact:
+    _removerepo_ok: "{{ _removerepo_result.results | selectattr('rc', 'defined') | selectattr('rc', 'equalto', 0) | map(attribute='item') | list }}"
+    _removerepo_failed: "{{ _removerepo_result.results | selectattr('rc', 'defined') | rejectattr('rc', 'equalto', 0) | map(attribute='item') | list }}"
+
+- name: Registrar en el acumulado de la etapa los alias temporales que SÍ se eliminaron
+  ansible.builtin.set_fact:
+    repos_temporary_removed: "{{ repos_temporary_removed + _removerepo_ok }}"
+
+- name: Fallar explícitamente si algún repositorio temporal no pudo eliminarse
+  ansible.builtin.fail:
+    msg: >-
+      No se pudieron eliminar los siguientes repositorios temporales:
+      {{ _removerepo_failed | join(', ') }}. Los que sí se eliminaron
+      correctamente antes del fallo quedaron registrados:
+      {{ _removerepo_ok | join(', ') or 'ninguno' }}.
+  when: _removerepo_failed | length > 0

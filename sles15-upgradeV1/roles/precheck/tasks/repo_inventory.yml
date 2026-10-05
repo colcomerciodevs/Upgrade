@@ -1,0 +1,91 @@
+---
+# roles/precheck/tasks/repo_inventory.yml
+#
+# Inventaría los repositorios ACTUALMENTE configurados (alias, nombre,
+# habilitado/deshabilitado) para el reporte, y detecta repositorios no
+# reconocidos (ni permanentes ni temporales de esta automatización).
+# Es de solo lectura: no deshabilita, agrega ni elimina ningún repositorio.
+#
+# FAIL-CLOSED: si "zypper repos" falla (rc != 0) o la salida XML no es
+# interpretable, NO se asume "ningún repositorio habilitado/configurado".
+# Un inventario en el que no se puede confiar debe bloquear el precheck
+# (status FAILED), porque continuar sin saber qué hay realmente habilitado
+# es justamente el escenario que este precheck existe para evitar.
+
+- name: Listar repositorios configurados actualmente (XML)
+  ansible.builtin.command:
+    cmd: zypper --xmlout --non-interactive repos -u
+  register: _repos_xml
+  changed_when: false
+  failed_when: false
+
+- name: Determinar si el inventario de repositorios es confiable
+  ansible.builtin.set_fact:
+    _repo_inventory_reliable: >-
+      {{
+        (_repos_xml.rc | default(1)) == 0
+        and '<repo-list' in (_repos_xml.stdout | default(''))
+      }}
+
+- name: Extraer alias de los repositorios configurados (solo si el inventario es confiable)
+  ansible.builtin.set_fact:
+    _configured_repo_aliases: "{{ _repos_xml.stdout | regex_findall('alias=\"([^\"]+)\"') }}"
+  when: _repo_inventory_reliable
+
+- name: Extraer alias, nombre y estado habilitado/deshabilitado de cada repositorio (solo si el inventario es confiable)
+  ansible.builtin.set_fact:
+    _repo_inventory_tuples: "{{ _repos_xml.stdout | regex_findall('<repo\\s+alias=\"([^\"]+)\"\\s+name=\"([^\"]+)\"[^>]*?\\benabled=\"([^\"]+)\"') }}"
+  when: _repo_inventory_reliable
+
+- name: Construir inventario estructurado de repositorios para el reporte
+  ansible.builtin.set_fact:
+    precheck_repo_inventory: |-
+      {% set result = [] %}
+      {% for t in _repo_inventory_tuples | default([]) %}
+      {% set _ = result.append({'alias': t[0], 'name': t[1], 'enabled': (t[2] == '1')}) %}
+      {% endfor %}
+      {{ result }}
+  when: _repo_inventory_reliable
+
+- name: Registrar el inventario de repositorios en el precheck como FAILED si no es confiable
+  ansible.builtin.set_fact:
+    precheck_checks: "{{ precheck_checks + [{
+        'name': 'inventario_repositorios',
+        'status': 'FAILED',
+        'detail': 'zypper repos falló (rc=' ~ (_repos_xml.rc | default('N/D') | string) ~ ') o devolvió una salida XML no interpretable; no se puede determinar con certeza qué repositorios están configurados/habilitados'
+      }] }}"
+  when: not _repo_inventory_reliable
+
+- name: Calcular detalle del inventario de repositorios (inventario confiable)
+  ansible.builtin.set_fact:
+    _repo_inventory_detail: >-
+      {{
+        (precheck_repo_inventory | map(attribute='alias') | zip(precheck_repo_inventory | map(attribute='enabled')) | map('join', '=') | join(', '))
+        if precheck_repo_inventory | length > 0 else 'inventario confiable: no hay repositorios configurados'
+      }}
+  when: _repo_inventory_reliable
+
+- name: Registrar el inventario de repositorios en el precheck (informativo)
+  ansible.builtin.set_fact:
+    precheck_checks: "{{ precheck_checks + [{'name': 'inventario_repositorios', 'status': ('OK' if precheck_repo_inventory | length > 0 else 'WARNING'), 'detail': _repo_inventory_detail}] }}"
+  when: _repo_inventory_reliable
+
+- name: Calcular repositorios no reconocidos (ni permanentes ni temporales de esta automatización)
+  ansible.builtin.set_fact:
+    _unrecognized_repos: "{{ _configured_repo_aliases | reject('in', permanent_repos | default([])) | reject('match', '^' ~ temporary_repo_prefix) | list }}"
+  when: _repo_inventory_reliable
+
+- name: Registrar hallazgo de repositorios no esperados como FAILED si el inventario no es confiable
+  ansible.builtin.set_fact:
+    precheck_checks: "{{ precheck_checks + [{'name': 'repositorios_no_esperados', 'status': 'FAILED', 'detail': 'no se puede evaluar: el inventario de repositorios no es confiable (ver inventario_repositorios)'}] }}"
+  when: not _repo_inventory_reliable
+
+- name: Registrar hallazgo cuando no hay lista de repos permanentes definida
+  ansible.builtin.set_fact:
+    precheck_checks: "{{ precheck_checks + [{'name': 'repositorios_no_esperados', 'status': 'NOT_CHECKED', 'detail': 'permanent_repos vacío; no es posible determinar qué repos son esperados. Repos actuales: ' ~ (_configured_repo_aliases | join(', '))}] }}"
+  when: _repo_inventory_reliable and (permanent_repos | default([])) | length == 0
+
+- name: Registrar hallazgo de repositorios no reconocidos
+  ansible.builtin.set_fact:
+    precheck_checks: "{{ precheck_checks + [{'name': 'repositorios_no_esperados', 'status': ('OK' if _unrecognized_repos | length == 0 else 'WARNING'), 'detail': ('sin repositorios no reconocidos' if _unrecognized_repos | length == 0 else 'repos no reconocidos: ' ~ (_unrecognized_repos | join(', ')))}] }}"
+  when: _repo_inventory_reliable and (permanent_repos | default([])) | length > 0

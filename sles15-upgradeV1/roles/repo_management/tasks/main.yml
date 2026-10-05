@@ -1,0 +1,19 @@
+---
+# roles/repo_management/tasks/main.yml
+#
+# Este rol se usa siempre invocando archivos específicos con `tasks_from`
+# desde playbooks/tasks/run_stage.yml, en este orden por etapa:
+#
+#   1. backup.yml              -> respaldo + repos_enabled_before/repos_disabled_before
+#   2. disable_preexisting.yml -> deshabilita solo los que estaban enabled
+#   3. add_temp_repos.yml      -> repos Foreman ORIGEN (alias "-src-", para updatestack)
+#   4. (sp_migration: updatestack.yml)
+#   5. cleanup.yml             -> retira los repos Foreman ORIGEN ("-src-")
+#   6. add_temp_repos.yml      -> repos Foreman DESTINO (alias "-dst-", para dup)
+#   7. (sp_migration: dup -D + dup real + reboot)
+#   8. cleanup.yml             -> retira los repos Foreman DESTINO ("-dst-"), solo si la etapa fue exitosa
+#   9. final_inventory.yml     -> repos_enabled_after
+#
+# Ver cada archivo para las vars que requiere. No existe un "main.yml"
+# combinado de un solo paso: el orden multi-fase es intencional (ver
+# README, sección 9).

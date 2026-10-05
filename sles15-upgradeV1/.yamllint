@@ -1,0 +1,10 @@
+---
+extends: default
+rules:
+  line-length:
+    max: 320
+    level: warning
+  truthy:
+    allowed-values: ['true', 'false']
+  braces:
+    max-spaces-inside: 1

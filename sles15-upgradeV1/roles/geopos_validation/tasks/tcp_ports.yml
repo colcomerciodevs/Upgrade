@@ -1,0 +1,48 @@
+---
+# roles/geopos_validation/tasks/tcp_ports.yml
+# Valida 0..N puertos TCP de GeoPOS verificando que estén escuchando.
+
+- name: Registrar categoría "tcp_ports" deshabilitada
+  ansible.builtin.set_fact:
+    _geopos_category_tcp_ports:
+      enabled: false
+      items: []
+      category_status: NOT_CHECKED
+  when: not (geopos_validation.tcp_ports.enabled | default(false))
+
+- name: Verificar que cada puerto TCP de GeoPOS esté escuchando
+  ansible.builtin.wait_for:
+    host: "{{ item.host | default('127.0.0.1') }}"
+    port: "{{ item.port }}"
+    state: started
+    timeout: 3
+  register: _geopos_ports_raw
+  loop: "{{ geopos_validation.tcp_ports['items'] | default([]) }}"
+  loop_control:
+    label: "{{ item.name }}"
+  ignore_errors: true
+  when: geopos_validation.tcp_ports.enabled | default(false)
+
+- name: Consolidar resultados de la categoría "tcp_ports"
+  ansible.builtin.set_fact:
+    _geopos_category_tcp_ports:
+      enabled: true
+      items: "{{ _port_items }}"
+      category_status: >-
+        {{
+          'OK' if (geopos_validation.tcp_ports['items'] | default([])) | length == 0
+          else ('FAILED' if (_port_items | selectattr('status', 'equalto', 'FAILED') | list | length > 0)
+          else ('WARNING' if (_port_items | selectattr('status', 'equalto', 'WARNING') | list | length > 0)
+          else 'OK'))
+        }}
+  vars:
+    _port_items: |-
+      {% set result = [] %}
+      {% for res in _geopos_ports_raw.results | default([]) %}
+      {% set is_open = not (res.failed | default(false)) %}
+      {% set is_critical = res.item.critical | default(true) %}
+      {% set item_status = 'OK' if is_open else ('FAILED' if is_critical else 'WARNING') %}
+      {% set _ = result.append({'name': res.item.name, 'critical': is_critical, 'port': res.item.port, 'status': item_status}) %}
+      {% endfor %}
+      {{ result }}
+  when: geopos_validation.tcp_ports.enabled | default(false)

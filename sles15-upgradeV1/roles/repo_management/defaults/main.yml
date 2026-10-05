@@ -1,0 +1,17 @@
+---
+# roles/repo_management/defaults/main.yml
+
+# Directorio base (en el host administrado) donde se respalda
+# /etc/zypp/repos.d antes de modificar repositorios. Se le agrega un
+# timestamp y el nombre de la etapa en cada ejecución.
+repo_management_backup_base_dir: /var/backup/ansible-sles-upgrade
+
+# Vars que debe suministrar quien incluye este rol (sin valor por defecto
+# de negocio, para forzar que se declaren explícitamente por etapa/fase):
+#   backup.yml              : repo_management_target_sp
+#   add_temp_repos.yml      : repo_management_phase_sp, repo_management_alias_suffix,
+#                             repo_management_phase_repositories, repo_management_phase_releasever
+#   cleanup.yml             : repo_management_cleanup_prefix
+#
+# repos_temporary_created y repos_temporary_removed deben inicializarse en
+# [] al comenzar cada etapa (ver playbooks/tasks/run_stage.yml).

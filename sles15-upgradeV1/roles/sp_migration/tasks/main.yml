@@ -1,0 +1,98 @@
+---
+# roles/sp_migration/tasks/main.yml
+#
+# Ejecuta la migración real de Service Pack, ya con los repos Foreman de
+# destino habilitados (ver playbooks/tasks/run_stage.yml). Basado en el
+# procedimiento "plain Zypper" documentado por SUSE (adaptado a
+# repositorios Foreman/Katello, decisión de arquitectura de este proyecto
+# — ver README.md).
+#
+# SP5 -> SP6 no usa --releasever (así lo documenta la guía SLES 15 SP6).
+# SP6 -> SP7 sí usa --releasever=15-SP7 (así lo documenta la guía SLES 15 SP7).
+# Quien incluye este rol decide sp_migration_releasever según la etapa.
+#
+# NOTAS IMPORTANTES:
+# - El paso "zypper patch --updatestack-only" NO está aquí: se ejecuta
+#   ANTES, con los repos Foreman de ORIGEN (ver updatestack.yml).
+# - La confirmación confirm_production_upgrade YA se validó en
+#   run_stage.yml, ANTES de tocar cualquier repositorio. Este archivo no
+#   vuelve a preguntarlo: si se llegó aquí, ya está autorizado.
+# - No existe un modo "solo dry-run" en este archivo: dup -D se ejecuta
+#   SIEMPRE como gate obligatorio inmediatamente antes del dup real. Para
+#   un ensayo que se pueda pedir de forma independiente sin llegar a este
+#   punto, use upgrade_mode: validate (roles/sp_migration/tasks/preflight.yml).
+# - El reinicio es SIEMPRE obligatorio tras un dup real aplicado.
+#
+# MODELO DE ESTADOS (no se pierde evidencia si el reinicio falla):
+#   sp_migration_dup_applied      -> true inmediatamente después del dup real exitoso.
+#   sp_migration_reboot_completed -> true solo si el reinicio realmente terminó.
+#   sp_migration_reconnected      -> true solo si Ansible reconectó tras el reinicio.
+# Estas tres son independientes entre sí. Un reinicio fallido NUNCA borra
+# la evidencia de que el dup sí se aplicó: el bloque de reinicio captura su
+# propio fallo con rescue, sin afectar los hechos ya establecidos.
+# `stage_validated` (calculado en playbooks/tasks/run_stage.yml) es la
+# única bandera que además exige reconexión, SP confirmado, servicios
+# críticos y GeoPOS crítico OK.
+
+- name: Ejecutar dup -D como gate obligatorio inmediatamente antes del dup real
+  ansible.builtin.command:
+    cmd: >-
+      zypper --non-interactive
+      {{ '--releasever=' ~ sp_migration_releasever if (sp_migration_releasever | default('')) | length > 0 else '' }}
+      dup -D --no-allow-vendor-change --no-recommends
+  become: true
+  register: sp_migration_dry_run_result
+  changed_when: false
+  failed_when: sp_migration_dry_run_result.rc != 0
+
+- name: Registrar salida resumida del gate dup -D
+  ansible.builtin.set_fact:
+    sp_migration_dry_run_output: "{{ sp_migration_dry_run_result.stdout | default('') | truncate(20000) }}"
+
+- name: Ejecutar la migración real (zypper dup)
+  ansible.builtin.command:
+    cmd: >-
+      zypper --non-interactive
+      {{ '--releasever=' ~ sp_migration_releasever if (sp_migration_releasever | default('')) | length > 0 else '' }}
+      dup --no-allow-vendor-change --no-recommends
+  become: true
+  register: sp_migration_dup_result
+  changed_when: true
+  failed_when: sp_migration_dup_result.rc != 0
+
+- name: Registrar salida resumida de la migración real
+  ansible.builtin.set_fact:
+    sp_migration_dup_output: "{{ sp_migration_dup_result.stdout | default('') | truncate(20000) }}"
+
+- name: Marcar el dup como aplicado INMEDIATAMENTE (no depende del resultado del reinicio)
+  ansible.builtin.set_fact:
+    sp_migration_dup_applied: true
+
+- name: Verificar paquetes huérfanos/no necesarios tras la migración (informativo)
+  ansible.builtin.command:
+    cmd: zypper --non-interactive packages --orphaned --unneeded
+  register: sp_migration_orphaned_packages
+  become: true
+  changed_when: false
+  failed_when: false
+
+- name: Reiniciar el sistema y esperar reconexión (fallo capturado localmente; el dup ya quedó registrado)
+  block:
+    - name: Reiniciar el sistema tras la migración real (obligatorio, sin excepción)
+      ansible.builtin.reboot:
+        reboot_timeout: "{{ sp_migration_reboot_timeout }}"
+        connect_timeout: "{{ sp_migration_reboot_connect_timeout }}"
+        pre_reboot_delay: "{{ sp_migration_reboot_pre_reboot_delay }}"
+        msg: "Reinicio controlado por ansible-sles-upgrade ({{ sp_migration_current_sp }} -> {{ sp_migration_target_sp }})"
+      become: true
+      register: sp_migration_reboot_result
+
+    - name: Marcar reinicio y reconexión como completados
+      ansible.builtin.set_fact:
+        sp_migration_reboot_completed: true
+        sp_migration_reconnected: true
+  rescue:
+    - name: Registrar que el reinicio o la reconexión fallaron (el dup sigue registrado como aplicado)
+      ansible.builtin.set_fact:
+        sp_migration_reboot_completed: false
+        sp_migration_reconnected: false

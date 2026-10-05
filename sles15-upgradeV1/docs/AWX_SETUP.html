@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Configuración de AWX desde cero</title>
+<style>
+  :root {
+    --navy: #1b2a4a;
+    --teal: #1f7a6c;
+    --gray-dark: #333;
+    --gray-mid: #666;
+    --light-bg: #f4f6f8;
+    --ok-green: #2e7d32;
+    --warn-amber: #b8860b;
+    --fail-red: #c62828;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Helvetica Neue", Arial, sans-serif;
+    color: var(--gray-dark);
+    font-size: 15px;
+    line-height: 1.55;
+    margin: 0;
+    background: #fff;
+  }
+  h1, h2, h3 { font-family: Arial, sans-serif; color: var(--navy); }
+  code {
+    font-family: "DejaVu Sans Mono", Consolas, monospace;
+    font-size: 0.88em;
+    background: var(--light-bg);
+    padding: 1px 5px;
+    border-radius: 3px;
+  }
+  pre {
+    background: #11151c;
+    color: #e8edf3;
+    padding: 12px 16px;
+    border-radius: 8px;
+    overflow-x: auto;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .wrap { max-width: 880px; margin: 0 auto; padding: 0 24px 60px; }
+
+  header.top {
+    background: var(--navy);
+    color: white;
+    padding: 36px 0 30px;
+    margin-bottom: 8px;
+  }
+  header.top .wrap { padding-top: 0; padding-bottom: 0; }
+  header.top .kicker {
+    color: #8fb3e8;
+    font-size: 12.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+  header.top h1 { color: white; font-size: 28px; margin: 0 0 8px 0; }
+  header.top .subtitle { color: #c9d6e8; font-size: 15px; max-width: 700px; }
+
+  nav.quicknav {
+    background: var(--light-bg);
+    border-bottom: 1px solid #e0e3e7;
+    padding: 12px 0;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  nav.quicknav .wrap { display: flex; flex-wrap: wrap; gap: 6px 14px; padding-top:0; padding-bottom:0; }
+  nav.quicknav a { color: var(--navy); text-decoration: none; font-size: 13px; font-weight: bold; white-space: nowrap; }
+  nav.quicknav a:hover { color: var(--teal); text-decoration: underline; }
+
+  section.main-section { padding-top: 36px; border-top: 1px solid #eceef1; margin-top: 12px; }
+  section.main-section:first-of-type { border-top: none; margin-top: 0; }
+
+  .section-head {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    border-bottom: 3px solid var(--navy);
+    padding-bottom: 10px;
+    margin-bottom: 18px;
+  }
+  .section-num {
+    background: var(--navy);
+    color: white;
+    font-weight: bold;
+    font-size: 17px;
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .section-head h2 { margin: 0; font-size: 20px; }
+
+  .callout {
+    border-left: 5px solid var(--gray-mid);
+    background: var(--light-bg);
+    padding: 12px 18px;
+    margin: 16px 0;
+    border-radius: 0 6px 6px 0;
+  }
+  .callout .label {
+    font-weight: bold;
+    font-size: 11.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    display: block;
+    margin-bottom: 6px;
+  }
+  .callout.risk { border-left-color: var(--warn-amber); background: #fdf6e8; }
+  .callout.risk .label { color: var(--warn-amber); }
+  .callout.note { border-left-color: var(--teal); }
+  .callout.note .label { color: var(--teal); }
+  .callout.decision { border-left-color: var(--navy); }
+  .callout.decision .label { color: var(--navy); }
+
+  table.clean { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 13.5px; }
+  table.clean th { background: var(--navy); color: white; padding: 8px 10px; text-align: left; }
+  table.clean td { padding: 8px 10px; border-bottom: 1px solid #ddd; vertical-align: top; }
+  table.clean tr:nth-child(even) td { background: #fafbfc; }
+
+  ul.checklist { list-style: none; padding: 0; margin: 14px 0; }
+  ul.checklist li {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 9px 10px;
+    border-radius: 6px;
+    margin-bottom: 4px;
+  }
+  ul.checklist li:hover { background: var(--light-bg); }
+  ul.checklist input[type="checkbox"] {
+    width: 18px; height: 18px; margin-top: 2px; flex-shrink: 0; accent-color: var(--ok-green);
+  }
+  ul.checklist label { font-size: 14.5px; cursor: pointer; }
+
+  .stepnum {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px; height: 26px;
+    background: var(--teal);
+    color: white;
+    border-radius: 50%;
+    font-weight: bold;
+    font-size: 13px;
+    margin-right: 8px;
+    flex-shrink: 0;
+  }
+  .step-title { display: flex; align-items: center; margin-top: 22px; margin-bottom: 6px; }
+  .step-title h3 { margin: 0; font-size: 16px; }
+
+  footer.page-footer { text-align: center; color: var(--gray-mid); font-size: 12.5px; padding: 30px 0 10px; }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <div class="kicker">ansible-sles-upgrade · runbook operativo</div>
+    <h1>Configuración de AWX desde cero</h1>
+    <div class="subtitle">
+      Manual paso a paso para crear en un AWX nuevo (sin nada reutilizable de otro
+      ambiente) todos los objetos necesarios para ejecutar este proyecto: inventario
+      dinámico, credenciales, Project, Job Template y Survey.
+    </div>
+  </div>
+</header>
+
+<nav class="quicknav">
+  <div class="wrap">
+    <a href="#s0">0. Antes de empezar</a>
+    <a href="#s1">1. Credential Type</a>
+    <a href="#s2">2. Credential (Excel)</a>
+    <a href="#s3">3. Credential (SSH)</a>
+    <a href="#s4">4. Project</a>
+    <a href="#s5">5. Inventory</a>
+    <a href="#s6">6. Job Template</a>
+    <a href="#s7">7. Survey</a>
+    <a href="#s8">8. Primera prueba</a>
+  </div>
+</nav>
+
+<div class="wrap">
+
+<section class="main-section" id="s0">
+  <div class="section-head"><div class="section-num">0</div><h2>Antes de empezar</h2></div>
+  <div class="callout risk">
+    <span class="label">Verificar primero — bloqueante</span>
+    El plugin de inventario personalizado <code>excel_inventory</code> (el código que
+    implementa <code>source_type: sharepoint</code>, lee el Excel vía Graph API, etc.)
+    debe estar disponible en el <strong>Execution Environment</strong> que usará
+    este AWX nuevo. Si este AWX es distinto al que ya usan para parchado, ese EE
+    probablemente no lo tiene instalado todavía. Sin esto, el paso 5 (Inventory Source)
+    fallará sin importar qué tan bien esté configurado lo demás. Pregunta a quien
+    mantiene el AWX de parchado de dónde sale ese plugin (EE propio, Collection, paquete).
+  </div>
+  <div class="callout note">
+    <span class="label">Variables de entorno reales vs. las de tu <code>.env</code></span>
+    <code>inventory/linux_excel_inventory.yml</code> solo referencia explícitamente
+    <code>TENANT_ID</code>, <code>CLIENT_ID</code> y <code>CLIENT_SECRET</code> (vía
+    <code>lookup('env', ...)</code>). Tu <code>.env</code> tiene más variables
+    (<code>remote_user</code>, <code>remote_host</code>, <code>remote_pass</code>, etc.)
+    que probablemente usa el código interno del plugin u otro script de parchado — no
+    se inventaron aquí porque no se confirmó el código fuente del plugin. Si el Sync del
+    paso 5 se queja de una variable de entorno faltante, agrégala al Credential Type del
+    paso 1 con el mismo patrón.
+  </div>
+  <ul class="checklist">
+    <li><input type="checkbox" id="s0-1"><label for="s0-1">Confirmado que el EE de este AWX tiene el plugin <code>excel_inventory</code> disponible.</label></li>
+    <li><input type="checkbox" id="s0-2"><label for="s0-2">Tienes a mano los valores reales de tu <code>.env</code> (tenant_id, client_id, client_secret) para copiarlos directamente a AWX.</label></li>
+  </ul>
+</section>
+
+<section class="main-section" id="s1">
+  <div class="section-head"><div class="section-num">1</div><h2>Credential Type personalizado</h2></div>
+  <p><strong>Administration → Credential Types → Add</strong></p>
+  <ul class="checklist">
+    <li><input type="checkbox" id="s1-1"><label for="s1-1">Name: <code>SharePoint Excel Inventory</code></label></li>
+  </ul>
+  <p>Input configuration:</p>
+  <pre>fields:
+  - id: tenant_id
+    type: string
+    label: Tenant ID
+  - id: client_id
+    type: string
+    label: Client ID
+  - id: client_secret
+    type: string
+    label: Client Secret
+    secret: true
+required:
+  - tenant_id
+  - client_id
+  - client_secret</pre>
+  <p>Injector configuration:</p>
+  <pre>env:
+  TENANT_ID: '{{ tenant_id }}'
+  CLIENT_ID: '{{ client_id }}'
+  CLIENT_SECRET: '{{ client_secret }}'</pre>
+</section>
+
+<section class="main-section" id="s2">
+  <div class="section-head"><div class="section-num">2</div><h2>Credential (instancia, con los valores reales)</h2></div>
+  <p><strong>Resources → Credentials → Add</strong></p>
+  <ul class="checklist">
+    <li><input type="checkbox" id="s2-1"><label for="s2-1">Credential Type: <code>SharePoint Excel Inventory</code> (paso 1).</label></li>
+    <li><input type="checkbox" id="s2-2"><label for="s2-2">Completa <code>tenant_id</code>/<code>client_id</code>/<code>client_secret</code> con los valores reales de tu <code>.env</code>.</label></li>
+    <li><input type="checkbox" id="s2-3"><label for="s2-3">Después de esto, el <code>.env</code> ya no hace falta conservarlo en ningún lado del proyecto.</label></li>
+  </ul>
+</section>
+
+<section class="main-section" id="s3">
+  <div class="section-head"><div class="section-num">3</div><h2>Credential de máquina (SSH)</h2></div>
+  <p><strong>Resources → Credentials → Add</strong></p>
+  <ul class="checklist">
+    <li><input type="checkbox" id="s3-1"><label for="s3-1">Credential Type: <code>Machine</code>.</label></li>
+    <li><input type="checkbox" id="s3-2"><label for="s3-2">Usuario/llave SSH (o contraseña) con privilegios para <code>zypper</code>, lectura/escritura en <code>/etc/zypp/repos.d</code>, <code>systemctl</code>, reinicio, y método <code>become</code>.</label></li>
+  </ul>
+</section>
+
+<section class="main-section" id="s4">
+  <div class="section-head"><div class="section-num">4</div><h2>Project</h2></div>
+  <p><strong>Resources → Projects → Add</strong></p>
+  <ul class="checklist">
+    <li><input type="checkbox" id="s4-1"><label for="s4-1">SCM Type: Git, apuntando a este repositorio.</label></li>
+    <li><input type="checkbox" id="s4-2"><label for="s4-2">Sincronizar el Project al menos una vez antes de continuar.</label></li>
+  </ul>
+</section>
+
+<section class="main-section" id="s5">
+  <div class="section-head"><div class="section-num">5</div><h2>Inventory + Inventory Source</h2></div>
+  <div class="callout note">
+    <span class="label">Antes de este paso</span>
+    Subir a SharePoint (misma carpeta que el inventario de parchado) la plantilla
+    <code>docs/references/plantilla_inventario_sles15_geopos.xlsx</code>, renombrada a
+    <code>Inventario_SLES15_GeoPOS_Upgrade.xlsx</code>, con una fila por cada servidor
+    físico SLES 15 real que ejecuta GeoPOS (reemplazando la fila de ejemplo
+    <code>CHANGE_ME_...</code>). Es un archivo y una hoja ("SLES15 GeoPOS")
+    dedicados a este proyecto — no el mismo archivo que usa el inventario general
+    de parchado.
+  </div>
+  <p><strong>Resources → Inventories → Add</strong> (ej. <code>GeoPOS SLES Servers</code>)</p>
+  <p>Dentro de ese Inventory → pestaña <strong>Sources → Add</strong>:</p>
+  <table class="clean">
+    <tr><th>Campo</th><th>Valor</th></tr>
+    <tr><td>Name</td><td><code>Excel SharePoint</code></td></tr>
+    <tr><td>Source</td><td><strong>Sourced from a Project</strong></td></tr>
+    <tr><td>Project</td><td>el del paso 4</td></tr>
+    <tr><td>Inventory file</td><td><code>inventory/linux_excel_inventory.yml</code></td></tr>
+    <tr><td>Credential</td><td>el del paso 2 (<code>SharePoint Excel Inventory</code>)</td></tr>
+  </table>
+  <ul class="checklist">
+    <li><input type="checkbox" id="s5-1"><label for="s5-1">Guardar y ejecutar <strong>Sync</strong>.</label></li>
+    <li><input type="checkbox" id="s5-2"><label for="s5-2">Si falla: revisar el log del Sync — ahí se ve exactamente si falta una variable de entorno o si el plugin no está disponible en el EE (ver sección 0).</label></li>
+    <li><input type="checkbox" id="s5-3"><label for="s5-3">Si tiene éxito: confirmar que aparecen hosts reales en el Inventory, con sus variables (<code>ambiente</code>, <code>lote</code>, <code>os</code>, etc.).</label></li>
+  </ul>
+</section>
+
+<section class="main-section" id="s6">
+  <div class="section-head"><div class="section-num">6</div><h2>Job Template</h2></div>
+  <p><strong>Resources → Templates → Add → Job Template</strong></p>
+  <table class="clean">
+    <tr><th>Campo</th><th>Valor</th></tr>
+    <tr><td>Name</td><td><code>SLES Upgrade SP4-SP7 (GeoPOS)</code></td></tr>
+    <tr><td>Job Type</td><td>Run</td></tr>
+    <tr><td>Inventory</td><td>el del paso 5</td></tr>
+    <tr><td>Project</td><td>el del paso 4</td></tr>
+    <tr><td>Playbook</td><td><code>playbooks/upgrade.yml</code></td></tr>
+    <tr><td>Credentials</td><td>el del paso 3 (Machine)</td></tr>
+    <tr><td>Limit</td><td>vacío + marcar <strong>"Prompt on Launch"</strong></td></tr>
+  </table>
+  <div class="callout decision">
+    <span class="label">Por qué Limit y no un campo de Survey</span>
+    El host a tocar se elige siempre con <code>Limit</code> (marcado "Prompt on
+    Launch"), nunca con un campo de Survey tipo "IP del servidor" — evita tener dos
+    lugares definiendo lo mismo. Ver <code>ARQUITECTURA_Y_DISENO_TECNICO.html</code>,
+    sección 8.
+  </div>
+</section>
+
+<section class="main-section" id="s7">
+  <div class="section-head"><div class="section-num">7</div><h2>Survey</h2></div>
+  <p>En el mismo Job Template → pestaña <strong>Survey</strong> → activar <strong>Survey Enabled</strong>.</p>
+  <table class="clean">
+    <tr><th>Pregunta</th><th>Variable</th><th>Tipo</th></tr>
+    <tr><td>Modo de ejecución</td><td><code>upgrade_mode</code></td><td>Multiple Choice: <code>precheck</code>, <code>validate</code>, <code>sp4_to_sp5</code>, <code>sp5_to_sp6</code>, <code>sp6_to_sp7</code>, <code>full</code></td></tr>
+    <tr><td>¿Confirma ejecución real en producción?</td><td><code>confirm_production_upgrade</code></td><td>Boolean</td></tr>
+    <tr><td>Ingrese el CRQ/RFC</td><td><code>upgrade_crq</code></td><td>Text (opcional)</td></tr>
+    <tr><td>Seleccione el Lote a parchar del CRQ/RFC</td><td><code>upgrade_lote</code></td><td>Text u opción múltiple (opcional)</td></tr>
+    <tr><td>Seleccione el Ambiente asociado al CRQ/RFC y Lote</td><td><code>upgrade_ambiente</code></td><td>Multiple Choice: Producción / Desarrollo / Laboratorio / Staging (opcional)</td></tr>
+  </table>
+  <div class="callout note">
+    <span class="label">Por qué el prefijo <code>upgrade_</code></span>
+    El inventario dinámico (paso 5) ya expone <code>crq</code>/<code>lote</code>/
+    <code>ambiente</code> como variables de host (del último ciclo de <em>parchado</em>
+    registrado en la hoja). Usar los mismos nombres en el Survey haría que un host
+    heredara silenciosamente ese dato viejo en el reporte de este upgrade. Ver
+    <code>playbooks/group_vars/all.yml</code>.
+  </div>
+</section>
+
+<section class="main-section" id="s8">
+  <div class="section-head"><div class="section-num">8</div><h2>Primera prueba</h2></div>
+  <ul class="checklist">
+    <li><input type="checkbox" id="s8-1"><label for="s8-1">Lanzar el Job Template con <code>upgrade_mode: precheck</code>, <code>Limit</code> = un host real de laboratorio, <code>confirm_production_upgrade: false</code>.</label></li>
+    <li><input type="checkbox" id="s8-2"><label for="s8-2">Revisar el reporte generado completo antes de continuar.</label></li>
+    <li><input type="checkbox" id="s8-3"><label for="s8-3">Seguir con <code>docs/CHECKLIST_LABORATORIO.html</code> para el resto del proceso.</label></li>
+  </ul>
+</section>
+
+</div>
+<footer class="page-footer">ansible-sles-upgrade — Configuración de AWX</footer>
+</body>
+</html>

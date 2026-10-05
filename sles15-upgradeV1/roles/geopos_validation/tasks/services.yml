@@ -1,0 +1,46 @@
+---
+# roles/geopos_validation/tasks/services.yml
+# Valida 0..N servicios systemd de GeoPOS. Categoría deshabilitada o sin
+# ítems se reporta de forma coherente sin forzar fallos.
+
+- name: Registrar categoría "services" deshabilitada
+  ansible.builtin.set_fact:
+    _geopos_category_services:
+      enabled: false
+      items: []
+      category_status: NOT_CHECKED
+  when: not (geopos_validation.services.enabled | default(false))
+
+- name: Consultar estado de los servicios systemd de GeoPOS configurados
+  ansible.builtin.systemd:
+    name: "{{ item.name }}"
+  register: _geopos_services_raw
+  loop: "{{ geopos_validation.services['items'] | default([]) }}"
+  loop_control:
+    label: "{{ item.name }}"
+  failed_when: false
+  when: geopos_validation.services.enabled | default(false)
+
+- name: Consolidar resultados de la categoría "services"
+  ansible.builtin.set_fact:
+    _geopos_category_services:
+      enabled: true
+      items: "{{ _service_items }}"
+      category_status: >-
+        {{
+          'OK' if (geopos_validation.services['items'] | default([])) | length == 0
+          else ('FAILED' if (_service_items | selectattr('status', 'equalto', 'FAILED') | list | length > 0)
+          else ('WARNING' if (_service_items | selectattr('status', 'equalto', 'WARNING') | list | length > 0)
+          else 'OK'))
+        }}
+  vars:
+    _service_items: |-
+      {% set result = [] %}
+      {% for res in _geopos_services_raw.results | default([]) %}
+      {% set active_state = res.status.ActiveState | default('desconocido') %}
+      {% set is_critical = res.item.critical | default(true) %}
+      {% set item_status = 'OK' if active_state == 'active' else ('FAILED' if is_critical else 'WARNING') %}
+      {% set _ = result.append({'name': res.item.name, 'critical': is_critical, 'active_state': active_state, 'status': item_status}) %}
+      {% endfor %}
+      {{ result }}
+  when: geopos_validation.services.enabled | default(false)

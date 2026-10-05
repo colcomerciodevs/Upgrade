@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Reporte SLES Upgrade - {{ stage_report.hostname }} - {{ stage_report.stage }}</title>
+<style>
+  body { font-family: -apple-system, Segoe UI, Arial, sans-serif; margin: 2rem; color: #1a1a1a; background: #fafafa; }
+  h1 { font-size: 1.4rem; margin-bottom: 0.2rem; }
+  h2 { font-size: 1.1rem; margin-top: 2rem; border-bottom: 1px solid #ddd; padding-bottom: 0.3rem; }
+  .subtitle { color: #555; margin-top: 0; }
+  table { border-collapse: collapse; width: 100%; margin-top: 0.5rem; background: #fff; }
+  th, td { border: 1px solid #ddd; padding: 0.5rem 0.7rem; text-align: left; font-size: 0.92rem; vertical-align: top; }
+  th { background: #f0f0f0; }
+  .badge { display: inline-block; padding: 0.15rem 0.6rem; border-radius: 0.8rem; font-weight: 600; font-size: 0.85rem; color: #fff; }
+  .badge-OK { background: #2e7d32; }
+  .badge-WARNING { background: #b8860b; }
+  .badge-FAILED { background: #c62828; }
+  .badge-NOT_CHECKED { background: #757575; }
+  pre { background: #111; color: #eee; padding: 0.8rem; overflow-x: auto; font-size: 0.8rem; white-space: pre-wrap; word-break: break-word; }
+  .summary-box { padding: 1rem; border-radius: 0.4rem; margin-bottom: 1rem; border: 1px solid #ddd; background: #fff; }
+  .muted { color: #777; font-size: 0.85rem; }
+</style>
+</head>
+<body>
+
+<h1>Reporte de upgrade SLES 15 — {{ stage_report.hostname }}</h1>
+<p class="subtitle">Etapa: <strong>{{ stage_report.stage }}</strong> · Acción solicitada: {{ stage_report.action }} · Generado: {{ stage_report.finished_at | default('N/D') }}</p>
+
+<div class="summary-box">
+  <p><strong>Resultado final de la etapa:</strong>
+    <span class="badge badge-{{ stage_report.status }}">{{ stage_report.status }}</span>
+  </p>
+  <table>
+    <tr><th>Hostname</th><td>{{ stage_report.hostname }}</td><th>FQDN</th><td>{{ stage_report.fqdn | default('N/D') }}</td></tr>
+    {% if (stage_report.crq | default('')) | length > 0 or (stage_report.lote | default('')) | length > 0 or (stage_report.ambiente | default('')) | length > 0 %}
+    <tr><th>CRQ/RFC</th><td>{{ stage_report.crq | default('N/D') }}</td><th>Lote</th><td>{{ stage_report.lote | default('N/D') }}</td></tr>
+    <tr><th>Ambiente</th><td colspan="3">{{ stage_report.ambiente | default('N/D') }}</td></tr>
+    {% endif %}
+    <tr><th>Inicio</th><td>{{ stage_report.started_at | default('N/D') }}</td><th>Fin</th><td>{{ stage_report.finished_at | default('N/D') }}</td></tr>
+    <tr><th>SP inicial</th><td>{{ stage_report.sp_inicial | default('N/D') }}</td><th>SP objetivo</th><td>{{ stage_report.sp_objetivo | default('N/D') }}</td></tr>
+    <tr><th>SP final detectado</th><td>{{ stage_report.sp_final | default('N/D') }}</td><th>dup aplicado</th><td>{{ stage_report.migration.dup_applied | default(false) }}</td></tr>
+    <tr><th>Kernel antes</th><td>{{ stage_report.kernel_antes | default('N/D') }}</td><th>Kernel después</th><td>{{ stage_report.kernel_despues | default('N/D') }}</td></tr>
+  </table>
+  {% if stage_report.failure_stage %}
+  <p><strong>Etapa/check exacto que falló:</strong> {{ stage_report.failure_stage }}</p>
+  {% endif %}
+</div>
+
+{% if stage_report.precheck %}
+<h2>Prechecks</h2>
+<table>
+  <tr><th>Chequeo</th><th>Estado</th><th>Detalle</th></tr>
+  {% for c in stage_report.precheck.checks | default([]) %}
+  <tr><td>{{ c.name }}</td><td><span class="badge badge-{{ c.status }}">{{ c.status }}</span></td><td>{{ c.detail }}</td></tr>
+  {% endfor %}
+</table>
+{% if stage_report.precheck.repo_inventory %}
+<h3>Inventario de repositorios al momento del precheck</h3>
+<table>
+  <tr><th>Alias</th><th>Nombre</th><th>Habilitado</th></tr>
+  {% for r in stage_report.precheck.repo_inventory %}
+  <tr><td>{{ r.alias }}</td><td>{{ r.name }}</td><td>{{ 'Sí' if r.enabled else 'No' }}</td></tr>
+  {% endfor %}
+</table>
+{% endif %}
+{% endif %}
+
+{% if stage_report.preflight %}
+<h2>Preflight real (VALIDATE) contra Foreman/Katello</h2>
+<p class="muted">
+  Aísla los archivos .repo con <code>--reposd-dir &lt;directorio temporal&gt;</code>
+  (no se afirma que aísle también servicios de Zypper u otros componentes). Nunca usa
+  <code>refresh -s</code>/<code>--services</code>: solo refresca los alias Foreman
+  exactos agregados para esta prueba. El directorio temporal se elimina siempre al
+  finalizar (éxito o fallo).
+</p>
+<p><strong>Soportado en este host:</strong> {{ stage_report.preflight.supported | default('N/D') }}
+   &nbsp;·&nbsp; <strong>Resultado global:</strong>
+   <span class="badge badge-{{ stage_report.preflight.status | default('NOT_CHECKED') }}">{{ stage_report.preflight.status | default('NOT_CHECKED') }}</span></p>
+{% if stage_report.preflight.status == 'NOT_CHECKED' or stage_report.preflight.status == 'FAILED' %}
+<p><strong>Este resultado NO debe interpretarse como una validación exitosa.</strong></p>
+{% endif %}
+{% if stage_report.preflight.origin %}
+<h3>Verificación del Service Pack de origen (refresh no destructivo)</h3>
+<p><span class="badge badge-{{ stage_report.preflight.origin.status | default('NOT_CHECKED') }}">{{ stage_report.preflight.origin.status | default('NOT_CHECKED') }}</span></p>
+<pre>{{ stage_report.preflight.origin.output_summary | default('sin salida registrada') }}</pre>
+{% endif %}
+<h3>Verificación del Service Pack de destino (refresh + dup -D)</h3>
+<pre>{{ stage_report.preflight.output_summary | default('sin salida registrada') }}</pre>
+{% endif %}
+
+{% if stage_report.repos %}
+<h2>Repositorios</h2>
+<table>
+  <tr><th>Directorio de respaldo</th><td colspan="3">{{ stage_report.repos.backup_dir | default('N/D') }}</td></tr>
+  <tr><th>Habilitados antes (preexistentes)</th><td>{{ (stage_report.repos.repos_enabled_before | default([])) | join(', ') or 'ninguno' }}</td>
+      <th>Ya deshabilitados antes</th><td>{{ (stage_report.repos.repos_disabled_before | default([])) | join(', ') or 'ninguno' }}</td></tr>
+  <tr><th>Deshabilitados por esta automatización</th><td colspan="3">{{ (stage_report.repos.repos_disabled_by_upgrade | default([])) | join(', ') or 'ninguno' }}</td></tr>
+  <tr><th>Temporales Foreman creados</th><td colspan="3">{{ (stage_report.repos.repos_temporary_created | default([])) | join(', ') or 'ninguno' }}</td></tr>
+  <tr><th>Temporales Foreman retirados</th><td colspan="3">{{ (stage_report.repos.repos_temporary_removed | default([])) | join(', ') or 'ninguno' }}</td></tr>
+  <tr><th>Habilitados al final de la etapa</th><td colspan="3">{{ (stage_report.repos.repos_enabled_after | default([])) | join(', ') or 'ninguno' }}</td></tr>
+  <tr><th>Inventario final confiable</th><td colspan="3">
+      <span class="badge badge-{{ stage_report.repos.final_inventory_status | default('NOT_CHECKED') }}">{{ stage_report.repos.final_inventory_status | default('NOT_CHECKED') }}</span>
+      — {{ stage_report.repos.final_inventory_detail | default('N/A') }}</td></tr>
+  <tr><th>Nota de limpieza</th><td colspan="3">{{ stage_report.repos.cleanup_note | default('N/A') }}</td></tr>
+</table>
+<p class="muted">Los repositorios preexistentes nunca se borran y nunca se reactivan
+   automáticamente: eso queda a cargo del proceso corporativo de parchado.</p>
+{% endif %}
+
+{% if stage_report.migration %}
+<h2>Resultado de la migración</h2>
+<p><strong>dup aplicado:</strong> {{ stage_report.migration.dup_applied | default(false) }}
+   <span class="muted">(esta evidencia se conserva aunque el reinicio posterior falle)</span></p>
+<h3>Gate obligatorio dup -D (inmediatamente antes del dup real)</h3>
+<pre>{{ stage_report.migration.dry_run_gate_output | default('N/A (no se llegó a ejecutar)') }}</pre>
+<h3>dup real</h3>
+<pre>{{ stage_report.migration.output_summary | default('N/A (no aplicado)') }}</pre>
+{% if stage_report.migration.orphaned_packages %}
+<p><strong>Paquetes huérfanos/no necesarios detectados tras la migración (informativo, no se eliminan automáticamente):</strong></p>
+<pre>{{ stage_report.migration.orphaned_packages }}</pre>
+{% endif %}
+{% endif %}
+
+{% if stage_report.reboot %}
+<h2>Reinicio</h2>
+<table>
+  <tr><th>Reinicio completado</th><td>{{ stage_report.reboot.completed | default(false) }}</td></tr>
+  <tr><th>Reconexión exitosa</th><td>{{ stage_report.reboot.reconnected | default(false) }}</td></tr>
+</table>
+<p class="muted">Un upgrade real de Service Pack siempre reinicia si el dup se aplicó: no
+   existe una opción para omitirlo.</p>
+{% endif %}
+
+{% for label, categoria in [('Servicios críticos antes', stage_report.critical_services_before), ('Servicios críticos después', stage_report.critical_services_after)] %}
+{% if categoria %}
+<h2>{{ label }}</h2>
+<table>
+  <tr><th>Servicio</th><th>Estado</th></tr>
+  {% for svc in categoria %}
+  <tr><td>{{ svc.name }}</td><td><span class="badge badge-{{ svc.status }}">{{ svc.status }}</span></td></tr>
+  {% endfor %}
+</table>
+{% endif %}
+{% endfor %}
+
+{% for label, gp in [('Validación GeoPOS — antes', stage_report.geopos_before), ('Validación GeoPOS — después', stage_report.geopos_after)] %}
+{% if gp %}
+<h2>{{ label }}</h2>
+<p>Estado global: <span class="badge badge-{{ gp.overall_status }}">{{ gp.overall_status }}</span>
+   {% if gp.enabled %}(componente crítico insalubre: {{ gp.critical_unhealthy }}){% endif %}</p>
+{% if gp.enabled %}
+{% for cat_name, cat in gp.categories.items() %}
+<table>
+  <tr><th colspan="4">{{ cat_name }} — <span class="badge badge-{{ cat.category_status }}">{{ cat.category_status }}</span></th></tr>
+  <tr><th>Nombre</th><th>Crítico</th><th>Estado</th><th>Detalle</th></tr>
+  {% for it in cat['items'] %}
+  <tr>
+    <td>{{ it.name }}</td>
+    <td>{{ it.critical }}</td>
+    <td><span class="badge badge-{{ it.status }}">{{ it.status }}</span></td>
+    <td>{{ it.active_state | default(it.match_count) | default(it.port) | default(it.url) | default('') }}</td>
+  </tr>
+  {% else %}
+  <tr><td colspan="4" class="muted">Sin ítems configurados</td></tr>
+  {% endfor %}
+</table>
+{% endfor %}
+{% endif %}
+{% endif %}
+{% endfor %}
+
+<h2>Persistencia del reporte</h2>
+<p>Copia de trabajo: <code>{{ report_local_dir }}/{{ stage_report.hostname }}/</code></p>
+<p>Destino persistente definitivo:
+  {% if report_destination is search('CHANGE_ME') %}
+  <strong>pendiente de configurar</strong> (report_destination = {{ report_destination }})
+  — <strong>este reporte todavía NO está garantizado fuera del Execution
+  Environment de AWX</strong>, que puede ser efímero incluso para "localhost".
+  {% else %}
+  {{ report_destination }}
+  {% endif %}
+</p>
+
+<p class="muted">Generado automáticamente por ansible-sles-upgrade. No contiene secretos.</p>
+
+</body>
+</html>

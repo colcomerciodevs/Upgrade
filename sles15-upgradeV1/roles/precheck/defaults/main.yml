@@ -1,0 +1,12 @@
+---
+# roles/precheck/defaults/main.yml
+# Valores técnicos internos del rol (no datos de negocio del ambiente,
+# esos viven en playbooks/group_vars/all.yml).
+
+# Etapa objetivo para la que se valida este precheck. Si no se define
+# explícitamente, se calcula a partir del Service Pack actual detectado.
+precheck_target_sp: ""
+
+# Tiempo de espera (segundos) para el chequeo de alcanzabilidad HTTP/HTTPS
+# de los repositorios Foreman/Katello.
+precheck_repo_reachability_timeout: 10

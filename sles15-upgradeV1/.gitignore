@@ -1,0 +1,20 @@
+# Secretos / credenciales — nunca deben versionarse en este repositorio.
+# La integración con el Excel/SharePoint de inventario (tenant_id, client_id,
+# client_secret, remote_pass, etc.) es responsabilidad de AWX (Credential),
+# no de este proyecto. Ver README, sección 13.
+.env
+*.env
+
+# Reportes generados localmente (report_local_dir) — no son código del
+# proyecto, se regeneran en cada ejecución. Ver reports/README.md.
+reports/*.html
+reports/*.json
+reports/*.jsonl
+!reports/README.md
+
+# Artefactos de ejecución local / temporales de desarrollo.
+*.retry
+.scratch_test_bin/
+__pycache__/
+*.pyc
+.DS_Store

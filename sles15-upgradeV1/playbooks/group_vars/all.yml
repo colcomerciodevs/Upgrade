@@ -1,0 +1,338 @@
+---
+# playbooks/group_vars/all.yml
+#
+# Variables comunes a todos los hosts. Los valores marcados como CHANGE_ME
+# son datos reales del ambiente que todavía no han sido provistos por el
+# administrador. NO deben sustituirse con datos inventados.
+#
+# UBICACIÓN DELIBERADA: este archivo vive junto al playbook
+# (playbooks/upgrade.yml), NO junto al inventario. Ansible carga
+# group_vars/host_vars tanto desde el directorio del inventario en uso
+# como desde el directorio del playbook que se ejecuta, sin importar cuál
+# de los dos cambie. Como en AWX el Inventory lo administra AWX (no
+# necesariamente inventory/hosts.ini de este repo), poner las variables
+# del proyecto aquí garantiza que se carguen igual en local y en AWX. Ver
+# README, sección 6, para el detalle de precedencia.
+#
+# Las excepciones puntuales por host se definen en playbooks/host_vars/.
+
+# ---------------------------------------------------------------------------
+# Control general de la ejecución
+# ---------------------------------------------------------------------------
+
+# Modo de ejecución. Se define normalmente como extra-var / Survey de AWX.
+# Valores válidos: precheck | validate | sp5_to_sp6 | sp6_to_sp7 | full
+#
+# - precheck : salud y preparación del servidor. No modifica nada.
+# - validate : preflight REAL contra Foreman (Zypper real, repos aislados
+#              con --reposd-dir). No modifica /etc/zypp/repos.d ni instala
+#              paquetes.
+# - sp5_to_sp6 / sp6_to_sp7 / full : ejecución REAL, con modificación del
+#              servidor. Requieren confirm_production_upgrade: true.
+upgrade_mode: precheck
+
+# Metadatos de control de cambios (CRQ/RFC, Lote, Ambiente), provistos por
+# el Survey de AWX. Puramente informativos: se registran en el reporte
+# (stage_report.crq/lote/ambiente) para trazabilidad/auditoría, pero NUNCA
+# se usan para seleccionar hosts ni para decidir nada del procedimiento —
+# el alcance de hosts se controla exclusivamente con "Limit" (sección 13).
+#
+# Se usa el prefijo "upgrade_" deliberadamente, DISTINTO de "crq"/"lote"/
+# "ambiente" a secas: el inventario dinámico Excel/SharePoint de este
+# proyecto (inventory/linux_excel_inventory.yml) ya expone esos mismos
+# nombres como variables de host (columnas CRQ/Lote/Ambiente de la hoja de
+# parchado). Si el Survey usara los mismos nombres, un host heredaría
+# silenciosamente un CRQ/Lote de un ciclo de PARCHADO anterior, no el de
+# este upgrade. Vacíos por defecto para no exigirlos en ejecuciones locales.
+upgrade_crq: ""
+upgrade_lote: ""
+upgrade_ambiente: ""
+
+# Procesamiento productivo por defecto: un host a la vez.
+serial_batch_size: 1
+
+# Candado de seguridad explícito: NINGÚN modo real (sp5_to_sp6, sp6_to_sp7,
+# full) modifica el sistema a menos que este valor sea true. El assert que
+# lo exige se ejecuta ANTES de tocar repositorios o paquetes. Debe activarse
+# a propósito (por ejemplo desde un Survey de AWX), nunca por defecto.
+#
+# No existe una opción "dry_run" para los modos reales: para ensayar sin
+# modificar el sistema, use upgrade_mode: validate. Un modo real siempre
+# ejecuta internamente "dup -D" como gate obligatorio inmediatamente antes
+# del "dup" real (ver roles/sp_migration/tasks/main.yml); si ese gate
+# falla, la etapa se detiene con FAILED sin aplicar ningún cambio.
+confirm_production_upgrade: false
+
+# Un upgrade real de Service Pack SIEMPRE requiere reinicio: no existe una
+# opción para omitirlo (ver roles/sp_migration/tasks/main.yml).
+
+# ---------------------------------------------------------------------------
+# Foreman / Katello — información pendiente del ambiente
+# ---------------------------------------------------------------------------
+# Regla obligatoria: el upgrade usa EXCLUSIVAMENTE estos repositorios,
+# tanto para el Service Pack de ORIGEN (updatestack) como para el de
+# DESTINO (dup). Ningún repositorio preexistente del servidor participa
+# en updatestack ni en dup. SUSEConnect nunca se usa para descubrir/
+# habilitar repos. No inventar URLs ni nombres.
+
+katello:
+  base_url: "https://ansibleforeman.coldecom.com"
+
+  # CA interna requerida para validar TLS contra Foreman/Katello (CA real
+  # "CAColdecom", provista por el administrador; archivo versionado en
+  # roles/repo_management/files/coldecom-ca.crt de este repositorio).
+  #
+  # IMPORTANTE: esta ruta es en el HOST ADMINISTRADO (SLES), no en el nodo
+  # de control. Para el chequeo de PRECHECK (ansible.builtin.uri) alimenta
+  # directamente ca_path. Para que Zypper mismo confíe en Foreman durante
+  # VALIDATE/UPGRADE (Zypper no lee esta variable: usa el almacén de
+  # confianza del sistema operativo), esta misma CA se instala
+  # AUTOMÁTICAMENTE en este path mediante
+  # roles/repo_management/tasks/ensure_ca_trusted.yml — decisión explícita
+  # del usuario para este ambiente (ver orden de fuentes de verdad en
+  # CLAUDE.md): es la única escritura al sistema operativo que ocurre
+  # durante upgrade_mode: validate, justificada porque sin ella la propia
+  # prueba TLS de VALIDATE no tiene sentido. Operación idempotente (solo
+  # agrega una CA de confianza si todavía no está presente; no reinicia
+  # servicios). Se ejecuta automáticamente justo antes de que se agregue o
+  # use cualquier repo Foreman real (add_temp_repos.yml y preflight.yml).
+  ca_certificate_path: /etc/pki/trust/anchors/coldecom-ca.crt
+
+  # Repos Foreman para el Service Pack ORIGEN de la etapa SP4 -> SP5
+  # (modo independiente "sp4_to_sp5", para hosts que todavía están en
+  # SP4). Se usan ÚNICAMENTE para "zypper patch --updatestack-only".
+  # Verificado por API contra Foreman/Katello (solo lectura) el 2026-10-01:
+  # los 5 módulos existen, están sincronizados con éxito y cada uno trae
+  # exactamente Pool + Updates (sin Source/Debuginfo).
+  sp4_repositories:
+    - name: SLE-Product-SLES15-SP4-Pool
+      url: "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/SUSE_Linux_Enterprise_Server_15_SP4_x86_64_id_2292_/2292_SLE-Product-SLES15-SP4-Pool_for_sle-15-x86_64/"
+    - name: SLE-Product-SLES15-SP4-Updates
+      url: "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/SUSE_Linux_Enterprise_Server_15_SP4_x86_64_id_2292_/2292_SLE-Product-SLES15-SP4-Updates_for_sle-15-x86_64/"
+    - name: SLE-Module-Basesystem15-SP4-Pool
+      url: "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Basesystem_Module_15_SP4_x86_64_id_2299_/2299_SLE-Module-Basesystem15-SP4-Pool_for_sle-15-x86_64/"
+    - name: SLE-Module-Basesystem15-SP4-Updates
+      url: "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Basesystem_Module_15_SP4_x86_64_id_2299_/2299_SLE-Module-Basesystem15-SP4-Updates_for_sle-15-x86_64/"
+    - name: SLE-Module-Server-Applications15-SP4-Pool
+      url: "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Server_Applications_Module_15_SP4_x86_64_id_2307_/2307_SLE-Module-Server-Applications15-SP4-Pool_for_sle-15-x86_64/"
+    - name: SLE-Module-Server-Applications15-SP4-Updates
+      url: "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Server_Applications_Module_15_SP4_x86_64_id_2307_/2307_SLE-Module-Server-Applications15-SP4-Updates_for_sle-15-x86_64/"
+    - name: SLE-Module-Desktop-Applications15-SP4-Pool
+      url: "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Desktop_Applications_Module_15_SP4_x86_64_id_2303_/2303_SLE-Module-Desktop-Applications15-SP4-Pool_for_sle-15-x86_64/"
+    - name: SLE-Module-Desktop-Applications15-SP4-Updates
+      url: "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Desktop_Applications_Module_15_SP4_x86_64_id_2303_/2303_SLE-Module-Desktop-Applications15-SP4-Updates_for_sle-15-x86_64/"
+    - name: SLE-Module-Python3-15-SP4-Pool
+      url: "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Python_3_Module_15_SP4_x86_64_id_2405_/2405_SLE-Module-Python3-15-SP4-Pool_for_sle-15-x86_64/"
+    - name: SLE-Module-Python3-15-SP4-Updates
+      url: "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Python_3_Module_15_SP4_x86_64_id_2405_/2405_SLE-Module-Python3-15-SP4-Updates_for_sle-15-x86_64/"
+
+  # Repos Foreman para el Service Pack SP5: sirven como DESTINO en la
+  # etapa SP4 -> SP5 (dup, modo "sp4_to_sp5") y como ORIGEN en la etapa
+  # SP5 -> SP6 (updatestack, modo "sp5_to_sp6"). Un solo listado por
+  # Service Pack, reutilizado según el rol que le toque en cada etapa.
+  # name: identificador descriptivo. url: baseurl real del repositorio.
+  # Verificado por API contra Foreman/Katello (solo lectura) el 2026-10-01:
+  # los 5 módulos existen, están sincronizados con éxito y cada uno trae
+  # exactamente Pool + Updates (sin Source/Debuginfo).
+  sp5_repositories:
+    - name: SLE-Product-SLES15-SP5-Pool
+      url: "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/SUSE_Linux_Enterprise_Server_15_SP5_x86_64_id_2465_/2465_SLE-Product-SLES15-SP5-Pool_for_sle-15-x86_64/"
+    - name: SLE-Product-SLES15-SP5-Updates
+      url: "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/SUSE_Linux_Enterprise_Server_15_SP5_x86_64_id_2465_/2465_SLE-Product-SLES15-SP5-Updates_for_sle-15-x86_64/"
+    - name: SLE-Module-Basesystem15-SP5-Pool
+      url: "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Basesystem_Module_15_SP5_x86_64_id_2474_/2474_SLE-Module-Basesystem15-SP5-Pool_for_sle-15-x86_64/"
+    - name: SLE-Module-Basesystem15-SP5-Updates
+      url: "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Basesystem_Module_15_SP5_x86_64_id_2474_/2474_SLE-Module-Basesystem15-SP5-Updates_for_sle-15-x86_64/"
+    - name: SLE-Module-Server-Applications15-SP5-Pool
+      url: "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Server_Applications_Module_15_SP5_x86_64_id_2482_/2482_SLE-Module-Server-Applications15-SP5-Pool_for_sle-15-x86_64/"
+    - name: SLE-Module-Server-Applications15-SP5-Updates
+      url: "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Server_Applications_Module_15_SP5_x86_64_id_2482_/2482_SLE-Module-Server-Applications15-SP5-Updates_for_sle-15-x86_64/"
+    - name: SLE-Module-Desktop-Applications15-SP5-Pool
+      url: "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Desktop_Applications_Module_15_SP5_x86_64_id_2478_/2478_SLE-Module-Desktop-Applications15-SP5-Pool_for_sle-15-x86_64/"
+    - name: SLE-Module-Desktop-Applications15-SP5-Updates
+      url: "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Desktop_Applications_Module_15_SP5_x86_64_id_2478_/2478_SLE-Module-Desktop-Applications15-SP5-Updates_for_sle-15-x86_64/"
+    - name: SLE-Module-Python3-15-SP5-Pool
+      url: "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Python_3_Module_15_SP5_x86_64_id_2536_/2536_SLE-Module-Python3-15-SP5-Pool_for_sle-15-x86_64/"
+    - name: SLE-Module-Python3-15-SP5-Updates
+      url: "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Python_3_Module_15_SP5_x86_64_id_2536_/2536_SLE-Module-Python3-15-SP5-Updates_for_sle-15-x86_64/"
+
+  # Repos Foreman para el Service Pack SP6: sirven como DESTINO en la
+  # etapa SP5 -> SP6 (dup) y, cuando el mismo host más adelante ejecute
+  # SP6 -> SP7, como ORIGEN (updatestack) para esa etapa. Un solo listado
+  # por Service Pack, reutilizado según el rol que le toque en cada etapa.
+  sp6_repositories:
+    - name: SLE-Product-SLES15-SP6-Pool
+      url: "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/SUSE_Linux_Enterprise_Server_15_SP6_x86_64_id_2609_/2609_SLE-Product-SLES15-SP6-Pool_for_sle-15-x86_64/"
+    - name: SLE-Product-SLES15-SP6-Updates
+      url: "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/SUSE_Linux_Enterprise_Server_15_SP6_x86_64_id_2609_/2609_SLE-Product-SLES15-SP6-Updates_for_sle-15-x86_64/"
+    - name: SLE-Module-Basesystem15-SP6-Pool
+      url: "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Basesystem_Module_15_SP6_x86_64_id_2618_/2618_SLE-Module-Basesystem15-SP6-Pool_for_sle-15-x86_64/"
+    - name: SLE-Module-Basesystem15-SP6-Updates
+      url: "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Basesystem_Module_15_SP6_x86_64_id_2618_/2618_SLE-Module-Basesystem15-SP6-Updates_for_sle-15-x86_64/"
+    - name: SLE-Module-Server-Applications15-SP6-Pool
+      url: "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Server_Applications_Module_15_SP6_x86_64_id_2626_/2626_SLE-Module-Server-Applications15-SP6-Pool_for_sle-15-x86_64/"
+    - name: SLE-Module-Server-Applications15-SP6-Updates
+      url: "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Server_Applications_Module_15_SP6_x86_64_id_2626_/2626_SLE-Module-Server-Applications15-SP6-Updates_for_sle-15-x86_64/"
+    - name: SLE-Module-Desktop-Applications15-SP6-Pool
+      url: "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Desktop_Applications_Module_15_SP6_x86_64_id_2622_/2622_SLE-Module-Desktop-Applications15-SP6-Pool_for_sle-15-x86_64/"
+    - name: SLE-Module-Desktop-Applications15-SP6-Updates
+      url: "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Desktop_Applications_Module_15_SP6_x86_64_id_2622_/2622_SLE-Module-Desktop-Applications15-SP6-Updates_for_sle-15-x86_64/"
+    - name: SLE-Module-Python3-15-SP6-Pool
+      url: "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Python_3_Module_15_SP6_x86_64_id_2683_/2683_SLE-Module-Python3-15-SP6-Pool_for_sle-15-x86_64/"
+    - name: SLE-Module-Python3-15-SP6-Updates
+      url: "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Python_3_Module_15_SP6_x86_64_id_2683_/2683_SLE-Module-Python3-15-SP6-Updates_for_sle-15-x86_64/"
+
+  # Repos Foreman DESTINO para la etapa SP6 -> SP7 (usados en dup).
+  sp7_repositories:
+    - name: SLE-Product-SLES15-SP7-Pool
+      url: "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/SUSE_Linux_Enterprise_Server_15_SP7_x86_64_id_2793_/2793_SLE-Product-SLES15-SP7-Pool_for_sle-15-x86_64/"
+    - name: SLE-Product-SLES15-SP7-Updates
+      url: "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/SUSE_Linux_Enterprise_Server_15_SP7_x86_64_id_2793_/2793_SLE-Product-SLES15-SP7-Updates_for_sle-15-x86_64/"
+    - name: SLE-Module-Basesystem15-SP7-Pool
+      url: "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Basesystem_Module_15_SP7_x86_64_id_2800_/2800_SLE-Module-Basesystem15-SP7-Pool_for_sle-15-x86_64/"
+    - name: SLE-Module-Basesystem15-SP7-Updates
+      url: "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Basesystem_Module_15_SP7_x86_64_id_2800_/2800_SLE-Module-Basesystem15-SP7-Updates_for_sle-15-x86_64/"
+    - name: SLE-Module-Server-Applications15-SP7-Pool
+      url: "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Server_Applications_Module_15_SP7_x86_64_id_2804_/2804_SLE-Module-Server-Applications15-SP7-Pool_for_sle-15-x86_64/"
+    - name: SLE-Module-Server-Applications15-SP7-Updates
+      url: "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Server_Applications_Module_15_SP7_x86_64_id_2804_/2804_SLE-Module-Server-Applications15-SP7-Updates_for_sle-15-x86_64/"
+    - name: SLE-Module-Desktop-Applications15-SP7-Pool
+      url: "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Desktop_Applications_Module_15_SP7_x86_64_id_2808_/2808_SLE-Module-Desktop-Applications15-SP7-Pool_for_sle-15-x86_64/"
+    - name: SLE-Module-Desktop-Applications15-SP7-Updates
+      url: "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Desktop_Applications_Module_15_SP7_x86_64_id_2808_/2808_SLE-Module-Desktop-Applications15-SP7-Updates_for_sle-15-x86_64/"
+    - name: SLE-Module-Python3-15-SP7-Pool
+      url: "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Python_3_Module_15_SP7_x86_64_id_2847_/2847_SLE-Module-Python3-15-SP7-Pool_for_sle-15-x86_64/"
+    - name: SLE-Module-Python3-15-SP7-Updates
+      url: "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Python_3_Module_15_SP7_x86_64_id_2847_/2847_SLE-Module-Python3-15-SP7-Updates_for_sle-15-x86_64/"
+
+# Prefijo obligatorio de los repositorios temporales creados por esta
+# automatización (nunca se usa para nombrar repos permanentes).
+temporary_repo_prefix: "ansible-sles-upgrade-"
+
+# Ante un fallo, por defecto NO se limpian los repositorios temporales
+# ni el respaldo, para preservar información de diagnóstico.
+cleanup_repositories_on_failure: false
+
+# Lista puramente INFORMATIVA (opcional) para que el precheck marque como
+# "no reconocido" cualquier repo configurado que no esté en esta lista.
+# NO tiene ningún efecto sobre la ejecución del upgrade: absolutamente
+# ningún repositorio preexistente (esté aquí listado o no) participa en
+# updatestack ni en dup — todos los que estén habilitados se deshabilitan
+# igual antes de migrar. Identificar por alias real de Zypper.
+permanent_repos: []
+
+# ---------------------------------------------------------------------------
+# Servicios base del sistema
+# ---------------------------------------------------------------------------
+# PENDIENTE: no se asumen nombres. Completar con los servicios base reales
+# del ambiente (ver CONTEXTO_PROYECTO.md) antes de producción. Una lista
+# vacía se reporta como validación sin ítems (ni OK "falso" ni bloqueante).
+critical_services: []
+
+# ---------------------------------------------------------------------------
+# Validación de GeoPOS
+# ---------------------------------------------------------------------------
+# Modelo 0..N por categoría. Cada categoría se habilita/deshabilita de
+# forma independiente. Una categoría deshabilitada se reporta NOT_CHECKED.
+#
+# critical (por ítem): por defecto true. Si un ítem crítico está
+# insalubre ANTES del upgrade y fail_precheck_if_unhealthy es true,
+# el precheck bloquea el upgrade para ese host.
+# Un ítem no crítico se marca explícitamente con critical: false.
+
+geopos_validation:
+  enabled: true
+
+  # Política de precheck: bloquear el upgrade si un componente crítico
+  # de GeoPOS no está saludable antes de iniciar. Puede sobrescribirse
+  # en group_vars/host_vars puntuales cuando exista una excepción
+  # operacional autorizada explícitamente.
+  fail_precheck_if_unhealthy: true
+
+  services:
+    enabled: true
+    items: []
+    # Ejemplo estructural:
+    # items:
+    #   - name: CHANGE_ME_GEOPOS_SERVICE_1
+    #     critical: true
+
+  java_processes:
+    enabled: true
+    items: []
+    # Ejemplo estructural. "match" debe identificar específicamente el
+    # componente (nunca usar únicamente "java"):
+    # items:
+    #   - name: CHANGE_ME_COMPONENT_1
+    #     match: CHANGE_ME_PROCESS_PATTERN_1
+    #     critical: true
+
+  tcp_ports:
+    enabled: true
+    items: []
+    # items:
+    #   - name: CHANGE_ME_COMPONENT_1
+    #     port: CHANGE_ME_PORT_1
+    #     critical: true
+
+  health_checks:
+    enabled: false
+    items: []
+    # items:
+    #   - name: CHANGE_ME_COMPONENT
+    #     url: CHANGE_ME_URL
+    #     expected_status: 200
+    #     critical: false
+
+# ---------------------------------------------------------------------------
+# Prechecks de espacio en disco
+# ---------------------------------------------------------------------------
+# Lista 0..N de filesystems a validar con un mínimo de espacio libre en MB.
+# No se inventa ningún umbral: permanece vacía (NOT_CHECKED) hasta que el
+# administrador aporte valores reales por filesystem.
+precheck_disk_checks: []
+# Ejemplo estructural:
+# precheck_disk_checks:
+#   - path: /
+#     min_free_mb: CHANGE_ME
+#   - path: /var
+#     min_free_mb: CHANGE_ME
+
+# Verificación adicional para raíz Btrfs con snapshots: SUSE recomienda
+# como buena práctica disponer al menos del mismo espacio libre que el
+# actualmente usado por el sistema (ver SLES 15 Upgrade Guide, sección
+# "Checking disk space on Btrfs root file systems"). Esta comprobación
+# se calcula dinámicamente (espacio libre >= espacio usado), no usa un
+# porcentaje inventado. Puede desactivarse si no aplica al ambiente.
+precheck_btrfs_double_space_check: true
+
+# ---------------------------------------------------------------------------
+# Reportes
+# ---------------------------------------------------------------------------
+report_enabled: true
+
+# Directorio de trabajo donde se escriben los reportes DURANTE la
+# ejecución (nodo de control / Execution Environment de AWX). Esto NO es
+# almacenamiento persistente: el filesystem de un Execution Environment de
+# AWX puede ser efímero y desecharse al terminar el Job, incluso para
+# "localhost". Es solo la ubicación de trabajo mientras corre el playbook.
+report_local_dir: "{{ playbook_dir }}/../reports"
+
+# Destino persistente DEFINITIVO. Se copia aquí (ver roles/reporting/tasks/
+# main.yml) con delegate_to: localhost + remote_src: true — es decir, esta
+# ruta se resuelve en el MISMO nodo de control/Execution Environment donde
+# corre Ansible, NUNCA en el servidor SLES administrado.
+#
+# PENDIENTE DE CONFIRMAR EN EL AWX REAL (no se puede verificar desde el
+# desarrollo de este proyecto):
+#   1. Que /data/work/Salida_Upgrade exista y tenga permisos de escritura
+#      para el usuario con el que corre el Job en el Execution Environment.
+#   2. Que sea realmente persistente (un volumen/mount que sobrevive al
+#      Job), no un directorio efímero dentro del propio contenedor del EE
+#      — si el EE es un contenedor que se destruye al terminar el Job, esta
+#      ruta debe estar montada desde fuera de él. Ver
+#      ARQUITECTURA_Y_DISENO_TECNICO.html, sección 9.
+# Sin "CHANGE_ME" en el valor, roles/reporting ya intenta la copia; revisar
+# el reporte HTML (bloque "Persistencia del reporte") para confirmar que la
+# copia fue exitosa en la primera ejecución real.
+report_destination: "/data/work/Salida_Upgrade"

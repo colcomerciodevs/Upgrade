@@ -1,0 +1,26 @@
+---
+# roles/precheck/tasks/locks.yml
+#
+# Verifica que no exista otro proceso reteniendo el gestor de paquetes
+# (PackageKit, otro Zypper, YaST, etc.). Zypper reporta explícitamente
+# "System management is locked" cuando esto ocurre; se usa un comando
+# real y liviano para detectarlo, sin inventar mecanismos.
+
+- name: Intentar una operación liviana de Zypper para detectar locks activos
+  ansible.builtin.command:
+    cmd: zypper --non-interactive --no-refresh --no-remote repos
+  register: _zypper_lock_probe
+  changed_when: false
+  failed_when: false
+
+- name: Calcular estado de la verificación de locks
+  ansible.builtin.set_fact:
+    _locks_status: >-
+      {{
+        'OK' if _zypper_lock_probe.rc == 0
+        else ('FAILED' if ('locked' in (_zypper_lock_probe.stderr | default('')) | lower) else 'WARNING')
+      }}
+
+- name: Registrar resultado de la verificación de locks
+  ansible.builtin.set_fact:
+    precheck_checks: "{{ precheck_checks + [{'name': 'locks_zypper_rpm_libzypp', 'status': _locks_status, 'detail': (_zypper_lock_probe.stderr | default('')) | trim | truncate(300)}] }}"

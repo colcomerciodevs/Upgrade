@@ -1,0 +1,70 @@
+---
+# roles/geopos_validation/tasks/main.yml
+#
+# Orquesta la validación de GeoPOS (servicios, procesos Java, puertos y
+# health checks), cada una habilitable/deshabilitable de forma
+# independiente y soportando listas vacías (0..N ítems).
+#
+# Vars esperadas al incluir este rol: geopos_validation_phase ("before"
+# o "after"), usada solo para etiquetar el resultado en el reporte.
+
+- name: Registrar todas las categorías como NOT_CHECKED (GeoPOS deshabilitado globalmente)
+  ansible.builtin.set_fact:
+    geopos_validation_result:
+      phase: "{{ geopos_validation_phase }}"
+      enabled: false
+      overall_status: NOT_CHECKED
+      critical_unhealthy: false
+      categories: {}
+  when: not (geopos_validation.enabled | default(false))
+
+- name: Ejecutar validaciones de GeoPOS por categoría
+  when: geopos_validation.enabled | default(false)
+  block:
+    - name: Validar servicios systemd
+      ansible.builtin.include_tasks: services.yml
+
+    - name: Validar procesos Java
+      ansible.builtin.include_tasks: java_processes.yml
+
+    - name: Validar puertos TCP
+      ansible.builtin.include_tasks: tcp_ports.yml
+
+    - name: Validar health checks HTTP/HTTPS
+      ansible.builtin.include_tasks: health_checks.yml
+
+    - name: Consolidar resultado global de GeoPOS
+      ansible.builtin.set_fact:
+        geopos_validation_result:
+          phase: "{{ geopos_validation_phase }}"
+          enabled: true
+          categories:
+            services: "{{ _geopos_category_services }}"
+            java_processes: "{{ _geopos_category_java_processes }}"
+            tcp_ports: "{{ _geopos_category_tcp_ports }}"
+            health_checks: "{{ _geopos_category_health_checks }}"
+          overall_status: >-
+            {{
+              'FAILED' if (_all_statuses | select('equalto', 'FAILED') | list | length > 0)
+              else ('WARNING' if (_all_statuses | select('equalto', 'WARNING') | list | length > 0)
+              else 'OK')
+            }}
+          critical_unhealthy: "{{ _critical_unhealthy_items | length > 0 }}"
+      vars:
+        _all_statuses:
+          - "{{ _geopos_category_services.category_status }}"
+          - "{{ _geopos_category_java_processes.category_status }}"
+          - "{{ _geopos_category_tcp_ports.category_status }}"
+          - "{{ _geopos_category_health_checks.category_status }}"
+        _critical_unhealthy_items: >-
+          {{
+            (_geopos_category_services['items'] | default([]) +
+             _geopos_category_java_processes['items'] | default([]) +
+             _geopos_category_tcp_ports['items'] | default([]) +
+             _geopos_category_health_checks['items'] | default([]))
+            | selectattr('status', 'equalto', 'FAILED') | selectattr('critical', 'equalto', true) | list
+          }}
+
+- name: Mostrar resumen de validación GeoPOS
+  ansible.builtin.debug:
+    msg: "GeoPOS ({{ geopos_validation_result.phase }}) en {{ inventory_hostname }}: {{ geopos_validation_result.overall_status }} (crítico insalubre: {{ geopos_validation_result.critical_unhealthy }})"

@@ -1,0 +1,25 @@
+---
+# roles/sp_migration/defaults/main.yml
+
+# Reintentos para la actualización de la pila de gestión de paquetes
+# (zypper puede pedir que se vuelva a ejecutar tras actualizarse a sí
+# mismo — código de retorno 103).
+sp_migration_updatestack_retries: 3
+sp_migration_updatestack_delay: 2
+
+# Parámetros de reinicio tras una migración real aplicada.
+sp_migration_reboot_timeout: 1800
+sp_migration_reboot_connect_timeout: 30
+sp_migration_reboot_pre_reboot_delay: 5
+
+# Vars que debe suministrar quien incluye este rol (sin default de
+# negocio):
+#   main.yml        : sp_migration_current_sp, sp_migration_target_sp ("sp5"|"sp6"|"sp7"),
+#                      sp_migration_releasever ("" | "15-SP7")
+#   updatestack.yml : ninguna adicional (usa los repos Foreman de origen ya habilitados)
+#   preflight.yml   : sp_migration_target_sp, sp_migration_releasever,
+#                      sp_migration_repositories (lista [{name, url}])
+#
+# No existe sp_migration_dry_run: un modo real (sp4_to_sp5/sp5_to_sp6/sp6_to_sp7/full)
+# siempre ejecuta dup -D como gate obligatorio y, si pasa, el dup real. El
+# ensayo independiente y no destructivo es upgrade_mode: validate.

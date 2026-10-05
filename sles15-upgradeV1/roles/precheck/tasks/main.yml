@@ -1,0 +1,100 @@
+---
+# roles/precheck/tasks/main.yml
+#
+# Ejecuta los prechecks obligatorios descritos en CLAUDE.md antes de
+# permitir cualquier upgrade. No modifica el sistema: solo recopila
+# evidencia y construye `precheck_result` con el veredicto.
+#
+# Este rol NO falla la ejecución por sí mismo: el playbook que lo invoca
+# decide qué hacer según `precheck_result.overall_status`, para poder
+# generar siempre un reporte aunque el precheck no sea satisfactorio.
+
+- name: Inicializar lista de resultados de precheck
+  ansible.builtin.set_fact:
+    precheck_checks: []
+
+- name: Verificar que el sistema operativo sea SUSE Linux Enterprise Server (SLES)
+  # Gate de seguridad obligatorio: este inventario puede incluir servidores
+  # con otros sistemas operativos (ver linux_excel_inventory.yml). Si el
+  # host no es SLES, el resto del precheck NO se ejecuta (ver los "when"
+  # siguientes) y el resultado queda FAILED con un mensaje explícito, en
+  # vez de intentar pasos específicos de Zypper/SLES sobre un sistema que
+  # no lo es.
+  ansible.builtin.set_fact:
+    precheck_checks: "{{ precheck_checks + [{
+        'name': 'distribucion_sistema_operativo',
+        'status': ('OK' if ansible_facts['distribution'] == 'SLES' else 'FAILED'),
+        'detail': (
+          (ansible_facts['distribution'] ~ ' ' ~ ansible_facts['distribution_version'])
+          if ansible_facts['distribution'] == 'SLES'
+          else ('Sistema operativo detectado: ' ~ ansible_facts['distribution'] ~ ' ' ~ ansible_facts['distribution_version'] ~
+            ' — NO COMPATIBLE. Este proyecto es exclusivamente para SUSE Linux Enterprise Server (SLES) 15. ' ~
+            'No se ejecuta ninguna otra verificación ni acción sobre este host.')
+        )
+      }] }}"
+
+- name: "Determinar Service Pack actual e información básica del sistema (solo en hosts SLES)"
+  ansible.builtin.include_tasks: sp_version.yml
+  when: ansible_facts['distribution'] == 'SLES'
+
+- name: "Verificar locks de Zypper/RPM/libzypp (solo en hosts SLES)"
+  ansible.builtin.include_tasks: locks.yml
+  when: ansible_facts['distribution'] == 'SLES'
+
+- name: "Verificar espacio en disco (solo en hosts SLES)"
+  ansible.builtin.include_tasks: disk_space.yml
+  when: ansible_facts['distribution'] == 'SLES'
+
+- name: "Inventariar repositorios actuales y detectar los no esperados (solo en hosts SLES)"
+  ansible.builtin.include_tasks: repo_inventory.yml
+  when: ansible_facts['distribution'] == 'SLES'
+
+- name: Verificar alcanzabilidad de los repositorios Foreman/Katello de la etapa objetivo
+  ansible.builtin.include_tasks: repos_reachability.yml
+  when:
+    - ansible_facts['distribution'] == 'SLES'
+    - precheck_effective_target_sp is defined and precheck_effective_target_sp in ['sp5', 'sp6', 'sp7']
+
+- name: "Verificar servicios críticos del sistema antes del upgrade (solo en hosts SLES)"
+  ansible.builtin.include_tasks: critical_services.yml
+  when: ansible_facts['distribution'] == 'SLES'
+
+- name: Conservar el estado de servicios críticos "antes" para el reporte
+  ansible.builtin.set_fact:
+    critical_services_before: "{{ critical_services_status | default([]) }}"
+  when: ansible_facts['distribution'] == 'SLES'
+
+- name: Calcular detalle de servicios críticos para el precheck
+  ansible.builtin.set_fact:
+    _critical_services_detail: >-
+      {{
+        (critical_services_before | map(attribute='name') | zip(critical_services_before | map(attribute='status')) | map('join', '=') | join(', '))
+        if critical_services_before | length > 0 else 'critical_services vacío'
+      }}
+  when: ansible_facts['distribution'] == 'SLES'
+
+- name: Registrar el resultado de servicios críticos en el precheck
+  ansible.builtin.set_fact:
+    precheck_checks: "{{ precheck_checks + [{'name': 'servicios_criticos', 'status': ('OK' if (critical_services_before | selectattr('status', 'equalto', 'FAILED') | list | length == 0) else 'FAILED'), 'detail': _critical_services_detail}] }}"
+  when: ansible_facts['distribution'] == 'SLES'
+
+- name: "Validar estado de GeoPOS antes del upgrade (gate de precheck, solo en hosts SLES)"
+  ansible.builtin.include_tasks: geopos_gate.yml
+  when: ansible_facts['distribution'] == 'SLES'
+
+- name: Calcular estado global del precheck
+  ansible.builtin.set_fact:
+    precheck_result:
+      target_sp: "{{ precheck_effective_target_sp | default('desconocido') }}"
+      checks: "{{ precheck_checks }}"
+      repo_inventory: "{{ precheck_repo_inventory | default([]) }}"
+      overall_status: >-
+        {{
+          'FAILED' if (precheck_checks | selectattr('status', 'equalto', 'FAILED') | list | length > 0)
+          else ('WARNING' if (precheck_checks | selectattr('status', 'equalto', 'WARNING') | list | length > 0)
+          else 'OK')
+        }}
+
+- name: Mostrar resumen de precheck
+  ansible.builtin.debug:
+    msg: "Precheck para {{ inventory_hostname }} (objetivo {{ precheck_result.target_sp }}): {{ precheck_result.overall_status }}"

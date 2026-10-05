@@ -1,0 +1,25 @@
+---
+# roles/sp_migration/tasks/updatestack.yml
+#
+# Actualiza la pila de gestión de paquetes (zypper/rpm/libzypp) usando
+# ÚNICAMENTE los repos Foreman/Katello del Service Pack de ORIGEN, ya
+# agregados como temporales por repo_management/add_temp_repos.yml (alias
+# "-src-"). En este punto los repos preexistentes ya fueron deshabilitados
+# (disable_preexisting.yml): ningún repositorio del servidor, aparte de
+# estos temporales Foreman, participa en este comando.
+#
+# Orden exigido por la guía oficial de SUSE ("Upgrading with plain
+# Zypper", paso 2: "Update the package management tools with the OLD
+# SUSE Linux Enterprise repositories") y por el flujo acordado del
+# proyecto.
+
+- name: Actualizar la pila de gestión de paquetes con los repositorios del SP de origen
+  ansible.builtin.command:
+    cmd: zypper --non-interactive patch --updatestack-only
+  become: true
+  register: _updatestack_result
+  until: _updatestack_result.rc == 0
+  retries: "{{ sp_migration_updatestack_retries }}"
+  delay: "{{ sp_migration_updatestack_delay }}"
+  changed_when: "'Nothing to do' not in (_updatestack_result.stdout | default(''))"
+  failed_when: _updatestack_result.rc != 0

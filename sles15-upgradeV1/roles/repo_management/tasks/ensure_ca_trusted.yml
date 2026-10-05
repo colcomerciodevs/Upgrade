@@ -1,0 +1,52 @@
+---
+# roles/repo_management/tasks/ensure_ca_trusted.yml
+#
+# Instala la CA interna real ("CAColdecom", roles/repo_management/files/
+# coldecom-ca.crt) en el almacén de confianza del sistema operativo del
+# host administrado, si todavía no está presente, y actualiza ese almacén
+# con `update-ca-certificates` (procedimiento estándar de SUSE/SLES).
+#
+# Por qué es necesario: Zypper valida TLS contra el almacén de confianza
+# del sistema operativo, no contra katello.ca_certificate_path (esa
+# variable solo alimenta el chequeo de alcanzabilidad de PRECHECK). Sin
+# esta CA instalada, cualquier refresh/dup real contra Foreman/Katello por
+# HTTPS falla con un error de TLS, tanto en VALIDATE como en UPGRADE.
+#
+# Por qué se incluye explícitamente aquí (decisión del usuario para este
+# ambiente — ver orden de fuentes de verdad en CLAUDE.md): es la ÚNICA
+# escritura al sistema operativo que ocurre durante upgrade_mode: validate,
+# que de otro modo nunca modifica el host. Es una operación idempotente,
+# no destructiva (agrega una CA de confianza adicional; no toca servicios,
+# no reinicia nada, no elimina ninguna CA existente) y se ejecuta siempre
+# justo antes de que Zypper use repositorios Foreman reales: aquí mismo
+# (add_temp_repos.yml, fases origen y destino de UPGRADE) y desde
+# roles/sp_migration/tasks/preflight.yml (VALIDATE).
+#
+# Documentado también en ARQUITECTURA_Y_DISENO_TECNICO.html (sección 1) y
+# en el checklist de laboratorio.
+
+- name: Verificar si la CA interna ya está instalada en el almacén de confianza del host
+  ansible.builtin.stat:
+    path: /etc/pki/trust/anchors/coldecom-ca.crt
+  register: _coldecom_ca_stat
+
+- name: Instalar la CA interna en el almacén de confianza del host
+  ansible.builtin.copy:
+    src: coldecom-ca.crt
+    dest: /etc/pki/trust/anchors/coldecom-ca.crt
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  register: _coldecom_ca_copy
+  when: not _coldecom_ca_stat.stat.exists
+
+- name: Actualizar el almacén de confianza del sistema (update-ca-certificates)
+  # Se ejecuta siempre (operación idempotente y segura de SUSE/SLES, no
+  # reinicia nada ni afecta servicios); "changed" solo se reporta cuando
+  # esta tarea realmente instaló la CA, para que el reporte sea honesto.
+  ansible.builtin.command:
+    cmd: update-ca-certificates
+  become: true
+  register: _coldecom_ca_update
+  changed_when: _coldecom_ca_copy is changed
