@@ -89,3 +89,30 @@
   ansible.builtin.set_fact:
     precheck_checks: "{{ precheck_checks + [{'name': 'repositorios_no_esperados', 'status': ('OK' if _unrecognized_repos | length == 0 else 'WARNING'), 'detail': ('sin repositorios no reconocidos' if _unrecognized_repos | length == 0 else 'repos no reconocidos: ' ~ (_unrecognized_repos | join(', ')))}] }}"
   when: _repo_inventory_reliable and (permanent_repos | default([])) | length > 0
+
+# Detecta repos temporales de ESTA automatización (prefijo
+# temporary_repo_prefix) que quedaron HABILITADOS -- típicamente evidencia
+# de una fase "prepare" (upgrade_phase: prepare, ver
+# playbooks/group_vars/all.yml) que nunca llegó a completarse con su fase
+# "apply" correspondiente. Es informativo (WARNING, nunca bloquea el
+# precheck): puede ser intencional (está pendiente de ejecutar "apply"), no
+# algo que este precheck deba corregir automáticamente.
+- name: Calcular repositorios temporales de esta automatización que quedaron habilitados
+  ansible.builtin.set_fact:
+    _leftover_prepared_repos: "{{ (precheck_repo_inventory | selectattr('enabled', 'equalto', true) | map(attribute='alias') | list) | select('match', '^' ~ temporary_repo_prefix) | list }}"
+  when: _repo_inventory_reliable
+
+- name: Registrar hallazgo de repos temporales habilitados de una fase 'prepare' sin completar
+  ansible.builtin.set_fact:
+    precheck_checks: "{{ precheck_checks + [{
+        'name': 'repos_preparacion_pendiente',
+        'status': ('WARNING' if _leftover_prepared_repos | length > 0 else 'OK'),
+        'detail': ('sin repos de preparación pendientes' if _leftover_prepared_repos | length == 0
+          else 'repos temporales de esta automatización ya habilitados -- probable fase prepare sin completar: ' ~ (_leftover_prepared_repos | join(', ')))
+      }] }}"
+  when: _repo_inventory_reliable
+
+- name: Registrar hallazgo de repos de preparación pendiente como NOT_CHECKED si el inventario no es confiable
+  ansible.builtin.set_fact:
+    precheck_checks: "{{ precheck_checks + [{'name': 'repos_preparacion_pendiente', 'status': 'NOT_CHECKED', 'detail': 'no se puede evaluar: el inventario de repositorios no es confiable (ver inventario_repositorios)'}] }}"
+  when: not _repo_inventory_reliable

@@ -183,6 +183,7 @@
     <a href="#s6">6. Job Template</a>
     <a href="#s7">7. Survey</a>
     <a href="#s8">8. Primera prueba</a>
+    <a href="#s9">9. Workflow (opcional)</a>
   </div>
 </nav>
 
@@ -299,6 +300,21 @@ required:
     <tr><td>Project</td><td>aparece al elegir "Sourced from a Project" — seleccionar el del paso 4</td></tr>
     <tr><td>Inventory file</td><td>desplegable que lee el Project — seleccionar <code>inventory/linux_excel_inventory.yml</code></td></tr>
     <tr><td>Credentials</td><td><strong>Agregar aquí</strong> el Credential del paso 2 (<code>SharePoint Excel Inventory</code>) — es este mismo formulario del Source, no un paso aparte. Sin esto, el Sync no tendrá <code>TENANT_ID</code>/<code>CLIENT_ID</code>/<code>CLIENT_SECRET</code> y fallará.</td></tr>
+    <tr><td>Environment Variables</td><td>
+      <pre style="margin:4px 0;">ANSIBLE_INVENTORY_ENABLED: "excel_inventory,host_list,script,auto,yaml,ini,toml"
+ANSIBLE_INVENTORY_PLUGINS: "/runner/project/&lt;CARPETA_DEL_PROJECT&gt;/inventory_plugins"</pre>
+      <strong>Confirmado necesario en la práctica</strong>: en varios AWX, el Sync del
+      Inventory Source no carga el <code>ansible.cfg</code> del proyecto (sale "No
+      config file found; using defaults" en el log), así que
+      <code>enable_plugins</code> e <code>inventory_plugins</code> de ese archivo no
+      surten efecto para este paso en particular. Declararlos como variables de
+      entorno aquí no depende de que se encuentre ningún archivo de configuración.
+      Reemplazar <code>&lt;CARPETA_DEL_PROJECT&gt;</code> por el nombre real con el
+      que AWX sincronizó este Project (se ve en el propio error del Sync fallido,
+      en la ruta del archivo de inventario, ej.
+      <code>/runner/project/sles15-upgradeV1/...</code>) — si se renombra el
+      Project más adelante, esta ruta hay que actualizarla.
+    </td></tr>
   </table>
 
   <p>Más abajo, en <strong>Update Options</strong>:</p>
@@ -311,7 +327,7 @@ required:
 
   <ul class="checklist">
     <li><input type="checkbox" id="s5-1"><label for="s5-1">Guardar y ejecutar <strong>Sync</strong>.</label></li>
-    <li><input type="checkbox" id="s5-2"><label for="s5-2">Si falla: revisar el log del Sync — ahí se ve exactamente si falta una variable de entorno o si el plugin no está disponible en el EE (ver sección 0).</label></li>
+    <li><input type="checkbox" id="s5-2"><label for="s5-2">Si falla con <code>"specifies unknown plugin 'excel_inventory'"</code> o <code>"No config file found"</code>: agregar las <strong>Environment Variables</strong> de arriba (es el caso más común). Para cualquier otro error, revisar el log completo del Sync.</label></li>
     <li><input type="checkbox" id="s5-3"><label for="s5-3">Si tiene éxito: confirmar que aparecen hosts reales en el Inventory, con sus variables (<code>ambiente</code>, <code>lote</code>, <code>os</code>, etc.).</label></li>
   </ul>
 </section>
@@ -327,28 +343,118 @@ required:
     <tr><td>Project</td><td>el del paso 4</td></tr>
     <tr><td>Playbook</td><td><code>playbooks/upgrade.yml</code></td></tr>
     <tr><td>Credentials</td><td>el del paso 3 (Machine)</td></tr>
-    <tr><td>Limit</td><td>vacío + marcar <strong>"Prompt on Launch"</strong></td></tr>
+    <tr><td>Limit</td><td>vacío, <strong>sin</strong> marcar "Prompt on Launch"</td></tr>
   </table>
   <div class="callout decision">
-    <span class="label">Por qué Limit y no un campo de Survey</span>
-    El host a tocar se elige siempre con <code>Limit</code> (marcado "Prompt on
-    Launch"), nunca con un campo de Survey tipo "IP del servidor" — evita tener dos
-    lugares definiendo lo mismo. Ver <code>ARQUITECTURA_Y_DISENO_TECNICO.html</code>,
-    sección 8.
+    <span class="label">Por qué ya no se usa Limit</span>
+    Decisión explícita del usuario para este ambiente: el host a tocar se elige con
+    el <strong>match CRQ + Lote + Ambiente</strong> del Survey (sección 7) contra esas
+    mismas columnas del inventario — no con <code>Limit</code>. Cada ejecución
+    (incluso un <code>precheck</code>) corresponde a un CRQ/RFC real de control de
+    cambios, así que ese dato ya identifica el host sin necesitar un campo aparte.
+    Si ningún host del inventario coincide con los 3 valores declarados, el playbook
+    falla explícito antes de tocar cualquier host (ver <code>playbooks/upgrade.yml</code>).
   </div>
 </section>
 
 <section class="main-section" id="s7">
   <div class="section-head"><div class="section-num">7</div><h2>Survey</h2></div>
-  <p>En el mismo Job Template → pestaña <strong>Survey</strong> → activar <strong>Survey Enabled</strong>.</p>
+  <p>En el mismo Job Template → pestaña <strong>Survey</strong> → activar <strong>Survey Enabled</strong>.
+  Cada pregunta tiene un campo <strong>"Description"</strong> en AWX (texto de ayuda que ve el
+  operador al llenar el formulario) — el texto sugerido va en la última columna, listo para copiar.</p>
+  <div class="callout decision">
+    <span class="label">upgrade_crq / upgrade_lote / upgrade_ambiente ya no son solo trazabilidad</span>
+    Estos 3 campos son ahora el <strong>único mecanismo de selección de hosts</strong>
+    del proyecto (reemplazan a <code>Limit</code>, sección 6): deben marcarse
+    <strong>Required</strong> en AWX, y su valor debe coincidir EXACTAMENTE (mismas
+    mayúsculas/minúsculas, sin espacios extra) con las columnas <code>CRQ</code>/
+    <code>Lote</code>/<code>Ambiente</code> del Excel para el host que se quiere
+    tocar. Si no coinciden con ningún host, el Job falla explícito con el mensaje
+    exacto de qué se buscó.
+  </div>
   <table class="clean">
-    <tr><th>Pregunta</th><th>Variable</th><th>Tipo</th></tr>
-    <tr><td>Modo de ejecución</td><td><code>upgrade_mode</code></td><td>Multiple Choice: <code>precheck</code>, <code>validate</code>, <code>sp4_to_sp5</code>, <code>sp5_to_sp6</code>, <code>sp6_to_sp7</code>, <code>full</code></td></tr>
-    <tr><td>¿Confirma ejecución real en producción?</td><td><code>confirm_production_upgrade</code></td><td>Boolean</td></tr>
-    <tr><td>Ingrese el CRQ/RFC</td><td><code>upgrade_crq</code></td><td>Text (opcional)</td></tr>
-    <tr><td>Seleccione el Lote a parchar del CRQ/RFC</td><td><code>upgrade_lote</code></td><td>Text u opción múltiple (opcional)</td></tr>
-    <tr><td>Seleccione el Ambiente asociado al CRQ/RFC y Lote</td><td><code>upgrade_ambiente</code></td><td>Multiple Choice: Producción / Desarrollo / Laboratorio / Staging (opcional)</td></tr>
+    <tr><th>Pregunta</th><th>Variable</th><th>Tipo</th><th>Description (pegar en AWX)</th></tr>
+    <tr>
+      <td>Modo de ejecución</td>
+      <td><code>upgrade_mode</code></td>
+      <td>Selección múltiple: <code>precheck</code>, <code>validate</code>, <code>sp4_to_sp5</code>, <code>sp5_to_sp6</code>, <code>sp6_to_sp7</code>, <code>full</code></td>
+      <td>
+        precheck: solo diagnostica (SO, espacio, servicios, GeoPOS, repos
+        actuales). No modifica nada. validate: además contacta de verdad los
+        repos Foreman del destino (metadata/TLS/CA/GPG, simulación de la
+        actualización). Tampoco modifica nada. sp4_to_sp5 / sp5_to_sp6 /
+        sp6_to_sp7: ejecutan esa única etapa real, con reinicio incluido —
+        requieren confirm_production_upgrade en true. full: encadena
+        SP5→SP6 y, solo si esa etapa quedó realmente validada (dup aplicado,
+        reiniciado, Service Pack confirmado, servicios críticos y GeoPOS
+        críticos OK), continúa con SP6→SP7 — nunca incluye SP4→SP5, que
+        siempre se ejecuta aparte con sp4_to_sp5.
+      </td>
+    </tr>
+    <tr>
+      <td>¿Confirma ejecución real en producción?</td>
+      <td><code>confirm_production_upgrade</code></td>
+      <td>Selección múltiple, con <strong>exactamente dos opciones: <code>true</code> y <code>false</code></strong> (ver nota abajo)</td>
+      <td>Obligatorio para los modos reales (sp4_to_sp5, sp5_to_sp6, sp6_to_sp7, full). Si el Modo de ejecución es precheck o validate, este valor se ignora por completo, sea true o false — esos dos modos nunca modifican el servidor bajo ninguna combinación. Déjalo en false para solo diagnosticar/ensayar un modo real. Ponlo en true únicamente cuando quieras aplicar la migración real, con reinicio incluido. Es independiente del Ambiente seleccionado abajo: todos los servidores de este proyecto se tratan como productivos, sin excepción.</td>
+    </tr>
+    <tr>
+      <td>Ingrese el CRQ/RFC</td>
+      <td><code>upgrade_crq</code></td>
+      <td>Texto, <strong>Required</strong></td>
+      <td>Debe coincidir exactamente con la columna CRQ del inventario del host que se quiere tocar. Selecciona el/los host(s) de esta ejecución junto con Lote y Ambiente — si no coincide con ninguno, el Job falla explícito.</td>
+    </tr>
+    <tr>
+      <td>Seleccione el Lote a parchar del CRQ/RFC</td>
+      <td><code>upgrade_lote</code></td>
+      <td>Texto o Selección múltiple, <strong>Required</strong></td>
+      <td>Debe coincidir exactamente con la columna Lote del inventario del host que se quiere tocar. Selecciona el/los host(s) de esta ejecución junto con CRQ y Ambiente — si no coincide con ninguno, el Job falla explícito.</td>
+    </tr>
+    <tr>
+      <td>Seleccione el Ambiente asociado al CRQ/RFC y Lote</td>
+      <td><code>upgrade_ambiente</code></td>
+      <td>Selección múltiple: Producción / Desarrollo / Laboratorio / Staging, <strong>Required</strong></td>
+      <td>Debe coincidir exactamente con la columna Ambiente del inventario del host que se quiere tocar. Selecciona el/los host(s) de esta ejecución junto con CRQ y Lote. NO reemplaza ni relaja "confirm_production_upgrade": todos los servidores de este proyecto se tratan como productivos, sin importar el Ambiente seleccionado aquí.</td>
+    </tr>
   </table>
+  <div class="callout decision">
+    <span class="label">Por qué existe confirm_production_upgrade si upgrade_mode ya dice que se quiere migrar</span>
+    No es redundante: es el patrón de <strong>"dos llaves"</strong>.
+    <code>upgrade_mode</code> decide <em>qué</em> operación correría;
+    <code>confirm_production_upgrade</code> decide si esa operación realmente
+    <em>se ejecuta</em>, o se queda preparada pero bloqueada. Hacen falta las
+    dos para modificar un servidor real:
+    <ul>
+      <li><strong>Protege contra un valor guardado por defecto</strong>: si un
+        Job Template o un Schedule queda configurado con
+        <code>upgrade_mode: full</code>, esa ejecución sigue sin modificar
+        nada mientras no se active explícitamente
+        <code>confirm_production_upgrade: true</code> en ese lanzamiento
+        puntual.</li>
+      <li><strong>Es independiente de Ambiente a propósito</strong>: no se
+        puede usar el Ambiente como candado porque todos los hosts de este
+        proyecto se tratan como productivos sin importar el Ambiente — hace
+        falta un campo que no dependa de ningún dato del inventario.</li>
+      <li><strong>Es un único punto de control en el código</strong>
+        (<code>playbooks/tasks/run_stage.yml</code>), revisado antes de
+        tocar cualquier repositorio o paquete, igual para los 4 modos
+        reales — para auditoría es una sola pregunta uniforme en vez de
+        confiar en que elegir el modo correcto nunca fue un error de click.</li>
+    </ul>
+    Por defecto siempre es <code>false</code>, así que cualquier ejecución
+    que no lo active a propósito queda inofensiva aunque el resto del
+    Survey esté mal configurado.
+  </div>
+  <div class="callout risk">
+    <span class="label">Importante: AWX no tiene un tipo de pregunta "Booleano"</span>
+    Usa <strong>Selección múltiple</strong> con las opciones escritas literalmente
+    <code>true</code> y <code>false</code> (en inglés, en minúsculas — no
+    <code>"Sí"</code>/<code>"No"</code>, ni con mayúscula inicial). El código del
+    playbook convierte este valor con el filtro <code>| bool</code> de Ansible, que
+    solo reconoce <code>true/false</code>, <code>yes/no</code>, <code>on/off</code>,
+    <code>1/0</code> (sin distinguir mayúsculas) — cualquier otro texto hace que la
+    etapa se bloquee explícitamente (fail-closed) en vez de interpretarse mal. Marcar
+    <code>false</code> como valor por defecto.
+  </div>
   <div class="callout note">
     <span class="label">Por qué el prefijo <code>upgrade_</code></span>
     El inventario dinámico (paso 5) ya expone <code>crq</code>/<code>lote</code>/
@@ -362,10 +468,99 @@ required:
 <section class="main-section" id="s8">
   <div class="section-head"><div class="section-num">8</div><h2>Primera prueba</h2></div>
   <ul class="checklist">
-    <li><input type="checkbox" id="s8-1"><label for="s8-1">Lanzar el Job Template con <code>upgrade_mode: precheck</code>, <code>Limit</code> = un host real de laboratorio, <code>confirm_production_upgrade: false</code>.</label></li>
+    <li><input type="checkbox" id="s8-1"><label for="s8-1">Lanzar el Job Template con <code>upgrade_mode: precheck</code>, <code>confirm_production_upgrade: false</code>, y <code>upgrade_crq</code>/<code>upgrade_lote</code>/<code>upgrade_ambiente</code> iguales a los datos reales del host de laboratorio en el inventario.</label></li>
     <li><input type="checkbox" id="s8-2"><label for="s8-2">Revisar el reporte generado completo antes de continuar.</label></li>
     <li><input type="checkbox" id="s8-3"><label for="s8-3">Seguir con <code>docs/CHECKLIST_LABORATORIO.html</code> para el resto del proceso.</label></li>
   </ul>
+</section>
+
+<section class="main-section" id="s9">
+  <div class="section-head"><div class="section-num">9</div><h2>Workflow Job Template (opcional: por etapas)</h2></div>
+  <p>Todo lo anterior (secciones 1-8) ya es suficiente para operar el proyecto con
+  <strong>un solo Job Template</strong>. Esta sección es una alternativa
+  <strong>opcional</strong>: partir la misma ejecución en 4 Job Templates encadenados
+  por un <strong>Workflow Job Template</strong>, para ver cada etapa como un nodo
+  separado en el diagrama, poder reintentar solo la etapa que falló, y poder insertar
+  un <strong>Approval Node</strong> entre "preparar" y "aplicar" (útil para exigir
+  aprobación de un supervisor antes del cambio real). No reemplaza nada de lo
+  anterior: reutiliza el mismo Project/Inventory/Credential, y el mismo
+  playbook <code>playbooks/upgrade.yml</code> para 3 de los 4 nodos.</p>
+
+  <h3>9.1 La variable <code>upgrade_phase</code></h3>
+  <p>Nueva variable (<code>playbooks/group_vars/all.yml</code>) que permite correr
+  una etapa real en 2 pasos separados en vez de todo de una vez:</p>
+  <table class="clean">
+    <tr><th>Valor</th><th>Qué hace</th></tr>
+    <tr><td><code>both</code> (default)</td><td>Todo en una sola corrida, exactamente como en las secciones 1-8 (sin Workflow).</td></tr>
+    <tr><td><code>prepare</code></td><td>Backup + deshabilitar preexistentes + repos ORIGEN + <code>updatestack</code> (real) + repos DESTINO agregados y verificados. Se detiene ahí — <strong>sin</strong> <code>dup -D</code>, <code>dup</code> ni reinicio. El sistema SÍ queda modificado (requiere <code>confirm_production_upgrade</code> igual que <code>both</code>).</td></tr>
+    <tr><td><code>apply</code></td><td>Verifica (gate) que los repos DESTINO de una fase <code>prepare</code> previa sigan exactamente habilitados — si no, falla explícito pidiendo ejecutar primero "preparar". Luego <code>dup -D</code> → <code>dup</code> real → reinicio → validación → limpieza.</td></tr>
+  </table>
+  <div class="callout risk">
+    <span class="label">upgrade_mode: full es la única excepción</span>
+    <code>full</code> encadena SP5→SP6 y SP6→SP7, cada uno con su propio set de
+    repos — no existe un único momento de "preparar" válido para ambos saltos a la
+    vez. Por eso, si <code>upgrade_mode=full</code>, el código (<code>_effective_upgrade_phase</code>
+    en <code>playbooks/tasks/run_stage.yml</code>) ignora <code>upgrade_phase</code> y
+    hace todo junto (como <code>both</code>) — <strong>excepto</strong> en el nodo
+    "Preparar repos", donde con <code>full</code> no hace absolutamente nada (no
+    modifica el sistema, solo informa) para que un único diseño de Workflow sirva
+    tanto para un salto individual como para <code>full</code>, sin que <code>full</code>
+    dispare un <code>dup</code> real por error en el nodo que se supone que solo prepara.
+  </div>
+
+  <h3>9.2 Los 4 Job Templates</h3>
+  <p>Mismo Inventory/Project/Credential que la sección 6. <code>upgrade_crq</code>/
+  <code>upgrade_lote</code>/<code>upgrade_ambiente</code>/<code>confirm_production_upgrade</code>
+  se marcan "Prompt on Launch" en los 4 (heredan la respuesta del Survey del Workflow,
+  sección 9.4). <code>upgrade_mode</code> se marca "Prompt on Launch" solo en los
+  nodos 2 y 3 (en el nodo 1 queda fijo en <code>precheck</code>; el nodo 4 no lo usa).</p>
+  <table class="clean">
+    <tr><th>#</th><th>Name</th><th>Playbook</th><th>Extra vars fijas (NO prompt)</th></tr>
+    <tr><td>1</td><td><code>SLES Upgrade - 1 Precheck</code></td><td><code>playbooks/upgrade.yml</code></td><td><code>upgrade_mode: precheck</code></td></tr>
+    <tr><td>2</td><td><code>SLES Upgrade - 2 Preparar repos</code></td><td><code>playbooks/upgrade.yml</code></td><td><code>upgrade_phase: prepare</code></td></tr>
+    <tr><td>3</td><td><code>SLES Upgrade - 3 Aplicar</code></td><td><code>playbooks/upgrade.yml</code></td><td><code>upgrade_phase: apply</code></td></tr>
+    <tr><td>4</td><td><code>SLES Upgrade - 4 Reporting</code></td><td><code>playbooks/report_summary.yml</code></td><td>(ninguna)</td></tr>
+  </table>
+  <div class="callout note">
+    <span class="label">Nodo 4: por qué un playbook distinto</span>
+    <code>playbooks/report_summary.yml</code> es la misma consolidación
+    (<code>resumen.html</code>) que ya corre automáticamente al final de
+    <code>playbooks/upgrade.yml</code> en cualquier modo — se extrajo a su propio
+    archivo justo para que este nodo pueda apuntar ahí directamente, sin duplicar
+    esa lógica en dos lugares. No necesita Survey ni CRQ/Lote/Ambiente: solo lee
+    <code>reports/run_summary.jsonl</code> y renderiza el resumen.
+  </div>
+
+  <h3>9.3 El Workflow Job Template</h3>
+  <p><strong>Resources → Templates → Add → Workflow Job Template</strong> →
+  pestaña "Workflow Visualizer" → encadenar los 4 nodos:</p>
+  <table class="clean">
+    <tr><th>Enlace</th><th>Condición</th></tr>
+    <tr><td>Nodo 1 (Precheck) → Nodo 2 (Preparar repos)</td><td>On Success</td></tr>
+    <tr><td>Nodo 2 (Preparar repos) → Nodo 3 (Aplicar)</td><td>On Success <span class="muted">(aquí se puede insertar un Approval Node intermedio)</span></td></tr>
+    <tr><td>Nodo 3 (Aplicar) → Nodo 4 (Reporting)</td><td><strong>Always</strong> (no "On Success")</td></tr>
+  </table>
+  <div class="callout decision">
+    <span class="label">Por qué el último enlace es "Always" y no "On Success"</span>
+    Si el Nodo 3 falla, igual se quiere el resumen consolidado al día (para ver el
+    fallo sin conectarse por SSH ni leer el log del Job) — "On Success" dejaría el
+    reporte desactualizado justo cuando más se necesita.
+  </div>
+
+  <h3>9.4 Survey del Workflow</h3>
+  <p>El Survey se configura en el <strong>Workflow Job Template</strong> (no en cada
+  nodo): mismas 5 preguntas de la sección 7 (<code>upgrade_mode</code>,
+  <code>confirm_production_upgrade</code>, <code>upgrade_crq</code>,
+  <code>upgrade_lote</code>, <code>upgrade_ambiente</code>). Las respuestas se
+  propagan a cada nodo que tenga esa variable marcada "Prompt on Launch" (sección 9.2).</p>
+
+  <h3>9.5 Notificaciones (por ejemplo, a un canal de Teams)</h3>
+  <p>No requiere ningún cambio de código: se configuran como
+  <strong>Notification Templates</strong> nativas de AWX (Administration →
+  Notifications → Add, tipo "Webhook"), asociadas al <strong>Workflow Job
+  Template</strong> (para notificar el resultado de todo el pipeline) o al
+  Nodo 4 específicamente. El webhook real del canal de Teams es responsabilidad
+  del administrador de AWX — este proyecto no lo invoca directamente.</p>
 </section>
 
 </div>

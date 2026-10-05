@@ -192,7 +192,7 @@ top = Inches(2.0)
 h = Inches(1.1)
 x0 = Inches(0.7)
 
-add_box(s, "AWX\n(orquestación, Survey, Limit)", x0, top, col_w, h, fill=NAVY)
+add_box(s, "AWX\n(orquestación, Survey)", x0, top, col_w, h, fill=NAVY)
 add_arrow_right(s, x0 + col_w, top + h / 2, gap)
 add_box(s, "Ansible\n(este proyecto)", x0 + col_w + gap, top, col_w, h, fill=TEAL)
 add_arrow_right(s, x0 + 2 * col_w + 2 * gap, top + h / 2, gap)
@@ -206,7 +206,7 @@ arrow.fill.fore_color.rgb = GRAY_MID
 arrow.line.fill.background()
 
 add_bullets(s, [
-    "AWX dispara la ejecución (Job Template + Survey) y define el alcance de servidores con “Limit”.",
+    "AWX dispara la ejecución (Job Template + Survey); el alcance de servidores se define con el CRQ/Lote/Ambiente declarados en el Survey, verificados contra el inventario — nunca con un campo de selección manual aparte.",
     "Ansible ejecuta el procedimiento en cada servidor, uno a la vez por defecto.",
     "Los servidores obtienen los paquetes de actualización exclusivamente desde Foreman/Katello, nunca desde Internet ni desde SUSEConnect.",
 ], top=Inches(4.6), size=15)
@@ -253,6 +253,58 @@ p3 = tf.add_paragraph()
 p3.text = "\nUna migración real requiere una confirmación explícita adicional (no ocurre por defecto), verificada antes de tocar cualquier repositorio."
 p3.font.size = Pt(14)
 p3.font.color.rgb = GRAY_MID
+p4 = tf.add_paragraph()
+p4.text = "\nLos pasos 3 (preparar repos) y 4-6 (aplicar el cambio) pueden ejecutarse juntos (por defecto) o como 2 etapas separadas con aprobación entre ambas — ver diapositiva siguiente."
+p4.font.size = Pt(14)
+p4.font.color.rgb = GRAY_MID
+add_footer(s, "ansible-sles-upgrade · Presentación ejecutiva")
+
+# =============================================================================
+# 5b. Workflow opcional: Preparar y Aplicar por separado
+# =============================================================================
+s = add_slide()
+set_background(s)
+add_title_bar(s, "Opcional: separar “Preparar” de “Aplicar”",
+              subtitle="Mismo procedimiento, con un punto de control humano en el medio")
+
+col_w = Inches(2.75)
+gap = Inches(0.35)
+top = Inches(1.65)
+h = Inches(1.1)
+x0 = Inches(0.6)
+add_box(s, "1. Precheck\n\n¿Está listo\nel servidor?", x0, top, col_w, h, fill=GRAY_MID, size=14)
+add_arrow_right(s, x0 + col_w, top + h / 2, gap)
+add_box(s, "2. Preparar\nrepositorios\n\n(cambio real)", x0 + (col_w + gap), top, col_w, h, fill=TEAL, size=14)
+add_arrow_right(s, x0 + 2 * (col_w + gap), top + h / 2, gap)
+add_box(s, "3. Aplicar\nel upgrade\n\n(cambio real,\nreinicio)", x0 + 2 * (col_w + gap), top, col_w, h, fill=NAVY, size=14)
+add_arrow_right(s, x0 + 3 * (col_w + gap), top + h / 2, gap)
+add_box(s, "4. Reporte\nconsolidado", x0 + 3 * (col_w + gap), top, col_w, h, fill=GRAY_MID, size=14)
+
+gate = s.shapes.add_textbox(x0 + (col_w + gap) + col_w + Inches(0.02), top + h + Inches(0.05), col_w + gap, Inches(0.4))
+gp = gate.text_frame.paragraphs[0]
+gp.text = "⬆ punto de aprobación opcional"
+gp.font.size = Pt(11)
+gp.font.italic = True
+gp.font.color.rgb = WARN_AMBER
+gp.alignment = PP_ALIGN.CENTER
+
+add_bullets(s, [
+    "Por qué separar “preparar” de “aplicar”: permite que una persona (ej. un supervisor de cambios) autorice el paso irreversible (el reinicio) después de ver que la preparación salió bien, sin tener que repetir todo desde cero.",
+    "Qué hace “preparar”: deja el servidor listo para migrar — respalda, deshabilita lo anterior, actualiza la herramienta de paquetes con los repositorios de origen, y agrega los repositorios de destino. Todavía NO aplica el cambio de Service Pack ni reinicia.",
+    "Qué hace “aplicar”: primero repite, con el sistema real ya preparado, la misma simulación que recomienda SUSE antes de migrar (ver nota abajo); si todo está bien, aplica el cambio real y reinicia.",
+    "Es opcional: por defecto las 2 etapas se ejecutan juntas, en una sola corrida, exactamente igual que antes de incluir esta opción.",
+], top=Inches(3.1), size=14)
+
+note_box = s.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.6), Inches(6.15), SLIDE_W - Inches(1.2), Inches(0.95))
+note_box.fill.solid()
+note_box.fill.fore_color.rgb = LIGHT_BG
+note_box.line.color.rgb = GRAY_MID
+tf = note_box.text_frame
+tf.word_wrap = True
+p = tf.paragraphs[0]
+p.text = "Por qué se hizo así: la guía oficial de SUSE (“SLES Upgrade Guide”, sección “Upgrading with plain Zypper”) ya indica ejecutar una simulación (zypper dup -D) y corregir cualquier problema ANTES de aplicar el cambio real (zypper dup). Separar “preparar” de “aplicar” simplemente hace visible, como un paso propio del flujo de aprobación, algo que el procedimiento oficial ya recomienda hacer antes de comprometerse al cambio real."
+p.font.size = Pt(12.5)
+p.font.color.rgb = GRAY_DARK
 add_footer(s, "ansible-sles-upgrade · Presentación ejecutiva")
 
 # =============================================================================
@@ -372,7 +424,7 @@ add_bullets(s, [
     "El reinicio tras una migración real es siempre obligatorio: no existe una opción para omitirlo.",
     "SP6 debe quedar realmente validado (aplicado, reiniciado, sistema operativo, servicios y GeoPOS) antes de que el mismo servidor continúe hacia SP7.",
     "Ante cualquier fallo, la información de diagnóstico se conserva por defecto en el propio servidor (no se limpia a ciegas).",
-    "Todo el alcance de servidores se controla desde AWX (“Limit”), evitando ejecuciones accidentales sobre servidores no previstos.",
+    "El alcance de servidores se controla con el CRQ/Lote/Ambiente del Survey, verificados contra el inventario: si no coinciden con ningún servidor, la ejecución falla antes de tocar nada — evitando ejecuciones accidentales sobre servidores no previstos.",
 ], size=15)
 add_footer(s, "ansible-sles-upgrade · Presentación ejecutiva")
 
@@ -483,8 +535,8 @@ steps3 = [
     "Deshabilitar solo los que estaban habilitados (nunca se borran)",
     "Agregar repos Foreman de origen -> actualizar la pila de paquetes",
     "Retirar los repos Foreman de origen",
-    "Agregar repos Foreman de destino -> migrar",
-    "Etapa exitosa: retirar los repos Foreman de destino",
+    "Agregar repos Foreman de destino (listos para migrar)",
+    "Migrar (dup); si la etapa fue exitosa, retirar los repos Foreman de destino",
 ]
 box_h = Inches(0.6)
 top = Inches(1.5)
@@ -511,6 +563,10 @@ p3 = tf.add_paragraph()
 p3.text = "\nAnte un fallo, todo se conserva tal cual para diagnóstico."
 p3.font.size = Pt(13)
 p3.font.color.rgb = GRAY_MID
+p4 = tf.add_paragraph()
+p4.text = "\nLos pasos 1-5 son la etapa “Preparar”; el paso 6 (migrar + retirar destino) es la etapa “Aplicar” — ver diapositiva 6."
+p4.font.size = Pt(13)
+p4.font.color.rgb = GRAY_MID
 add_footer(s, "ansible-sles-upgrade · Anexo técnico")
 
 out_path = os.path.join(os.path.dirname(__file__), "ansible-sles-upgrade-presentacion-ejecutiva.pptx")

@@ -355,8 +355,8 @@
     <tr><td>Inventory</td><td>Hosts/grupos reales de GeoPOS, con <code>ansible_host</code>/<code>ansible_user</code> si aplica</td></tr>
     <tr><td>Credential</td><td>SSH + <code>become</code> con los privilegios de la sección 1</td></tr>
     <tr><td>Job Template</td><td>Playbook <code>playbooks/upgrade.yml</code></td></tr>
-    <tr><td>Survey</td><td>Solo <code>upgrade_mode</code> y <code>confirm_production_upgrade</code> (ver README §13)</td></tr>
-    <tr><td>Limit</td><td>Mecanismo para seleccionar el host de laboratorio (no agregar selector propio en el Survey)</td></tr>
+    <tr><td>Survey</td><td><code>upgrade_mode</code>, <code>confirm_production_upgrade</code>, y <code>upgrade_crq</code>/<code>upgrade_lote</code>/<code>upgrade_ambiente</code> (ver README §13)</td></tr>
+    <tr><td>Selección de host</td><td><code>upgrade_crq</code>/<code>upgrade_lote</code>/<code>upgrade_ambiente</code> deben coincidir exactamente con las columnas CRQ/Lote/Ambiente del host de laboratorio en el inventario — ya no se usa <code>Limit</code></td></tr>
   </table>
 
   <h3>2.6 Parámetros técnicos con default razonable pero no medido</h3>
@@ -396,6 +396,7 @@
     <li><code>upgrade_mode: validate</code> sobre el mismo host (requiere los repos Foreman de origen y destino ya configurados). Confirmar <code>preflight.status: OK</code> con evidencia real de Zypper, no solo que el playbook termine sin error.</li>
     <li>Solo si los pasos anteriores fueron satisfactorios: <code>upgrade_mode: sp5_to_sp6</code> con <code>confirm_production_upgrade: true</code> en <strong>un único host no crítico</strong>. Revisar el reporte de la etapa completo, incluida la sección "Inventario final confiable" y el gate de doble evidencia.</li>
     <li>Repetir <code>validate</code> y luego <code>sp6_to_sp7</code> de la misma forma, de forma independiente, antes de intentar <code>full</code> encadenado.</li>
+    <li><strong>Solo si se planea usar el Workflow Job Template por etapas</strong> (<code>docs/AWX_SETUP.html</code>, sección 9): antes de producción, probar en el laboratorio <code>upgrade_phase: prepare</code> sobre un host, revisar que el reporte muestre los repos de destino habilitados y <em>sin</em> aplicar, y luego <code>upgrade_phase: apply</code> sobre ese mismo host para confirmar que el gate pasa y la migración se completa igual que con <code>both</code>.</li>
     <li>Solo después de una corrida exitosa documentada, evaluar <code>serial_batch_size</code> mayor a 1 o un grupo de hosts — el valor por defecto sigue siendo 1.</li>
   </ol>
 </section>

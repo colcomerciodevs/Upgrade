@@ -443,13 +443,11 @@ awx:
 
 No guardar contraseñas ni claves privadas en este documento.
 
-AWX debe permitir seleccionar el alcance mediante **Limit**:
-
-```text
-host01
-host01:host02
-grupo_geopos
-```
+AWX debe permitir seleccionar el alcance de la ejecución. Decisión explícita
+del usuario para este ambiente (no se usa `Limit`): el alcance se define con
+el match exacto entre `upgrade_crq`/`upgrade_lote`/`upgrade_ambiente` del
+Survey y las columnas `CRQ`/`Lote`/`Ambiente` del inventario — ver
+`playbooks/upgrade.yml` y README §13.
 
 La ejecución productiva debe utilizar por defecto:
 

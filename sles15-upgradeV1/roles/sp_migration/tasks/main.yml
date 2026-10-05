@@ -35,6 +35,14 @@
 # críticos y GeoPOS crítico OK.
 
 - name: Ejecutar dup -D como gate obligatorio inmediatamente antes del dup real
+  # "failed_when: false" aquí es deliberado: si se deja que esta tarea falle
+  # por sí sola (rc != 0), Ansible aborta ANTES de llegar a la tarea
+  # siguiente, que es la que guarda la salida real de Zypper en un hecho —
+  # la evidencia de qué paquete/dependencia causó el problema se perdería
+  # por completo, dejando al operador solo un mensaje genérico en el
+  # reporte. Por eso se registra el resultado completo primero, y la
+  # decisión de fallar se hace explícita en la tarea siguiente, después de
+  # haber guardado la salida.
   ansible.builtin.command:
     cmd: >-
       zypper --non-interactive
@@ -43,11 +51,24 @@
   become: true
   register: sp_migration_dry_run_result
   changed_when: false
-  failed_when: sp_migration_dry_run_result.rc != 0
+  failed_when: false
 
-- name: Registrar salida resumida del gate dup -D
+- name: "Registrar salida completa del gate dup -D (éxito o fallo)"
   ansible.builtin.set_fact:
-    sp_migration_dry_run_output: "{{ sp_migration_dry_run_result.stdout | default('') | truncate(20000) }}"
+    sp_migration_dry_run_output: >-
+      {{ ((sp_migration_dry_run_result.stdout | default('')) ~ '\n' ~ (sp_migration_dry_run_result.stderr | default(''))) | trim | truncate(20000) }}
+
+- name: "Fallar explícitamente si dup -D encontró problemas (la salida completa queda en el reporte)"
+  ansible.builtin.fail:
+    msg: >-
+      zypper dup -D (simulación obligatoria antes del dup real) encontró
+      problemas (rc={{ sp_migration_dry_run_result.rc }}). La salida completa
+      de Zypper queda en el reporte de esta etapa, sección "Resultado de la
+      migración" / "Gate obligatorio dup -D" -- normalmente indica paquetes
+      con conflictos de dependencias o cambios de proveedor (vendor).
+      Corríjalos (o, si corresponde, documente y autorice la excepción) antes
+      de reintentar esta etapa. No se ejecutó ningún cambio real.
+  when: sp_migration_dry_run_result.rc != 0
 
 - name: Ejecutar la migración real (zypper dup)
   ansible.builtin.command:

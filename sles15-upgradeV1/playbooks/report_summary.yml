@@ -1,0 +1,68 @@
+---
+# playbooks/report_summary.yml
+#
+# Genera/actualiza el resumen consolidado (reports/resumen.html) a partir
+# del historial acumulado en run_summary.jsonl -- el último estado conocido
+# de cada host y etapa. Es de solo lectura sobre el estado del sistema
+# administrado (localhost/control node únicamente): no toca ningún host
+# SLES ni cambia resultados ya registrados.
+#
+# Se importa automáticamente al final de playbooks/upgrade.yml (para que
+# cualquier corrida, con o sin Workflow, deje el resumen al día), y además
+# puede usarse como entrypoint propio -- por ejemplo, como la "Etapa 4:
+# Reporting" de un Workflow Job Template en AWX (ver docs/AWX_SETUP.html),
+# para tener un nodo final dedicado al que colgar una notificación (AWX
+# Notification Template) sin duplicar esta lógica en dos archivos.
+#
+# NOTA: no se fija report_local_dir aquí: se hereda igual que en la play
+# principal (playbooks/group_vars/all.yml, o el valor que haya pasado el
+# operador vía extra-vars/Survey), para que el resumen quede exactamente
+# en el mismo lugar donde se escribieron los reportes por host.
+
+- name: Generar resumen consolidado de la ejecución
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Verificar si existe historial de ejecuciones (run_summary.jsonl)
+      ansible.builtin.stat:
+        path: "{{ report_local_dir }}/run_summary.jsonl"
+      register: _run_summary_file
+
+    - name: Leer y consolidar el resumen (último estado conocido por host y etapa)
+      when: _run_summary_file.stat.exists
+      block:
+        - name: Leer líneas del historial
+          ansible.builtin.set_fact:
+            _summary_lines: "{{ lookup('file', report_local_dir ~ '/run_summary.jsonl').splitlines() | select | list }}"
+
+        - name: Convertir cada línea a un objeto y quedarse con el último por host+etapa
+          ansible.builtin.set_fact:
+            _resumen_map: "{{ _resumen_map | default({}) | combine({(entry.hostname ~ '|' ~ entry.stage): entry}) }}"
+          loop: "{{ _summary_lines | map('from_json') | list }}"
+          loop_control:
+            loop_var: entry
+            label: "{{ entry.hostname }}/{{ entry.stage }}"
+
+        - name: Renderizar resumen consolidado HTML
+          ansible.builtin.template:
+            src: "{{ playbook_dir }}/../roles/reporting/templates/resumen.html.j2"
+            dest: "{{ report_local_dir }}/resumen.html"
+            mode: "0644"
+          vars:
+            resumen_generated_at: "{{ lookup('pipe', 'date -u +%Y-%m-%dT%H:%M:%SZ') }}"
+            resumen_entries: "{{ (_resumen_map | default({})).values() | list }}"
+
+        - name: Copiar el resumen consolidado al destino persistente definitivo, si ya está configurado
+          ansible.builtin.copy:
+            src: "{{ report_local_dir }}/resumen.html"
+            dest: "{{ report_destination }}/resumen.html"
+            remote_src: true
+            mode: "0644"
+          when: not (report_destination is search('CHANGE_ME'))
+          failed_when: false
+
+    - name: Informar que aún no hay historial para consolidar
+      ansible.builtin.debug:
+        msg: "Todavía no existe {{ report_local_dir }}/run_summary.jsonl; no hay nada que consolidar aún."
+      when: not _run_summary_file.stat.exists

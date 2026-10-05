@@ -487,6 +487,34 @@
     dejaría el sistema en un estado mixto (binarios nuevos, kernel/servicios viejos en ejecución) que este proyecto
     nunca debe reportar como una etapa completa.
   </div>
+
+  <h3>5.1 <code>upgrade_phase</code>: partir un modo real en "preparar" y "aplicar" (decisión posterior, no contradice lo anterior)</h3>
+  <p>Más adelante se agregó <code>upgrade_phase</code> (<code>prepare</code> | <code>apply</code> | <code>both</code>,
+  default <code>both</code>) para permitir correr un modo real en 2 pasos separados — por ejemplo, como 2 Job
+  Templates de un Workflow en AWX, con un Approval Node entre ambos. A primera vista se parece al
+  <code>dry_run</code> descartado arriba; la diferencia es exactamente el punto que hacía a ese diseño ambiguo:</p>
+  <table class="clean">
+    <tr><th></th><th><code>dry_run</code> (descartado)</th><th><code>upgrade_phase: prepare</code> (actual)</th></tr>
+    <tr><td>¿Modifica el sistema?</td><td>No — se detenía después de <code>dup -D</code>, que nunca escribe nada</td><td>Sí — corre <code>updatestack</code> real y deja los repos de destino realmente habilitados</td></tr>
+    <tr><td>¿Para qué se usa?</td><td>"Mirar sin tocar" — redundante con <code>validate</code>, que ya hace exactamente eso de forma aislada</td><td>Dejar el sistema listo para un <code>apply</code> posterior — un paso intermedio real, no un ensayo</td></tr>
+    <tr><td>¿Se puede dejar así indefinidamente?</td><td>N/A (no modificaba nada)</td><td>Sí, a propósito: el host queda en un estado intermedio conocido (repos de destino listos, sin aplicar) hasta que se ejecute <code>apply</code></td></tr>
+  </table>
+  <p><code>upgrade_phase: apply</code> NO repite el preflight aislado de <code>validate</code>: en vez de eso, verifica
+  (gate, reutilizando <code>assert_enabled_repos.yml</code>) que los repos de destino de una fase <code>prepare</code>
+  previa sigan exactamente habilitados y, si es así, ejecuta el mismo <code>dup -D</code> obligatorio de siempre —
+  ahora contra los repos reales, no contra una copia aislada — seguido del <code>dup</code> real y el reinicio. El
+  orden interno (<code>dup -D</code> antes de <code>dup</code>) sigue siendo exactamente el recomendado por la guía
+  oficial de SUSE ("SLES Upgrade Guide", sección "Upgrading with plain Zypper", paso 6): ejecutar la simulación,
+  corregir problemas si los hay, y solo entonces aplicar el <code>dup</code> real.</p>
+  <div class="callout decision">
+    <span class="label"><code>upgrade_mode: full</code> ignora <code>upgrade_phase</code> (con una excepción)</span>
+    <code>full</code> encadena 2 saltos (SP5→SP6 y SP6→SP7), cada uno con su propio set de repos: no existe un único
+    momento de "preparar" válido para ambos a la vez. Por eso <code>full</code> siempre se comporta como <code>both</code>
+    para cada salto — <strong>excepto</strong> cuando <code>upgrade_phase: prepare</code>, caso en el que esa etapa no
+    hace absolutamente nada (<code>_effective_upgrade_phase = 'skip'</code> en <code>playbooks/tasks/run_stage.yml</code>).
+    Esto evita que un mismo diseño de Workflow en AWX (pensado para un salto individual) dispare por error un
+    <code>dup</code> real en el nodo que el operador esperaba fuera "solo preparar" cuando el modo elegido es <code>full</code>.
+  </div>
 </section>
 
 <!-- =========================== 6 =========================== -->
@@ -675,6 +703,7 @@
     <li><strong>Sin mecanismo de rollback automático propio</strong>: si la raíz es Btrfs con snapshots, el procedimiento de SUSE (<code>snapper rollback</code>) ya existe y es real; una capa propia habría añadido complejidad sin garantía adicional.</li>
     <li><strong>Sin plantillas de reposd-dir persistentes</strong>: el directorio de VALIDATE se genera y destruye en cada ejecución.</li>
     <li><strong><code>permanent_repos</code> reducido a informativo</strong>: mantenerlo como mecanismo de exclusión real habría reintroducido el riesgo que el modelo de aislamiento por fases busca eliminar (sección 4).</li>
+    <li><strong>El Workflow por etapas (<code>upgrade_phase</code>, sección 5.1) es opcional, no el camino por defecto</strong>: <code>upgrade_phase: both</code> reproduce exactamente el comportamiento original de un solo Job Template. No se creó un segundo playbook ni un segundo rol de migración para soportarlo — es la misma lógica de <code>run_stage.yml</code>, con <code>when:</code> adicionales.</li>
   </ul>
 </section>
 

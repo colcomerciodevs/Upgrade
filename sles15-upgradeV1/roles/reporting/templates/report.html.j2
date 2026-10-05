@@ -24,7 +24,14 @@
 <body>
 
 <h1>Reporte de upgrade SLES 15 — {{ stage_report.hostname }}</h1>
-<p class="subtitle">Etapa: <strong>{{ stage_report.stage }}</strong> · Acción solicitada: {{ stage_report.action }} · Generado: {{ stage_report.finished_at | default('N/D') }}</p>
+<p class="subtitle">Etapa: <strong>{{ stage_report.stage }}</strong> · Acción solicitada: {{ stage_report.action }} · Fase: <strong>{{ stage_report.phase | default('both') }}</strong> · Generado: {{ stage_report.finished_at | default('N/D') }}</p>
+{% if stage_report.phase == 'prepare' %}
+<p class="muted">Esta corrida solo PREPARÓ los repositorios (updatestack real + repos de destino habilitados) — no ejecutó dup -D, dup, ni reinicio. Ejecute la fase "apply" para continuar con la migración real.</p>
+{% elif stage_report.phase == 'apply' %}
+<p class="muted">Esta corrida asume que una fase "prepare" previa ya dejó los repos de destino habilitados; no repite backup/deshabilitar preexistentes/updatestack (ver esos datos en el reporte de esa fase anterior).</p>
+{% elif stage_report.phase == 'skip' %}
+<p class="muted">upgrade_mode=full con fase=prepare: esta etapa no modificó nada — full prepara y aplica cada salto internamente al ejecutar la fase "apply"/"both".</p>
+{% endif %}
 
 <div class="summary-box">
   <p><strong>Resultado final de la etapa:</strong>
@@ -91,6 +98,9 @@
 
 {% if stage_report.repos %}
 <h2>Repositorios</h2>
+{% if stage_report.repos.phase_note %}
+<p class="muted">{{ stage_report.repos.phase_note }}</p>
+{% endif %}
 <table>
   <tr><th>Directorio de respaldo</th><td colspan="3">{{ stage_report.repos.backup_dir | default('N/D') }}</td></tr>
   <tr><th>Habilitados antes (preexistentes)</th><td>{{ (stage_report.repos.repos_enabled_before | default([])) | join(', ') or 'ninguno' }}</td>

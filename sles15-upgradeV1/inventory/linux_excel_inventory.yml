@@ -20,8 +20,15 @@
 #
 # Aun así, PRECHECK sigue validando ansible_facts['distribution'] == 'SLES'
 # como primer chequeo obligatorio (ver roles/precheck/tasks/main.yml): si
-# por error se agrega a esta hoja un host que no sea SLES, o el Limit
-# apunta a uno equivocado, el precheck falla explícito en vez de continuar.
+# por error se agrega a esta hoja un host que no sea SLES, el precheck
+# falla explícito en vez de continuar.
+#
+# El alcance de hosts de cada ejecución NO se define aquí ni con "Limit":
+# se define con el match CRQ+Lote+Ambiente del Survey de AWX contra las
+# columnas CRQ/Lote/Ambiente de esta hoja (ver playbooks/upgrade.yml y
+# playbooks/group_vars/all.yml). Por eso no hace falta ningún "keyed_groups"
+# para agrupar por Lote: la selección se resuelve por comparación directa
+# de esas 3 columnas, no por pertenencia a un grupo de Ansible.
 #
 # IMPORTANTE: las columnas CRQ/Lote/Ambiente de abajo (compose) son
 # metadatos del host según el ÚLTIMO ciclo de PARCHADO registrado en la
@@ -65,6 +72,3 @@ compose:
   lote: "Lote"
   os: "SISTEMA OPERATIVO"
   type_os: "TIPO SO"
-
-keyed_groups:
-  - key: Lote

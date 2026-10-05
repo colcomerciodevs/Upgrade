@@ -32,10 +32,15 @@
 upgrade_mode: precheck
 
 # Metadatos de control de cambios (CRQ/RFC, Lote, Ambiente), provistos por
-# el Survey de AWX. Puramente informativos: se registran en el reporte
-# (stage_report.crq/lote/ambiente) para trazabilidad/auditoría, pero NUNCA
-# se usan para seleccionar hosts ni para decidir nada del procedimiento —
-# el alcance de hosts se controla exclusivamente con "Limit" (sección 13).
+# el Survey de AWX. Decisión explícita del usuario para este ambiente: estos
+# 3 valores NO son solo trazabilidad — son el ÚNICO mecanismo de selección
+# de hosts de todo el playbook (ver playbooks/upgrade.yml, plays iniciales
+# "Validar que se declaró..."/"Seleccionar los hosts..."/"Verificar que
+# hubo..."). Un host entra al alcance de la ejecución únicamente si sus
+# columnas CRQ/Lote/Ambiente del inventario (ver más abajo) coinciden
+# EXACTAMENTE con estos 3 valores; si ninguno coincide, el playbook falla
+# explícito antes de tocar cualquier host. "Limit" de AWX ya NO se usa para
+# seleccionar hosts en este proyecto.
 #
 # Se usa el prefijo "upgrade_" deliberadamente, DISTINTO de "crq"/"lote"/
 # "ambiente" a secas: el inventario dinámico Excel/SharePoint de este
@@ -43,10 +48,38 @@ upgrade_mode: precheck
 # nombres como variables de host (columnas CRQ/Lote/Ambiente de la hoja de
 # parchado). Si el Survey usara los mismos nombres, un host heredaría
 # silenciosamente un CRQ/Lote de un ciclo de PARCHADO anterior, no el de
-# este upgrade. Vacíos por defecto para no exigirlos en ejecuciones locales.
+# este upgrade. Vacíos por defecto solo para que ansible-playbook/ansible-lint
+# puedan cargar este archivo sin valores; en una ejecución real (local o AWX)
+# los 3 son obligatorios (ver el assert correspondiente en playbooks/upgrade.yml).
 upgrade_crq: ""
 upgrade_lote: ""
 upgrade_ambiente: ""
+
+# Permite ejecutar una etapa real (sp4_to_sp5/sp5_to_sp6/sp6_to_sp7) en 2
+# pasos separados (por ejemplo, como 2 nodos de un Workflow Job Template en
+# AWX, con un Approval Node entre ambos), en vez de todo en una sola corrida:
+#
+# - prepare : backup + deshabilitar preexistentes + repos ORIGEN +
+#             updatestack (real) + repos DESTINO agregados y verificados.
+#             Se detiene ahí -- NO ejecuta dup -D, dup, ni reinicio. El
+#             sistema SÍ queda modificado (requiere confirm_production_upgrade
+#             igual que "both").
+# - apply   : verifica (gate) que los repos DESTINO de una fase "prepare"
+#             previa sigan exactamente habilitados: si no, falla explícito
+#             pidiendo ejecutar primero "prepare". Luego dup -D -> dup real
+#             -> reinicio -> validación -> limpieza.
+# - both    : comportamiento de siempre, todo en una sola corrida (default,
+#             compatibilidad total con un único Job Template sin Workflow).
+#
+# upgrade_mode: full SIEMPRE se comporta como "both" para cada uno de sus 2
+# saltos encadenados (SP5->SP6 y SP6->SP7): no tiene un único momento de
+# "preparar" válido para ambos a la vez. La ÚNICA excepción es
+# upgrade_phase=prepare combinado con upgrade_mode=full: ahí esta etapa no
+# hace nada (ver playbooks/tasks/run_stage.yml, _effective_upgrade_phase),
+# para que un Workflow con un solo diseño sirva tanto para un salto
+# individual como para full, sin que full dispare un dup real por error en
+# el nodo que se supone que solo prepara.
+upgrade_phase: "both"
 
 # Procesamiento productivo por defecto: un host a la vez.
 serial_batch_size: 1

@@ -9,7 +9,8 @@ Foreman/Katello**.
 > productivos. Ninguna acción de este proyecto se ejecuta contra
 > infraestructura real salvo que un operador la lance explícitamente desde
 > AWX (o `ansible-playbook` con inventario real) indicando el alcance con
-> `Limit`.
+> CRQ + Lote + Ambiente (sección 13) — el host o los hosts que coincidan
+> exactamente con esos 3 valores en el inventario.
 
 Este README cubre la **operación** del proyecto. El diseño técnico y las
 decisiones de arquitectura en detalle están en
@@ -143,7 +144,8 @@ sles15-upgrade/
 │   └── linux_excel_inventory.yml  # Inventory Source dinámico (Excel/SharePoint, sección 13)
 ├── playbooks/
 │   ├── upgrade.yml                # entrypoint único (todos los modos)
-│   ├── tasks/run_stage.yml        # lógica común de UNA etapa de migración
+│   ├── report_summary.yml         # consolidación final (resumen.html); también usable como Etapa 4 de un Workflow (sección 13)
+│   ├── tasks/run_stage.yml        # lógica común de UNA etapa de migración (soporta upgrade_phase, sección 10.1)
 │   ├── group_vars/all.yml         # variables comunes del proyecto (ver sección 6)
 │   └── host_vars/*.yml.example    # excepciones puntuales por host
 ├── roles/
@@ -700,6 +702,28 @@ silenciosamente.
 
 Cada modo produce su propio reporte por host (sección 11).
 
+### 10.1 `upgrade_phase`: partir una etapa real en 2 corridas separadas
+
+Para `sp4_to_sp5`/`sp5_to_sp6`/`sp6_to_sp7` (no para `full`, ver más abajo),
+`upgrade_phase` permite dividir lo que hace `run_stage.yml` en 2 pasos — por
+ejemplo, como 2 Job Templates de un Workflow en AWX, con un Approval Node
+entre ambos (ver `docs/AWX_SETUP.html`, sección 9):
+
+| `upgrade_phase` | Qué hace | Modifica el sistema |
+|---|---|---|
+| `both` (default) | Todo en una sola corrida, como siempre: backup → deshabilitar preexistentes → repos ORIGEN + `updatestack` → repos DESTINO → `dup -D` → `dup` real → reinicio → validar → limpiar | Sí |
+| `prepare` | Backup → deshabilitar preexistentes → repos ORIGEN + `updatestack` (real) → repos DESTINO agregados y verificados. Se detiene ahí | Sí (pero sin `dup`/reinicio) |
+| `apply` | Gate: verifica que los repos DESTINO de una fase `prepare` previa sigan exactamente habilitados (si no, falla explícito) → `dup -D` → `dup` real → reinicio → validar → limpiar | Sí |
+
+**`upgrade_mode: full` ignora `upgrade_phase`** (siempre se comporta como
+`both` para cada uno de sus 2 saltos encadenados: no existe un único momento
+de "preparar" válido para SP5→SP6 y SP6→SP7 a la vez) — **excepto**
+`upgrade_phase: prepare`, que en ese caso específico no hace absolutamente
+nada (ver `_effective_upgrade_phase` en `playbooks/tasks/run_stage.yml`),
+para que un mismo diseño de Workflow sirva tanto para un salto individual
+como para `full` sin arriesgar un `dup` real por error en el nodo que se
+supone que solo prepara.
+
 ---
 
 ## 11. Reportes
@@ -708,10 +732,11 @@ Cada modo produce su propio reporte por host (sección 11).
   prechecks, preflight, ciclo de vida completo de repositorios, migración,
   reinicio, servicios críticos y GeoPOS antes/después, y el estado final) y
   su equivalente **JSON** (mismo contenido, para auditoría/integración).
-- Si se completaron en el Survey de AWX (`upgrade_crq`/`upgrade_lote`/
-  `upgrade_ambiente`), el reporte los muestra como `crq`/`lote`/`ambiente`
-  (control de cambios) — puramente informativos, nunca afectan la
-  ejecución; se omiten de la vista si están vacíos (ejecuciones locales).
+- El reporte muestra `upgrade_crq`/`upgrade_lote`/`upgrade_ambiente` (Survey
+  de AWX) como `crq`/`lote`/`ambiente` (control de cambios) — además de
+  quedar en el reporte, estos 3 valores son el criterio con el que se
+  seleccionó el host de esta ejecución (sección 13); se omiten de la vista
+  si están vacíos (ejecuciones locales de prueba sin match).
 - El bloque de repositorios del reporte muestra explícitamente:
   `repos_enabled_before`, `repos_disabled_before`, `repos_disabled_by_upgrade`,
   `repos_temporary_created`, `repos_temporary_removed`, `repos_enabled_after`.
@@ -783,6 +808,14 @@ Manual paso a paso para crear todo esto desde cero en un AWX nuevo (Credential
 Type, Credential, Project, Inventory Source, Job Template, Survey):
 [`docs/AWX_SETUP.html`](docs/AWX_SETUP.html).
 
+**Opción alternativa (opcional): Workflow Job Template por etapas.** En vez
+de un único Job Template, el mismo proyecto soporta partir la ejecución en 4
+Job Templates (Precheck → Preparar repos → Aplicar → Reporting) encadenados
+por un Workflow — ver la variable `upgrade_phase` (sección 10.1) y
+`docs/AWX_SETUP.html`, sección 9, para el diseño completo (incluye dónde
+insertar un Approval Node y cómo conectar notificaciones de AWX, por ejemplo
+a un canal de Teams).
+
 ### Objetos a configurar (con datos reales, no inventados)
 
 - **Project**: apuntando a este repositorio.
@@ -828,18 +861,73 @@ Type, Credential, Project, Inventory Source, Job Template, Survey):
     físicos SLES 15 con GeoPOS, PRECHECK igual valida
     `ansible_facts['distribution'] == 'SLES'` como primer chequeo
     obligatorio (sección 8.1), como defensa adicional ante un error de
-    captura en la hoja o un `Limit` mal escrito: si el host no es SLES, el precheck
+    captura en la hoja: si el host no es SLES, el precheck
     queda `FAILED` de inmediato con un mensaje explícito y **no ejecuta
     ninguna otra verificación ni acción** sobre ese host.
 - **Credential**: SSH + `become` con los privilegios necesarios.
-- **Job Template**: Playbook `playbooks/upgrade.yml`.
-- **Survey** (pequeño, solo lo operacional y de trazabilidad — nunca para
-  seleccionar hosts):
+- **Job Template**: Playbook `playbooks/upgrade.yml`. **No** marcar
+  `Limit` como "Prompt on Launch": ya no se usa para seleccionar hosts
+  (ver más abajo).
+- **Survey** (pequeño; `upgrade_crq`/`upgrade_lote`/`upgrade_ambiente` ya
+  no son solo trazabilidad — son el mecanismo de selección de hosts):
   - `upgrade_mode` (choice: precheck / validate / sp4_to_sp5 / sp5_to_sp6 / sp6_to_sp7 / full)
-  - `confirm_production_upgrade` (boolean)
-  - `upgrade_crq` (texto, opcional): "Ingrese el CRQ/RFC"
-  - `upgrade_lote` (texto u opción múltiple, opcional): "Seleccione el Lote a parchar del CRQ/RFC"
-  - `upgrade_ambiente` (opción múltiple, opcional): "Seleccione el Ambiente asociado al CRQ/RFC y Lote" (ej. Producción/Desarrollo/Laboratorio/Staging)
+  - `confirm_production_upgrade` (choice, **no boolean** — AWX no tiene ese tipo de
+    pregunta; ver nota abajo)
+  - `upgrade_crq` (texto, **obligatorio**): "Ingrese el CRQ/RFC"
+  - `upgrade_lote` (texto u opción múltiple, **obligatorio**): "Seleccione el Lote a parchar del CRQ/RFC"
+  - `upgrade_ambiente` (opción múltiple, **obligatorio**): "Seleccione el Ambiente asociado al CRQ/RFC y Lote" (ej. Producción/Desarrollo/Laboratorio/Staging)
+
+  **Por qué existe `confirm_production_upgrade` si `upgrade_mode` ya dice
+  que se quiere migrar — el patrón de "dos llaves".** No es redundante:
+  `upgrade_mode` decide **qué** operación correría; `confirm_production_upgrade`
+  decide si esa operación realmente **se ejecuta**, o se queda preparada pero
+  bloqueada. Hacen falta las dos para modificar un servidor real:
+
+  1. **Protege contra un valor guardado por defecto.** Si un Job Template o
+     un Schedule queda configurado con `upgrade_mode: full` (por ejemplo,
+     para no tener que re-seleccionarlo en cada lanzamiento), esa ejecución
+     sigue sin modificar nada mientras no se active explícitamente
+     `confirm_production_upgrade: true` en ese lanzamiento puntual.
+  2. **Es intencionalmente independiente de `upgrade_ambiente`.** No se puede
+     usar el Ambiente como candado porque, por política de este proyecto
+     (ver encabezado del README), **todos** los hosts se tratan como
+     productivos sin importar el Ambiente — así que se necesita un campo
+     que no dependa de ningún dato del inventario, algo que un humano deba
+     afirmar activamente cada vez.
+  3. **Es un único punto de control en el código**
+     (`playbooks/tasks/run_stage.yml`), revisado antes de tocar cualquier
+     repositorio o paquete, igual para las 4 formas de modificar el sistema
+     (`sp4_to_sp5`/`sp5_to_sp6`/`sp6_to_sp7`/`full`) — para auditoría es una
+     sola pregunta uniforme ("¿este log muestra
+     `confirm_production_upgrade=true`?"), en vez de confiar en que elegir
+     el modo correcto nunca fue un error de click.
+
+  Por defecto siempre es `false` (`playbooks/group_vars/all.yml`), así que
+  cualquier ejecución que no lo active a propósito queda inofensiva, aunque
+  el resto del Survey esté mal configurado.
+
+  **`confirm_production_upgrade` — AWX no tiene un tipo de pregunta
+  "Boolean" en el Survey** (solo texto/área de texto/contraseña/selección
+  múltiple/opciones de selección múltiple/entero/decimal). Usar
+  **"Selección múltiple"** con exactamente dos opciones, escritas
+  literalmente `true` y `false` (en inglés, minúsculas — no `"Sí"`/`"No"`).
+  El código (`playbooks/tasks/run_stage.yml`) aplica el filtro `| bool` de
+  Ansible sobre este valor, que reconoce `true/false`, `yes/no`, `on/off`,
+  `1/0` sin distinguir mayúsculas; cualquier otro texto bloquea la etapa
+  explícitamente en vez de interpretarse mal — es intencional: sin este
+  filtro, el string `"false"` (no vacío) se evaluaría como verdadero en
+  Jinja y **autorizaría** la migración real por error.
+
+  **¿Qué pasa si se selecciona `precheck` (o `validate`) con
+  `confirm_production_upgrade: true`?** Nada distinto de dejarlo en
+  `false`: ese valor solo se lee dentro de `playbooks/tasks/run_stage.yml`
+  (línea con el assert), y ese archivo únicamente se incluye cuando
+  `upgrade_mode` es `sp4_to_sp5`/`sp5_to_sp6`/`sp6_to_sp7`/`full` (ver
+  `playbooks/upgrade.yml`). `precheck` y `validate` nunca llegan a ese
+  código, así que el valor de `confirm_production_upgrade` se ignora por
+  completo bajo esos dos modos — no hay ninguna combinación de
+  `upgrade_mode`/`confirm_production_upgrade` que haga que `precheck` o
+  `validate` modifiquen el servidor.
 
   **Por qué el prefijo `upgrade_`** (y no `crq`/`lote`/`ambiente` a secas):
   el inventario dinámico de arriba ya expone esos mismos nombres como
@@ -848,15 +936,24 @@ Type, Credential, Project, Inventory Source, Job Template, Survey):
   nombres, un host heredaría silenciosamente ese dato de parchado en el
   reporte de este upgrade en vez del CRQ/Lote/Ambiente real de esta
   ejecución. Ver `playbooks/group_vars/all.yml`.
-- **Limit**: mecanismo **único** de selección de hosts/grupos (marcar
-  "Prompt on Launch" si se quiere elegir el servidor al momento de
-  lanzar). `upgrade_crq`/`upgrade_lote`/`upgrade_ambiente` son puramente
-  informativos — quedan registrados en el reporte para auditoría (ver
-  sección 11), pero **nunca** determinan ni filtran qué host se toca; eso
-  es exclusivamente responsabilidad de `Limit`, para no duplicar ni
-  contradecir la fuente real del Inventory.
+
+  **Selección de hosts: match CRQ + Lote + Ambiente, no `Limit`.**
+  Decisión explícita del usuario para este ambiente: cada ejecución
+  (incluso un `precheck`) corresponde a un CRQ/RFC de control de cambios
+  real, así que `upgrade_crq`/`upgrade_lote`/`upgrade_ambiente` del Survey
+  se comparan contra las columnas `CRQ`/`Lote`/`Ambiente` **del inventario**
+  (mismo nombre, sin prefijo, compuestas en `inventory/linux_excel_inventory.yml`
+  desde el Excel) — ver los 3 primeros plays de `playbooks/upgrade.yml`. El
+  host o los hosts cuyas 3 columnas coincidan EXACTAMENTE (comparación con
+  `trim`, sensible a mayúsculas) con lo declarado en el Survey entran al
+  alcance de la ejecución; si ninguno coincide, el playbook falla
+  explícito antes de tocar cualquier host — nunca se ejecuta sin
+  seleccionar nada ni contra el host equivocado. Deje `Limit` vacío y sin
+  "Prompt on Launch" en el Job Template: ya no participa en la selección.
 - **Schedule**: opcional, para ejecuciones programadas (por ejemplo,
-  `validate` periódico).
+  `validate` periódico) — en ese caso, `upgrade_crq`/`upgrade_lote`/
+  `upgrade_ambiente` deben fijarse como extra-vars del Schedule, igual que
+  cualquier otro valor del Survey.
 
 No hay `dry_run` ni `reboot_after_upgrade` que agregar al Survey: no
 existen en este proyecto (sección 9).

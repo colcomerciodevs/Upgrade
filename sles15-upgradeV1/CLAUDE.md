@@ -288,7 +288,15 @@ Soportar:
 - grupo de inventario;
 - ejecución programada.
 
-Utilizar **AWX Limit** como mecanismo principal para seleccionar hosts/grupos.
+Mecanismo de selección de hosts (decisión explícita del usuario para este
+ambiente, 2026-10-05): **no se usa `Limit`**. Cada ejecución (incluso un
+`precheck`) corresponde a un CRQ/RFC de control de cambios real, así que el
+alcance se define con el match exacto entre `upgrade_crq`/`upgrade_lote`/
+`upgrade_ambiente` del Survey y las columnas `CRQ`/`Lote`/`Ambiente` del
+inventario dinámico — ver `playbooks/upgrade.yml`. Si ningún host coincide
+con los 3 valores declarados, el playbook falla explícito antes de tocar
+cualquier host. `Limit` se deja vacío y sin "Prompt on Launch" en el Job
+Template.
 
 El procesamiento productivo por defecto debe ser de un host a la vez:
 
@@ -298,7 +306,8 @@ serial_batch_size: 1
 
 Mantener el Survey pequeño y útil operacionalmente.
 
-No construir en el Survey un selector de hosts redundante con `Limit`.
+Los 3 campos de selección (`upgrade_crq`/`upgrade_lote`/`upgrade_ambiente`)
+deben marcarse como obligatorios ("Required") en el Survey.
 
 ## Simplicidad
 
@@ -362,7 +371,7 @@ Mantener un `README.md` práctico y en español que cubra:
 - Credential;
 - Job Template;
 - Survey;
-- Limit;
+- selección de hosts (CRQ/Lote/Ambiente, ya no Limit);
 - Schedule;
 - precheck;
 - dry-run/preflight;

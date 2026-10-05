@@ -21,10 +21,27 @@
 # nunca se reactiva automáticamente.
 #
 # Vars requeridas: stage_current_sp, stage_target_sp, stage_releasever
+#
+# upgrade_phase (prepare|apply|both, ver playbooks/group_vars/all.yml)
+# permite partir todo lo anterior en 2 corridas separadas:
+#   prepare -> hasta "agregar repos DESTINO", sin dup -D/dup/reinicio.
+#   apply   -> gate (repos DESTINO de un "prepare" previo) -> dup -D -> dup
+#              real -> reinicio -> validación -> limpieza.
+#   both    -> todo junto, como siempre (default).
+# upgrade_mode: full siempre fuerza "both" para sus 2 saltos encadenados,
+# EXCEPTO cuando upgrade_phase=prepare: ahí esta etapa no hace nada (ver
+# _effective_upgrade_phase = 'skip' más abajo), porque full no tiene un
+# único momento de "preparar" válido para sus 2 saltos a la vez.
 
 - name: "Inicializar estado de la etapa de migración {{ stage_target_sp }}"
   ansible.builtin.set_fact:
     _stage_started_at: "{{ lookup('pipe', 'date -u +%Y-%m-%dT%H:%M:%SZ') }}"
+    _effective_upgrade_phase: >-
+      {{
+        (('skip' if (upgrade_phase | default('both')) == 'prepare' else 'both'))
+        if upgrade_mode == 'full'
+        else (upgrade_phase | default('both'))
+      }}
     stage_status: "OK"
     stage_failure_reason: ""
     stage_validated: false
@@ -58,16 +75,36 @@
     stage_status: "{{ precheck_result.overall_status }}"
     stage_failure_reason: "{{ 'precheck' if precheck_result.overall_status == 'FAILED' else '' }}"
 
+- name: "Informar que esta etapa no aplica (upgrade_mode=full ya prepara y aplica todo internamente en la fase 'apply')"
+  ansible.builtin.debug:
+    msg: >-
+      upgrade_mode=full con upgrade_phase=prepare: esta etapa (preparar
+      repos como paso separado) no aplica -- full preparará y aplicará cada
+      salto (SP5->SP6, SP6->SP7) internamente cuando se ejecute la fase
+      "apply" (o "both"). No se modificó nada en este host.
+  when:
+    - stage_status != 'FAILED'
+    - _effective_upgrade_phase == 'skip'
+
 - name: "Preparar repos y migrar si el precheck no bloqueó la etapa {{ stage_target_sp }}"
-  when: stage_status != 'FAILED'
+  when:
+    - stage_status != 'FAILED'
+    - _effective_upgrade_phase != 'skip'
   block:
 
     - name: "Exigir confirmación explícita ANTES de tocar cualquier repositorio o paquete"
       block:
         - name: Verificar confirm_production_upgrade
+          # "| bool" es obligatorio aquí, no cosmético: AWX no tiene un tipo
+          # de pregunta "booleano" en el Survey (solo Selección
+          # múltiple/texto/entero/etc.), así que este valor puede llegar
+          # como el STRING "false" en vez de un booleano real. Sin "| bool",
+          # el string "false" (no vacío) se evalúa como verdadero en
+          # Jinja/Python, y "false" terminaría AUTORIZANDO la migración
+          # real — justo lo contrario de lo que debe hacer.
           ansible.builtin.assert:
             that:
-              - confirm_production_upgrade | default(false)
+              - confirm_production_upgrade | default(false) | bool
             fail_msg: >-
               confirm_production_upgrade=false: no se ejecutará ningún cambio real.
               Actívelo explícitamente (por ejemplo desde el Survey de AWX) para
@@ -82,17 +119,28 @@
     - name: "Respaldar, deshabilitar preexistentes y migrar con repos Foreman aislados"
       when: stage_status != 'FAILED'
       block:
+        - name: Seleccionar repos Foreman de origen y destino de esta etapa
+          # Se calcula SIEMPRE (incluso en fase "apply" en solitario): el
+          # gate de "apply" más abajo necesita _stage_dest_repositories
+          # para calcular qué alias de destino debería haber dejado una
+          # fase "prepare" previa, sin tener que volver a agregarlos.
+          ansible.builtin.set_fact:
+            _stage_origin_repositories: "{{ katello[stage_current_sp ~ '_repositories'] }}"
+            _stage_dest_repositories: "{{ katello[stage_target_sp ~ '_repositories'] }}"
+
         - name: Respaldar e inventariar repositorios (enabled/disabled) antes de modificar nada
           ansible.builtin.include_role:
             name: repo_management
             tasks_from: backup.yml
           vars:
             repo_management_target_sp: "{{ stage_target_sp }}"
+          when: _effective_upgrade_phase in ['prepare', 'both']
 
         - name: Deshabilitar únicamente los repositorios preexistentes que estaban habilitados
           ansible.builtin.include_role:
             name: repo_management
             tasks_from: disable_preexisting.yml
+          when: _effective_upgrade_phase in ['prepare', 'both']
 
         - name: "Gate de seguridad: confirmar que ningún repositorio quedó habilitado tras deshabilitar preexistentes"
           ansible.builtin.include_role:
@@ -101,11 +149,7 @@
           vars:
             repo_management_assert_expected_enabled_repos: []
             repo_management_assert_context_label: "tras deshabilitar preexistentes"
-
-        - name: Seleccionar repos Foreman de origen y destino de esta etapa
-          ansible.builtin.set_fact:
-            _stage_origin_repositories: "{{ katello[stage_current_sp ~ '_repositories'] }}"
-            _stage_dest_repositories: "{{ katello[stage_target_sp ~ '_repositories'] }}"
+          when: _effective_upgrade_phase in ['prepare', 'both']
 
         - name: Agregar repos Foreman de ORIGEN (para updatestack)
           ansible.builtin.include_role:
@@ -116,6 +160,7 @@
             repo_management_alias_suffix: "src"
             repo_management_phase_repositories: "{{ _stage_origin_repositories }}"
             repo_management_phase_releasever: ""
+          when: _effective_upgrade_phase in ['prepare', 'both']
 
         - name: "Gate de seguridad: confirmar que lo habilitado es exactamente el Foreman de origen"
           ansible.builtin.include_role:
@@ -124,11 +169,13 @@
           vars:
             repo_management_assert_expected_enabled_repos: "{{ _phase_created_aliases }}"
             repo_management_assert_context_label: "tras agregar Foreman origen"
+          when: _effective_upgrade_phase in ['prepare', 'both']
 
         - name: Actualizar la pila de gestión de paquetes con los repos Foreman de origen
           ansible.builtin.include_role:
             name: sp_migration
             tasks_from: updatestack.yml
+          when: _effective_upgrade_phase in ['prepare', 'both']
 
         - name: Retirar los repos Foreman de ORIGEN (ya cumplieron su función)
           ansible.builtin.include_role:
@@ -136,6 +183,7 @@
             tasks_from: cleanup.yml
           vars:
             repo_management_cleanup_prefix: "{{ temporary_repo_prefix }}{{ stage_current_sp }}-src-"
+          when: _effective_upgrade_phase in ['prepare', 'both']
 
         - name: "Gate de seguridad: confirmar que ningún repositorio quedó habilitado tras retirar Foreman origen"
           ansible.builtin.include_role:
@@ -144,6 +192,7 @@
           vars:
             repo_management_assert_expected_enabled_repos: []
             repo_management_assert_context_label: "tras retirar Foreman origen"
+          when: _effective_upgrade_phase in ['prepare', 'both']
 
         - name: Agregar repos Foreman de DESTINO (para dup)
           ansible.builtin.include_role:
@@ -154,6 +203,7 @@
             repo_management_alias_suffix: "dst"
             repo_management_phase_repositories: "{{ _stage_dest_repositories }}"
             repo_management_phase_releasever: "{{ stage_releasever }}"
+          when: _effective_upgrade_phase in ['prepare', 'both']
 
         - name: "Gate de seguridad: confirmar que lo habilitado es exactamente el Foreman de destino, antes de dup -D"
           ansible.builtin.include_role:
@@ -162,25 +212,62 @@
           vars:
             repo_management_assert_expected_enabled_repos: "{{ _phase_created_aliases }}"
             repo_management_assert_context_label: "tras agregar Foreman destino, antes de dup -D"
+          when: _effective_upgrade_phase in ['prepare', 'both']
 
-        - name: Ejecutar dup -D (gate), dup real y reinicio obligatorio
-          ansible.builtin.include_role:
-            name: sp_migration
-          vars:
-            sp_migration_current_sp: "{{ stage_current_sp }}"
-            sp_migration_target_sp: "{{ stage_target_sp }}"
-            sp_migration_releasever: "{{ stage_releasever }}"
-
-        - name: Registrar información de la migración y el reinicio
+        - name: "Calcular alias esperados de los repos Foreman de destino (gate de la fase 'apply' en solitario)"
+          # Reproduce la misma fórmula que add_temp_repos.yml para no tener
+          # que volver a agregar los repos (ya deberían estar ahí desde una
+          # fase "prepare" previa) -- solo para poder comparar.
           ansible.builtin.set_fact:
-            stage_migration_info:
-              dup_applied: "{{ sp_migration_dup_applied | default(false) }}"
-              dry_run_gate_output: "{{ sp_migration_dry_run_output | default('') }}"
-              output_summary: "{{ sp_migration_dup_output | default('') }}"
-              orphaned_packages: "{{ sp_migration_orphaned_packages.stdout | default('') }}"
-            stage_reboot_info:
-              completed: "{{ sp_migration_reboot_completed | default(false) }}"
-              reconnected: "{{ sp_migration_reconnected | default(false) }}"
+            _expected_dest_aliases: |-
+              {% set result = [] %}
+              {% for idx in range(0, (_stage_dest_repositories | length)) %}
+              {% set _ = result.append(temporary_repo_prefix ~ stage_target_sp ~ '-dst-' ~ '%02d' | format(idx + 1)) %}
+              {% endfor %}
+              {{ result }}
+          when: _effective_upgrade_phase == 'apply'
+
+        - name: "Gate de seguridad: confirmar que los repos de destino de una fase 'prepare' previa siguen exactamente habilitados"
+          ansible.builtin.include_role:
+            name: repo_management
+            tasks_from: assert_enabled_repos.yml
+          vars:
+            repo_management_assert_expected_enabled_repos: "{{ _expected_dest_aliases }}"
+            repo_management_assert_context_label: "fase=apply; se esperaba que una fase 'prepare' previa ya hubiera dejado estos repos habilitados"
+          when: _effective_upgrade_phase == 'apply'
+
+        - name: "Ejecutar dup -D (gate), dup real y reinicio obligatorio; conservar evidencia siempre"
+          when: _effective_upgrade_phase in ['apply', 'both']
+          # Este include se envuelve en su propio block/always (en vez de
+          # dejar que "Registrar información..." sea simplemente la
+          # siguiente tarea del bloque exterior) porque, si dup -D o dup
+          # fallan, Ansible salta directo al rescue exterior sin pasar por
+          # las tareas intermedias — "Registrar información..." nunca
+          # llegaría a ejecutarse y stage_migration_info quedaría en {}
+          # (su valor inicial), ocultando en el reporte la salida real de
+          # Zypper aunque sí se haya capturado correctamente en el rol
+          # sp_migration. "always" garantiza que esto se registre sin
+          # importar el resultado, y el fallo sigue propagándose igual
+          # hacia el rescue exterior.
+          block:
+            - name: Ejecutar dup -D (gate), dup real y reinicio obligatorio
+              ansible.builtin.include_role:
+                name: sp_migration
+              vars:
+                sp_migration_current_sp: "{{ stage_current_sp }}"
+                sp_migration_target_sp: "{{ stage_target_sp }}"
+                sp_migration_releasever: "{{ stage_releasever }}"
+          always:
+            - name: Registrar información de la migración y el reinicio (siempre, incluso si dup -D o dup fallaron)
+              ansible.builtin.set_fact:
+                stage_migration_info:
+                  dup_applied: "{{ sp_migration_dup_applied | default(false) }}"
+                  dry_run_gate_output: "{{ sp_migration_dry_run_output | default('') }}"
+                  output_summary: "{{ sp_migration_dup_output | default('') }}"
+                  orphaned_packages: "{{ sp_migration_orphaned_packages.stdout | default('') }}"
+                stage_reboot_info:
+                  completed: "{{ sp_migration_reboot_completed | default(false) }}"
+                  reconnected: "{{ sp_migration_reconnected | default(false) }}"
       rescue:
         - name: Marcar la etapa como fallida en la preparación/migración
           ansible.builtin.set_fact:
@@ -282,7 +369,14 @@
             stage_failure_reason: "validacion_post_migracion: {{ ansible_failed_result.msg | default('error durante la validación posterior') }}"
 
     - name: "Retirar repos Foreman de DESTINO tras una etapa exitosa"
-      when: stage_status in ['OK', 'WARNING']
+      # Agregado "_effective_upgrade_phase in ['apply', 'both']" a propósito:
+      # en fase "prepare" el objetivo es justo dejar estos repos habilitados
+      # para que una fase "apply" posterior los use -- sin este filtro, una
+      # fase "prepare" exitosa (stage_status=OK) retiraría inmediatamente lo
+      # que acaba de preparar, dejando la etapa "apply" sin nada que aplicar.
+      when:
+        - stage_status in ['OK', 'WARNING']
+        - _effective_upgrade_phase in ['apply', 'both']
       block:
         - name: Incluir cleanup de repo_management (destino)
           ansible.builtin.include_role:
@@ -352,6 +446,7 @@
       lote: "{{ upgrade_lote | default('') }}"
       ambiente: "{{ upgrade_ambiente | default('') }}"
       action: "{{ upgrade_mode }}"
+      phase: "{{ _effective_upgrade_phase }}"
       stage: "{{ stage_target_sp }}"
       started_at: "{{ _stage_started_at }}"
       finished_at: "{{ lookup('pipe', 'date -u +%Y-%m-%dT%H:%M:%SZ') }}"
@@ -363,6 +458,11 @@
       precheck: "{{ precheck_result }}"
       preflight: {}
       repos:
+        phase_note: >-
+          {{
+            'fase=apply: el backup/inventario "antes" de los repos se registró en el reporte de la fase prepare anterior; aquí no se vuelve a tocar backup/disable_preexisting/updatestack.'
+            if _effective_upgrade_phase == 'apply' else ''
+          }}
         backup_dir: "{{ repo_backup_dir | default('N/A') }}"
         repos_enabled_before: "{{ repos_enabled_before }}"
         repos_disabled_before: "{{ repos_disabled_before }}"
@@ -372,7 +472,14 @@
         repos_enabled_after: "{{ repos_enabled_after }}"
         final_inventory_status: "{{ _final_inventory_status | default('NOT_CHECKED') }}"
         final_inventory_detail: "{{ _final_inventory_detail | default('N/A') }}"
-        cleanup_note: "{{ _stage_note_cleanup | default('N/A (etapa exitosa, limpieza normal ejecutada)') }}"
+        cleanup_note: >-
+          {{
+            _stage_note_cleanup | default(
+              'repos de destino dejados habilitados a propósito (fase=prepare); ejecute la fase apply para continuar'
+              if _effective_upgrade_phase == 'prepare'
+              else 'N/A (etapa exitosa, limpieza normal ejecutada)'
+            )
+          }}
       migration: "{{ stage_migration_info }}"
       reboot: "{{ stage_reboot_info }}"
       critical_services_before: "{{ critical_services_before | default([]) }}"
