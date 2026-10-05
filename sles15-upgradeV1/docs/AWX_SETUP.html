@@ -190,29 +190,32 @@
 
 <section class="main-section" id="s0">
   <div class="section-head"><div class="section-num">0</div><h2>Antes de empezar</h2></div>
+  <div class="callout note">
+    <span class="label">Resuelto: el plugin ya viaja con este proyecto</span>
+    Ya no depende de que el Execution Environment tenga una Collection instalada: el
+    código del plugin vive versionado en
+    <code>inventory_plugins/excel_inventory.py</code> (raíz del proyecto) y queda
+    habilitado en <code>ansible.cfg</code> (<code>[inventory] enable_plugins</code>).
+    Esto se verificó localmente: Ansible ya lo encuentra y lo invoca correctamente.
+  </div>
   <div class="callout risk">
-    <span class="label">Verificar primero — bloqueante</span>
-    El plugin de inventario personalizado <code>excel_inventory</code> (el código que
-    implementa <code>source_type: sharepoint</code>, lee el Excel vía Graph API, etc.)
-    debe estar disponible en el <strong>Execution Environment</strong> que usará
-    este AWX nuevo. Si este AWX es distinto al que ya usan para parchado, ese EE
-    probablemente no lo tiene instalado todavía. Sin esto, el paso 5 (Inventory Source)
-    fallará sin importar qué tan bien esté configurado lo demás. Pregunta a quien
-    mantiene el AWX de parchado de dónde sale ese plugin (EE propio, Collection, paquete).
+    <span class="label">Lo único que sigue siendo responsabilidad del Execution Environment</span>
+    El plugin necesita estas librerías de Python instaladas donde corra el Sync del
+    Inventory Source: <code>pandas</code> y <code>openpyxl</code> (siempre), más
+    <code>msal</code> y <code>requests</code> (solo para SharePoint, que es nuestro caso).
+    Si faltan, el plugin lo dice con un mensaje claro
+    (<code>Se requiere 'pandas' para procesar archivos Excel. Instala con: pip install
+    pandas openpyxl</code>) en vez de un error confuso — revisa el log del Sync del
+    paso 5 si esto ocurre.
   </div>
   <div class="callout note">
-    <span class="label">Variables de entorno reales vs. las de tu <code>.env</code></span>
-    <code>inventory/linux_excel_inventory.yml</code> solo referencia explícitamente
-    <code>TENANT_ID</code>, <code>CLIENT_ID</code> y <code>CLIENT_SECRET</code> (vía
-    <code>lookup('env', ...)</code>). Tu <code>.env</code> tiene más variables
-    (<code>remote_user</code>, <code>remote_host</code>, <code>remote_pass</code>, etc.)
-    que probablemente usa el código interno del plugin u otro script de parchado — no
-    se inventaron aquí porque no se confirmó el código fuente del plugin. Si el Sync del
-    paso 5 se queja de una variable de entorno faltante, agrégala al Credential Type del
-    paso 1 con el mismo patrón.
+    <span class="label">Variables de entorno requeridas</span>
+    El plugin solo necesita tres: <code>TENANT_ID</code>, <code>CLIENT_ID</code> y
+    <code>CLIENT_SECRET</code>. Son exactamente los tres campos del Credential Type
+    del paso 1.
   </div>
   <ul class="checklist">
-    <li><input type="checkbox" id="s0-1"><label for="s0-1">Confirmado que el EE de este AWX tiene el plugin <code>excel_inventory</code> disponible.</label></li>
+    <li><input type="checkbox" id="s0-1"><label for="s0-1">Confirmado que el Execution Environment de este AWX tiene instalados <code>pandas</code>, <code>openpyxl</code>, <code>msal</code> y <code>requests</code> (si no, pedir que se agreguen a la imagen del EE).</label></li>
     <li><input type="checkbox" id="s0-2"><label for="s0-2">Tienes a mano los valores reales de tu <code>.env</code> (tenant_id, client_id, client_secret) para copiarlos directamente a AWX.</label></li>
   </ul>
 </section>
@@ -287,15 +290,25 @@ required:
     de parchado.
   </div>
   <p><strong>Resources → Inventories → Add</strong> (ej. <code>GeoPOS SLES Servers</code>)</p>
-  <p>Dentro de ese Inventory → pestaña <strong>Sources → Add</strong>:</p>
+  <p>Dentro de ese Inventory → pestaña <strong>Sources → Add</strong>. Es una sola
+  pantalla; estos son los campos, en el orden en que aparecen:</p>
   <table class="clean">
     <tr><th>Campo</th><th>Valor</th></tr>
     <tr><td>Name</td><td><code>Excel SharePoint</code></td></tr>
-    <tr><td>Source</td><td><strong>Sourced from a Project</strong></td></tr>
-    <tr><td>Project</td><td>el del paso 4</td></tr>
-    <tr><td>Inventory file</td><td><code>inventory/linux_excel_inventory.yml</code></td></tr>
-    <tr><td>Credential</td><td>el del paso 2 (<code>SharePoint Excel Inventory</code>)</td></tr>
+    <tr><td>Source</td><td>desplegable → elegir <strong>Sourced from a Project</strong></td></tr>
+    <tr><td>Project</td><td>aparece al elegir "Sourced from a Project" — seleccionar el del paso 4</td></tr>
+    <tr><td>Inventory file</td><td>desplegable que lee el Project — seleccionar <code>inventory/linux_excel_inventory.yml</code></td></tr>
+    <tr><td>Credentials</td><td><strong>Agregar aquí</strong> el Credential del paso 2 (<code>SharePoint Excel Inventory</code>) — es este mismo formulario del Source, no un paso aparte. Sin esto, el Sync no tendrá <code>TENANT_ID</code>/<code>CLIENT_ID</code>/<code>CLIENT_SECRET</code> y fallará.</td></tr>
   </table>
+
+  <p>Más abajo, en <strong>Update Options</strong>:</p>
+  <table class="clean">
+    <tr><th>Opción</th><th>Recomendación</th><th>Por qué</th></tr>
+    <tr><td>Overwrite (Anular)</td><td><strong>Activar</strong></td><td>El Excel es la fuente única de verdad: si un servidor se retira de la hoja, debe desaparecer también del Inventory de AWX, no quedar como residuo.</td></tr>
+    <tr><td>Overwrite Variables (Anular variables)</td><td><strong>Activar</strong></td><td>Todas las variables de host (<code>ambiente</code>, <code>crq</code>, <code>lote</code>, <code>ip</code>, etc.) vienen del Excel — no hay nada agregado manualmente en AWX que deba preservarse entre sincronizaciones.</td></tr>
+    <tr><td>Update on Launch (Actualizar al ejecutar)</td><td><strong>Activar</strong>, con <strong>Cache Timeout</strong> ≈ 600 segundos</td><td>Garantiza datos frescos antes de una ejecución real, sin forzar una sincronización nueva en cada lanzamiento: si ya se sincronizó hace menos de 10 minutos (ej. <code>precheck</code> → <code>validate</code> → upgrade real en la misma sesión), reutiliza esa sincronización en vez de volver a golpear SharePoint.</td></tr>
+  </table>
+
   <ul class="checklist">
     <li><input type="checkbox" id="s5-1"><label for="s5-1">Guardar y ejecutar <strong>Sync</strong>.</label></li>
     <li><input type="checkbox" id="s5-2"><label for="s5-2">Si falla: revisar el log del Sync — ahí se ve exactamente si falta una variable de entorno o si el plugin no está disponible en el EE (ver sección 0).</label></li>

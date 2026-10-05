@@ -135,7 +135,9 @@ exclusivamente los repos Foreman controlados por esta automatización.
 
 ```
 sles15-upgrade/
-├── ansible.cfg
+├── ansible.cfg                    # habilita inventory_plugins/excel_inventory (sección 13)
+├── inventory_plugins/
+│   └── excel_inventory.py         # plugin de inventario dinámico (Excel/SharePoint), local al proyecto
 ├── inventory/
 │   ├── hosts.ini                  # inventario de EJEMPLO local
 │   └── linux_excel_inventory.yml  # Inventory Source dinámico (Excel/SharePoint, sección 13)
@@ -806,6 +808,22 @@ Type, Credential, Project, Inventory Source, Job Template, Survey):
     mediante un **Credential de AWX** — nunca como archivo `.env` dentro
     de este repositorio (si alguna vez aparece uno, está excluido por
     `.gitignore`, pero no debería colocarse aquí).
+    - **El plugin viaja con este proyecto**: a diferencia de lo que se
+      pensó inicialmente, el código del plugin `excel_inventory` **no
+      depende de una Collection instalada en el Execution Environment de
+      AWX** — vive versionado en
+      [`inventory_plugins/excel_inventory.py`](inventory_plugins/excel_inventory.py)
+      (raíz del proyecto, no dentro de `inventory/`: Ansible solo
+      descubre automáticamente una carpeta `inventory_plugins/` si está
+      junto a `ansible.cfg`) y queda habilitado explícitamente en
+      `ansible.cfg` (`[inventory] enable_plugins = excel_inventory, ...`
+      — los plugins de inventario, a diferencia de módulos/filtros,
+      requieren habilitación explícita). Lo único que debe existir en el
+      Execution Environment son sus dependencias de Python: `pandas`,
+      `openpyxl` (siempre) y `msal`, `requests` (solo para SharePoint).
+      Verificado localmente: sin esas dependencias, el plugin falla con
+      un mensaje claro (`Se requiere 'pandas'...`), nunca con un error
+      confuso.
     Aunque esta hoja está pensada para contener únicamente servidores
     físicos SLES 15 con GeoPOS, PRECHECK igual valida
     `ansible_facts['distribution'] == 'SLES'` como primer chequeo

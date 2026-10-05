@@ -625,12 +625,14 @@
     configuración no pueda versionarse. Este proyecto incluye
     <code>inventory/linux_excel_inventory.yml</code>, la definición de un
     Inventory Source dinámico (plugin que lee un Excel real de SharePoint),
-    pensado para usarse en AWX como "Sourced from a Project". Es código
-    (la receta de cómo construir el inventario), no datos — los hosts
-    reales y sus variables de conexión siguen resolviéndose en tiempo de
-    ejecución, dinámicamente, igual que cualquier otro Inventory Source de
-    AWX. No contradice la sección 8: sigue sin haber variables de
-    <em>negocio</em> de este proyecto en el Inventory.
+    pensado para usarse en AWX como "Sourced from a Project" — y también
+    el propio código del plugin (<code>inventory_plugins/excel_inventory.py</code>),
+    habilitado en <code>ansible.cfg</code>. Es código (la receta de cómo
+    construir el inventario y el mecanismo que la ejecuta), no datos — los
+    hosts reales y sus variables de conexión siguen resolviéndose en
+    tiempo de ejecución, dinámicamente, igual que cualquier otro Inventory
+    Source de AWX. No contradice la sección 8: sigue sin haber variables
+    de <em>negocio</em> de este proyecto en el Inventory.
   </div>
 </section>
 
