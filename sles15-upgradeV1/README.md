@@ -869,12 +869,19 @@ para casos donde no se necesita el control granular por etapa.
     queda `FAILED` de inmediato con un mensaje explícito y **no ejecuta
     ninguna otra verificación ni acción** sobre ese host.
 - **Credential**: SSH + `become` con los privilegios necesarios.
-- **Job Template**: Playbook `playbooks/upgrade.yml`. **No** marcar
-  `Limit` como "Prompt on Launch": ya no se usa para seleccionar hosts
-  (ver más abajo).
+- **Job Template(s)**: por defecto son 4, encadenados por un Workflow Job
+  Template — ver `docs/AWX_SETUP.html` sección 7 para el detalle campo por
+  campo de cada uno (hay una alternativa con un solo Job Template, sección
+  8). En ninguno se marca `Limit` como "Prompt on Launch": ya no se usa
+  para seleccionar hosts (ver más abajo).
 - **Survey** (pequeño; `upgrade_crq`/`upgrade_lote`/`upgrade_ambiente` ya
-  no son solo trazabilidad — son el mecanismo de selección de hosts):
-  - `upgrade_mode` (choice: precheck / validate / sp4_to_sp5 / sp5_to_sp6 / sp6_to_sp7 / full)
+  no son solo trazabilidad — son el mecanismo de selección de hosts; se
+  crea una sola vez en el Workflow Job Template):
+  - `upgrade_mode` (choice: en el Workflow, solo sp4_to_sp5 / sp5_to_sp6 /
+    sp6_to_sp7 / full — precheck ya es automático en el Nodo 1 y validate
+    no participa en el Workflow; en la alternativa de un solo Job
+    Template, las 6: precheck / validate / sp4_to_sp5 / sp5_to_sp6 /
+    sp6_to_sp7 / full)
   - `confirm_production_upgrade` (choice, **no boolean** — AWX no tiene ese tipo de
     pregunta; ver nota abajo)
   - `upgrade_crq` (texto, **obligatorio**): "Ingrese el CRQ/RFC"
