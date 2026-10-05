@@ -254,17 +254,17 @@ p3.text = "\nUna migración real requiere una confirmación explícita adicional
 p3.font.size = Pt(14)
 p3.font.color.rgb = GRAY_MID
 p4 = tf.add_paragraph()
-p4.text = "\nLos pasos 3 (preparar repos) y 4-6 (aplicar el cambio) pueden ejecutarse juntos (por defecto) o como 2 etapas separadas con aprobación entre ambas — ver diapositiva siguiente."
+p4.text = "\nPor defecto, los pasos 3 (preparar repos) y 4-6 (aplicar el cambio) se ejecutan como 2 etapas separadas, con un punto de aprobación entre ambas — ver diapositiva siguiente."
 p4.font.size = Pt(14)
 p4.font.color.rgb = GRAY_MID
 add_footer(s, "ansible-sles-upgrade · Presentación ejecutiva")
 
 # =============================================================================
-# 5b. Workflow opcional: Preparar y Aplicar por separado
+# 5b. Workflow por defecto: Preparar y Aplicar por separado
 # =============================================================================
 s = add_slide()
 set_background(s)
-add_title_bar(s, "Opcional: separar “Preparar” de “Aplicar”",
+add_title_bar(s, "Configuración por defecto: “Preparar” y “Aplicar” separados",
               subtitle="Mismo procedimiento, con un punto de control humano en el medio")
 
 col_w = Inches(2.75)
@@ -282,7 +282,7 @@ add_box(s, "4. Reporte\nconsolidado", x0 + 3 * (col_w + gap), top, col_w, h, fil
 
 gate = s.shapes.add_textbox(x0 + (col_w + gap) + col_w + Inches(0.02), top + h + Inches(0.05), col_w + gap, Inches(0.4))
 gp = gate.text_frame.paragraphs[0]
-gp.text = "⬆ punto de aprobación opcional"
+gp.text = "⬆ punto de aprobación (opcional insertar un Approval Node aquí)"
 gp.font.size = Pt(11)
 gp.font.italic = True
 gp.font.color.rgb = WARN_AMBER
@@ -292,7 +292,7 @@ add_bullets(s, [
     "Por qué separar “preparar” de “aplicar”: permite que una persona (ej. un supervisor de cambios) autorice el paso irreversible (el reinicio) después de ver que la preparación salió bien, sin tener que repetir todo desde cero.",
     "Qué hace “preparar”: deja el servidor listo para migrar — respalda, deshabilita lo anterior, actualiza la herramienta de paquetes con los repositorios de origen, y agrega los repositorios de destino. Todavía NO aplica el cambio de Service Pack ni reinicia.",
     "Qué hace “aplicar”: primero repite, con el sistema real ya preparado, la misma simulación que recomienda SUSE antes de migrar (ver nota abajo); si todo está bien, aplica el cambio real y reinicia.",
-    "Es opcional: por defecto las 2 etapas se ejecutan juntas, en una sola corrida, exactamente igual que antes de incluir esta opción.",
+    "Es la configuración por defecto de este proyecto; existe una alternativa simplificada (las 2 etapas en una sola corrida) para casos donde no se necesita el punto de aprobación.",
 ], top=Inches(3.1), size=14)
 
 note_box = s.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.6), Inches(6.15), SLIDE_W - Inches(1.2), Inches(0.95))

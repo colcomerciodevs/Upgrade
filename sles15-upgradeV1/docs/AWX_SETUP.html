@@ -167,7 +167,8 @@
     <div class="subtitle">
       Manual paso a paso para crear en un AWX nuevo (sin nada reutilizable de otro
       ambiente) todos los objetos necesarios para ejecutar este proyecto: inventario
-      dinámico, credenciales, Project, Job Template y Survey.
+      dinámico, credenciales, Project, Survey y el Workflow Job Template de 4 etapas
+      (configuración por defecto).
     </div>
   </div>
 </header>
@@ -180,10 +181,10 @@
     <a href="#s3">3. Credential (SSH)</a>
     <a href="#s4">4. Project</a>
     <a href="#s5">5. Inventory</a>
-    <a href="#s6">6. Job Template</a>
-    <a href="#s7">7. Survey</a>
-    <a href="#s8">8. Primera prueba</a>
-    <a href="#s9">9. Workflow (opcional)</a>
+    <a href="#s6">6. Survey</a>
+    <a href="#s7">7. Workflow (por defecto)</a>
+    <a href="#s8">8. Alternativa: 1 solo Job Template</a>
+    <a href="#s9">9. Primera prueba</a>
   </div>
 </nav>
 
@@ -333,44 +334,33 @@ ANSIBLE_INVENTORY_PLUGINS: "/runner/project/&lt;CARPETA_DEL_PROJECT&gt;/inventor
 </section>
 
 <section class="main-section" id="s6">
-  <div class="section-head"><div class="section-num">6</div><h2>Job Template</h2></div>
-  <p><strong>Resources → Templates → Add → Job Template</strong></p>
-  <table class="clean">
-    <tr><th>Campo</th><th>Valor</th></tr>
-    <tr><td>Name</td><td><code>SLES Upgrade SP4-SP7 (GeoPOS)</code></td></tr>
-    <tr><td>Job Type</td><td>Run</td></tr>
-    <tr><td>Inventory</td><td>el del paso 5</td></tr>
-    <tr><td>Project</td><td>el del paso 4</td></tr>
-    <tr><td>Playbook</td><td><code>playbooks/upgrade.yml</code></td></tr>
-    <tr><td>Credentials</td><td>el del paso 3 (Machine)</td></tr>
-    <tr><td>Limit</td><td>vacío, <strong>sin</strong> marcar "Prompt on Launch"</td></tr>
-  </table>
+  <div class="section-head"><div class="section-num">6</div><h2>Survey (preguntas compartidas por las 4 etapas)</h2></div>
+  <p>Estas 5 preguntas son las mismas en todo el proyecto. En la configuración
+  <strong>por defecto</strong> (paso 7, Workflow) se crean <strong>una sola vez</strong>,
+  en el <strong>Workflow Job Template</strong>, y se propagan a cada etapa que las
+  necesite. Cada pregunta tiene un campo <strong>"Description"</strong> en AWX (texto
+  de ayuda que ve el operador al llenar el formulario) — el texto sugerido va en la
+  última columna, listo para copiar.</p>
   <div class="callout decision">
-    <span class="label">Por qué ya no se usa Limit</span>
-    Decisión explícita del usuario para este ambiente: el host a tocar se elige con
-    el <strong>match CRQ + Lote + Ambiente</strong> del Survey (sección 7) contra esas
-    mismas columnas del inventario — no con <code>Limit</code>. Cada ejecución
+    <span class="label">Por qué no existe un campo "Limit"</span>
+    Decisión explícita del usuario para este ambiente: el host a tocar se elige con el
+    <strong>match CRQ + Lote + Ambiente</strong> (preguntas de abajo) contra esas mismas
+    columnas del inventario — nunca con el campo nativo <code>Limit</code> de AWX. Por
+    eso, en ninguno de los Job Templates de este proyecto (paso 7 u 8) se marca
+    <code>Limit</code> como "Prompt on Launch": se deja siempre vacío. Cada ejecución
     (incluso un <code>precheck</code>) corresponde a un CRQ/RFC real de control de
-    cambios, así que ese dato ya identifica el host sin necesitar un campo aparte.
-    Si ningún host del inventario coincide con los 3 valores declarados, el playbook
-    falla explícito antes de tocar cualquier host (ver <code>playbooks/upgrade.yml</code>).
+    cambios, así que ese dato ya identifica el host sin necesitar un campo aparte. Si
+    ningún host del inventario coincide con los 3 valores declarados, el playbook falla
+    explícito antes de tocar cualquier host (ver <code>playbooks/upgrade.yml</code>).
   </div>
-</section>
-
-<section class="main-section" id="s7">
-  <div class="section-head"><div class="section-num">7</div><h2>Survey</h2></div>
-  <p>En el mismo Job Template → pestaña <strong>Survey</strong> → activar <strong>Survey Enabled</strong>.
-  Cada pregunta tiene un campo <strong>"Description"</strong> en AWX (texto de ayuda que ve el
-  operador al llenar el formulario) — el texto sugerido va en la última columna, listo para copiar.</p>
   <div class="callout decision">
     <span class="label">upgrade_crq / upgrade_lote / upgrade_ambiente ya no son solo trazabilidad</span>
-    Estos 3 campos son ahora el <strong>único mecanismo de selección de hosts</strong>
-    del proyecto (reemplazan a <code>Limit</code>, sección 6): deben marcarse
-    <strong>Required</strong> en AWX, y su valor debe coincidir EXACTAMENTE (mismas
-    mayúsculas/minúsculas, sin espacios extra) con las columnas <code>CRQ</code>/
-    <code>Lote</code>/<code>Ambiente</code> del Excel para el host que se quiere
-    tocar. Si no coinciden con ningún host, el Job falla explícito con el mensaje
-    exacto de qué se buscó.
+    Estos 3 campos son el <strong>único mecanismo de selección de hosts</strong> del
+    proyecto: deben marcarse <strong>Required</strong> en AWX, y su valor debe coincidir
+    EXACTAMENTE (mismas mayúsculas/minúsculas, sin espacios extra) con las columnas
+    <code>CRQ</code>/<code>Lote</code>/<code>Ambiente</code> del Excel para el host que
+    se quiere tocar. Si no coinciden con ningún host, el Job falla explícito con el
+    mensaje exacto de qué se buscó.
   </div>
   <table class="clean">
     <tr><th>Pregunta</th><th>Variable</th><th>Tipo</th><th>Description (pegar en AWX)</th></tr>
@@ -465,35 +455,25 @@ ANSIBLE_INVENTORY_PLUGINS: "/runner/project/&lt;CARPETA_DEL_PROJECT&gt;/inventor
   </div>
 </section>
 
-<section class="main-section" id="s8">
-  <div class="section-head"><div class="section-num">8</div><h2>Primera prueba</h2></div>
-  <ul class="checklist">
-    <li><input type="checkbox" id="s8-1"><label for="s8-1">Lanzar el Job Template con <code>upgrade_mode: precheck</code>, <code>confirm_production_upgrade: false</code>, y <code>upgrade_crq</code>/<code>upgrade_lote</code>/<code>upgrade_ambiente</code> iguales a los datos reales del host de laboratorio en el inventario.</label></li>
-    <li><input type="checkbox" id="s8-2"><label for="s8-2">Revisar el reporte generado completo antes de continuar.</label></li>
-    <li><input type="checkbox" id="s8-3"><label for="s8-3">Seguir con <code>docs/CHECKLIST_LABORATORIO.html</code> para el resto del proceso.</label></li>
-  </ul>
-</section>
+<section class="main-section" id="s7">
+  <div class="section-head"><div class="section-num">7</div><h2>Workflow Job Template — configuración por defecto</h2></div>
+  <p>Esta es la forma <strong>recomendada y por defecto</strong> de operar el proyecto
+  en AWX: partir la ejecución en <strong>4 Job Templates</strong> encadenados por un
+  <strong>Workflow Job Template</strong>. Cada etapa queda como un nodo visible en el
+  diagrama, se puede reintentar solo la que falló, y se puede insertar un
+  <strong>Approval Node</strong> entre "preparar" y "aplicar" (para exigir aprobación de
+  un supervisor antes del cambio real). Si se necesita algo más simple — por ejemplo,
+  para un laboratorio rápido sin punto de aprobación — existe una alternativa con un
+  solo Job Template (paso 8), con el mismo código y el mismo Survey.</p>
 
-<section class="main-section" id="s9">
-  <div class="section-head"><div class="section-num">9</div><h2>Workflow Job Template (opcional: por etapas)</h2></div>
-  <p>Todo lo anterior (secciones 1-8) ya es suficiente para operar el proyecto con
-  <strong>un solo Job Template</strong>. Esta sección es una alternativa
-  <strong>opcional</strong>: partir la misma ejecución en 4 Job Templates encadenados
-  por un <strong>Workflow Job Template</strong>, para ver cada etapa como un nodo
-  separado en el diagrama, poder reintentar solo la etapa que falló, y poder insertar
-  un <strong>Approval Node</strong> entre "preparar" y "aplicar" (útil para exigir
-  aprobación de un supervisor antes del cambio real). No reemplaza nada de lo
-  anterior: reutiliza el mismo Project/Inventory/Credential, y el mismo
-  playbook <code>playbooks/upgrade.yml</code> para 3 de los 4 nodos.</p>
-
-  <h3>9.1 La variable <code>upgrade_phase</code></h3>
-  <p>Nueva variable (<code>playbooks/group_vars/all.yml</code>) que permite correr
-  una etapa real en 2 pasos separados en vez de todo de una vez:</p>
+  <h3>7.1 La variable <code>upgrade_phase</code></h3>
+  <p>Es lo que hace posible partir una etapa real en 2 pasos
+  (<code>playbooks/group_vars/all.yml</code>):</p>
   <table class="clean">
-    <tr><th>Valor</th><th>Qué hace</th></tr>
-    <tr><td><code>both</code> (default)</td><td>Todo en una sola corrida, exactamente como en las secciones 1-8 (sin Workflow).</td></tr>
-    <tr><td><code>prepare</code></td><td>Backup + deshabilitar preexistentes + repos ORIGEN + <code>updatestack</code> (real) + repos DESTINO agregados y verificados. Se detiene ahí — <strong>sin</strong> <code>dup -D</code>, <code>dup</code> ni reinicio. El sistema SÍ queda modificado (requiere <code>confirm_production_upgrade</code> igual que <code>both</code>).</td></tr>
-    <tr><td><code>apply</code></td><td>Verifica (gate) que los repos DESTINO de una fase <code>prepare</code> previa sigan exactamente habilitados — si no, falla explícito pidiendo ejecutar primero "preparar". Luego <code>dup -D</code> → <code>dup</code> real → reinicio → validación → limpieza.</td></tr>
+    <tr><th>Valor</th><th>Qué hace</th><th>Dónde se usa</th></tr>
+    <tr><td><code>prepare</code></td><td>Backup + deshabilitar preexistentes + repos ORIGEN + <code>updatestack</code> (real) + repos DESTINO agregados y verificados. Se detiene ahí — <strong>sin</strong> <code>dup -D</code>, <code>dup</code> ni reinicio. El sistema SÍ queda modificado (requiere <code>confirm_production_upgrade</code>).</td><td>Nodo 2 (7.3)</td></tr>
+    <tr><td><code>apply</code></td><td>Verifica (gate) que los repos DESTINO de una fase <code>prepare</code> previa sigan exactamente habilitados — si no, falla explícito pidiendo ejecutar primero "preparar". Luego <code>dup -D</code> → <code>dup</code> real → reinicio → validación → limpieza.</td><td>Nodo 3 (7.4)</td></tr>
+    <tr><td><code>both</code> (default si se omite)</td><td>Todo en una sola corrida. No se usa en ningún nodo del Workflow — es lo que usa la alternativa de un solo Job Template (paso 8).</td><td>Paso 8</td></tr>
   </table>
   <div class="callout risk">
     <span class="label">upgrade_mode: full es la única excepción</span>
@@ -501,39 +481,112 @@ ANSIBLE_INVENTORY_PLUGINS: "/runner/project/&lt;CARPETA_DEL_PROJECT&gt;/inventor
     repos — no existe un único momento de "preparar" válido para ambos saltos a la
     vez. Por eso, si <code>upgrade_mode=full</code>, el código (<code>_effective_upgrade_phase</code>
     en <code>playbooks/tasks/run_stage.yml</code>) ignora <code>upgrade_phase</code> y
-    hace todo junto (como <code>both</code>) — <strong>excepto</strong> en el nodo
+    hace todo junto (como <code>both</code>) — <strong>excepto</strong> en el nodo 2
     "Preparar repos", donde con <code>full</code> no hace absolutamente nada (no
-    modifica el sistema, solo informa) para que un único diseño de Workflow sirva
-    tanto para un salto individual como para <code>full</code>, sin que <code>full</code>
-    dispare un <code>dup</code> real por error en el nodo que se supone que solo prepara.
+    modifica el sistema, solo informa) para que el mismo Workflow sirva tanto para un
+    salto individual como para <code>full</code>, sin que <code>full</code> dispare un
+    <code>dup</code> real por error en el nodo que se supone que solo prepara.
   </div>
 
-  <h3>9.2 Los 4 Job Templates</h3>
-  <p>Mismo Inventory/Project/Credential que la sección 6. <code>upgrade_crq</code>/
-  <code>upgrade_lote</code>/<code>upgrade_ambiente</code>/<code>confirm_production_upgrade</code>
-  se marcan "Prompt on Launch" en los 4 (heredan la respuesta del Survey del Workflow,
-  sección 9.4). <code>upgrade_mode</code> se marca "Prompt on Launch" solo en los
-  nodos 2 y 3 (en el nodo 1 queda fijo en <code>precheck</code>; el nodo 4 no lo usa).</p>
+  <h3>7.2 Resumen de los 4 Job Templates</h3>
+  <p>Todos reutilizan el Inventory (paso 5), Project (paso 4) y Credential (paso 3).
+  <strong>Resources → Templates → Add → Job Template</strong>, uno por fila:</p>
   <table class="clean">
-    <tr><th>#</th><th>Name</th><th>Playbook</th><th>Extra vars fijas (NO prompt)</th></tr>
-    <tr><td>1</td><td><code>SLES Upgrade - 1 Precheck</code></td><td><code>playbooks/upgrade.yml</code></td><td><code>upgrade_mode: precheck</code></td></tr>
-    <tr><td>2</td><td><code>SLES Upgrade - 2 Preparar repos</code></td><td><code>playbooks/upgrade.yml</code></td><td><code>upgrade_phase: prepare</code></td></tr>
-    <tr><td>3</td><td><code>SLES Upgrade - 3 Aplicar</code></td><td><code>playbooks/upgrade.yml</code></td><td><code>upgrade_phase: apply</code></td></tr>
-    <tr><td>4</td><td><code>SLES Upgrade - 4 Reporting</code></td><td><code>playbooks/report_summary.yml</code></td><td>(ninguna)</td></tr>
+    <tr><th>#</th><th>Name</th><th>Playbook</th><th>Extra vars fijas</th><th>Variables en "Prompt on Launch"</th></tr>
+    <tr><td>1</td><td><code>SLES Upgrade - 1 Precheck</code></td><td><code>playbooks/upgrade.yml</code></td><td><code>upgrade_mode: precheck</code></td><td>upgrade_crq, upgrade_lote, upgrade_ambiente, confirm_production_upgrade</td></tr>
+    <tr><td>2</td><td><code>SLES Upgrade - 2 Preparar repos</code></td><td><code>playbooks/upgrade.yml</code></td><td><code>upgrade_phase: prepare</code></td><td>upgrade_mode + los 4 anteriores</td></tr>
+    <tr><td>3</td><td><code>SLES Upgrade - 3 Aplicar</code></td><td><code>playbooks/upgrade.yml</code></td><td><code>upgrade_phase: apply</code></td><td>upgrade_mode + los 4 anteriores</td></tr>
+    <tr><td>4</td><td><code>SLES Upgrade - 4 Reporting</code></td><td><code>playbooks/report_summary.yml</code></td><td>(ninguna)</td><td>(ninguna)</td></tr>
+  </table>
+  <p>Detalle campo por campo de cada uno, a continuación (7.2.1 a 7.2.4).</p>
+
+  <div class="step-title"><span class="stepnum">1</span><h3>Etapa 1 — Precheck</h3></div>
+  <table class="clean">
+    <tr><th>Campo</th><th>Valor</th></tr>
+    <tr><td>Name</td><td><code>SLES Upgrade - 1 Precheck</code></td></tr>
+    <tr><td>Job Type</td><td>Run</td></tr>
+    <tr><td>Inventory</td><td>el del paso 5</td></tr>
+    <tr><td>Project</td><td>el del paso 4</td></tr>
+    <tr><td>Playbook</td><td><code>playbooks/upgrade.yml</code></td></tr>
+    <tr><td>Credentials</td><td>el del paso 3 (Machine)</td></tr>
+    <tr><td>Limit</td><td>vacío, <strong>sin</strong> "Prompt on Launch" (ver sección 6)</td></tr>
+    <tr><td>Variables (extra vars, YAML)</td><td><code>upgrade_mode: precheck</code> — fijo, <strong>sin</strong> marcar "Prompt on Launch" para esta variable en este nodo</td></tr>
+    <tr><td>Prompt on Launch</td><td>Activar para <code>upgrade_crq</code>, <code>upgrade_lote</code>, <code>upgrade_ambiente</code>, <code>confirm_production_upgrade</code> (heredan la respuesta del Survey del Workflow, 7.6). No activar para <code>upgrade_mode</code> ni <code>upgrade_phase</code> en este nodo.</td></tr>
+    <tr><td>Survey propio</td><td>No crear uno aquí — lo trae el Workflow (7.6).</td></tr>
+  </table>
+  <p class="muted">Siempre de solo lectura, sin importar qué <code>upgrade_mode</code> llegue del Survey del
+  Workflow para los nodos 2/3 — este nodo fija <code>precheck</code> por su cuenta.</p>
+
+  <div class="step-title"><span class="stepnum">2</span><h3>Etapa 2 — Preparar repos (modifica el sistema)</h3></div>
+  <table class="clean">
+    <tr><th>Campo</th><th>Valor</th></tr>
+    <tr><td>Name</td><td><code>SLES Upgrade - 2 Preparar repos</code></td></tr>
+    <tr><td>Job Type</td><td>Run</td></tr>
+    <tr><td>Inventory</td><td>el del paso 5</td></tr>
+    <tr><td>Project</td><td>el del paso 4</td></tr>
+    <tr><td>Playbook</td><td><code>playbooks/upgrade.yml</code></td></tr>
+    <tr><td>Credentials</td><td>el del paso 3 (Machine)</td></tr>
+    <tr><td>Limit</td><td>vacío, <strong>sin</strong> "Prompt on Launch"</td></tr>
+    <tr><td>Variables (extra vars, YAML)</td><td><code>upgrade_phase: prepare</code> — fijo, <strong>sin</strong> marcar "Prompt on Launch" para esta variable en este nodo</td></tr>
+    <tr><td>Prompt on Launch</td><td>Activar para <code>upgrade_mode</code> (debe venir del Survey del Workflow: <code>sp4_to_sp5</code>/<code>sp5_to_sp6</code>/<code>sp6_to_sp7</code>/<code>full</code>), además de <code>upgrade_crq</code>, <code>upgrade_lote</code>, <code>upgrade_ambiente</code>, <code>confirm_production_upgrade</code>.</td></tr>
+    <tr><td>Survey propio</td><td>No — lo trae el Workflow (7.6).</td></tr>
+  </table>
+  <div class="callout risk">
+    <span class="label">Este nodo SÍ modifica el servidor</span>
+    No es un ensayo: corre <code>updatestack</code> real y deja los repos de destino
+    realmente habilitados. Por eso exige <code>confirm_production_upgrade: true</code>
+    igual que cualquier modo real — nunca lo confundas con <code>validate</code> (que
+    sigue siendo de solo lectura).
+  </div>
+
+  <div class="step-title"><span class="stepnum">3</span><h3>Etapa 3 — Aplicar el upgrade</h3></div>
+  <table class="clean">
+    <tr><th>Campo</th><th>Valor</th></tr>
+    <tr><td>Name</td><td><code>SLES Upgrade - 3 Aplicar</code></td></tr>
+    <tr><td>Job Type</td><td>Run</td></tr>
+    <tr><td>Inventory</td><td>el del paso 5</td></tr>
+    <tr><td>Project</td><td>el del paso 4</td></tr>
+    <tr><td>Playbook</td><td><code>playbooks/upgrade.yml</code></td></tr>
+    <tr><td>Credentials</td><td>el del paso 3 (Machine)</td></tr>
+    <tr><td>Limit</td><td>vacío, <strong>sin</strong> "Prompt on Launch"</td></tr>
+    <tr><td>Variables (extra vars, YAML)</td><td><code>upgrade_phase: apply</code> — fijo, <strong>sin</strong> marcar "Prompt on Launch" para esta variable en este nodo</td></tr>
+    <tr><td>Prompt on Launch</td><td>Igual que la Etapa 2: <code>upgrade_mode</code> (debe ser el MISMO valor que se usó para preparar) + <code>upgrade_crq</code>, <code>upgrade_lote</code>, <code>upgrade_ambiente</code>, <code>confirm_production_upgrade</code>.</td></tr>
+    <tr><td>Survey propio</td><td>No — lo trae el Workflow (7.6).</td></tr>
   </table>
   <div class="callout note">
-    <span class="label">Nodo 4: por qué un playbook distinto</span>
+    <span class="label">Gate de entrada de este nodo</span>
+    Antes de tocar nada, verifica que los repos de destino que dejó la Etapa 2 sigan
+    exactamente habilitados (reutiliza <code>assert_enabled_repos.yml</code>). Si no
+    coinciden — por ejemplo, porque la Etapa 2 nunca se ejecutó, o alguien modificó
+    los repos a mano entre ambas etapas — este nodo falla explícito pidiendo ejecutar
+    primero la Etapa 2, en vez de intentar seguir con datos inconsistentes.
+  </div>
+
+  <div class="step-title"><span class="stepnum">4</span><h3>Etapa 4 — Reporting</h3></div>
+  <table class="clean">
+    <tr><th>Campo</th><th>Valor</th></tr>
+    <tr><td>Name</td><td><code>SLES Upgrade - 4 Reporting</code></td></tr>
+    <tr><td>Job Type</td><td>Run</td></tr>
+    <tr><td>Inventory</td><td>el del paso 5 (el playbook solo usa <code>localhost</code>, pero AWX exige seleccionar un Inventory)</td></tr>
+    <tr><td>Project</td><td>el del paso 4</td></tr>
+    <tr><td>Playbook</td><td><code>playbooks/report_summary.yml</code></td></tr>
+    <tr><td>Credentials</td><td>no se usa ninguna (no toca ningún host remoto); si AWX exige seleccionar una, puede reutilizarse la del paso 3 sin efecto</td></tr>
+    <tr><td>Limit</td><td>vacío</td></tr>
+    <tr><td>Variables / Prompt on Launch</td><td>Ninguna — este playbook no lee <code>upgrade_mode</code>/<code>upgrade_crq</code>/etc., solo <code>reports/run_summary.jsonl</code></td></tr>
+    <tr><td>Survey propio</td><td>No necesita</td></tr>
+  </table>
+  <div class="callout note">
+    <span class="label">Por qué un playbook distinto</span>
     <code>playbooks/report_summary.yml</code> es la misma consolidación
     (<code>resumen.html</code>) que ya corre automáticamente al final de
     <code>playbooks/upgrade.yml</code> en cualquier modo — se extrajo a su propio
     archivo justo para que este nodo pueda apuntar ahí directamente, sin duplicar
-    esa lógica en dos lugares. No necesita Survey ni CRQ/Lote/Ambiente: solo lee
-    <code>reports/run_summary.jsonl</code> y renderiza el resumen.
+    esa lógica en dos lugares.
   </div>
 
-  <h3>9.3 El Workflow Job Template</h3>
+  <h3>7.3 Crear el Workflow Job Template y encadenar los 4 nodos</h3>
   <p><strong>Resources → Templates → Add → Workflow Job Template</strong> →
-  pestaña "Workflow Visualizer" → encadenar los 4 nodos:</p>
+  pestaña "Workflow Visualizer" → agregar los 4 nodos de 7.2 y encadenarlos:</p>
   <table class="clean">
     <tr><th>Enlace</th><th>Condición</th></tr>
     <tr><td>Nodo 1 (Precheck) → Nodo 2 (Preparar repos)</td><td>On Success</td></tr>
@@ -547,20 +600,64 @@ ANSIBLE_INVENTORY_PLUGINS: "/runner/project/&lt;CARPETA_DEL_PROJECT&gt;/inventor
     reporte desactualizado justo cuando más se necesita.
   </div>
 
-  <h3>9.4 Survey del Workflow</h3>
-  <p>El Survey se configura en el <strong>Workflow Job Template</strong> (no en cada
-  nodo): mismas 5 preguntas de la sección 7 (<code>upgrade_mode</code>,
-  <code>confirm_production_upgrade</code>, <code>upgrade_crq</code>,
-  <code>upgrade_lote</code>, <code>upgrade_ambiente</code>). Las respuestas se
-  propagan a cada nodo que tenga esa variable marcada "Prompt on Launch" (sección 9.2).</p>
+  <h3>7.4 Survey: se crea en el Workflow Job Template</h3>
+  <p>En el <strong>Workflow Job Template</strong> (no en cada nodo) → pestaña
+  <strong>Survey</strong> → activar <strong>Survey Enabled</strong> → crear las 5
+  preguntas de la sección 6. Las respuestas se propagan automáticamente a cada nodo
+  que tenga esa variable marcada "Prompt on Launch" (7.2).</p>
 
-  <h3>9.5 Notificaciones (por ejemplo, a un canal de Teams)</h3>
+  <h3>7.5 Notificaciones (por ejemplo, a un canal de Teams)</h3>
   <p>No requiere ningún cambio de código: se configuran como
   <strong>Notification Templates</strong> nativas de AWX (Administration →
   Notifications → Add, tipo "Webhook"), asociadas al <strong>Workflow Job
   Template</strong> (para notificar el resultado de todo el pipeline) o al
   Nodo 4 específicamente. El webhook real del canal de Teams es responsabilidad
   del administrador de AWX — este proyecto no lo invoca directamente.</p>
+</section>
+
+<section class="main-section" id="s8">
+  <div class="section-head"><div class="section-num">8</div><h2>Alternativa simplificada: un solo Job Template</h2></div>
+  <p>Mismo código, mismo Survey (sección 6) — sin las 4 etapas separadas ni el punto
+  de aprobación intermedio. Útil para un laboratorio rápido o un ambiente donde no
+  interesa el control granular del paso 7.</p>
+  <p><strong>Resources → Templates → Add → Job Template</strong></p>
+  <table class="clean">
+    <tr><th>Campo</th><th>Valor</th></tr>
+    <tr><td>Name</td><td><code>SLES Upgrade SP4-SP7 (GeoPOS) - simple</code></td></tr>
+    <tr><td>Job Type</td><td>Run</td></tr>
+    <tr><td>Inventory</td><td>el del paso 5</td></tr>
+    <tr><td>Project</td><td>el del paso 4</td></tr>
+    <tr><td>Playbook</td><td><code>playbooks/upgrade.yml</code></td></tr>
+    <tr><td>Credentials</td><td>el del paso 3 (Machine)</td></tr>
+    <tr><td>Limit</td><td>vacío, <strong>sin</strong> "Prompt on Launch" (sección 6)</td></tr>
+    <tr><td>Variables</td><td>ninguna fija — <code>upgrade_phase</code> no se define, así que queda en su default <code>both</code> (ver 7.1)</td></tr>
+    <tr><td>Survey propio</td><td>Sí — las 5 preguntas de la sección 6, directamente en este Job Template (aquí <code>upgrade_mode</code> sí incluye las 6 opciones: <code>precheck</code>, <code>validate</code>, <code>sp4_to_sp5</code>, <code>sp5_to_sp6</code>, <code>sp6_to_sp7</code>, <code>full</code>)</td></tr>
+  </table>
+</section>
+
+<section class="main-section" id="s9">
+  <div class="section-head"><div class="section-num">9</div><h2>Primera prueba</h2></div>
+  <p>Instrucciones para la configuración por defecto (Workflow, paso 7). Si se usó la
+  alternativa simplificada (paso 8), el Paso A es el mismo lanzando directamente ese
+  Job Template con <code>upgrade_mode: precheck</code>.</p>
+
+  <div class="step-title"><span class="stepnum">A</span><h3>Prueba de cableado del Workflow (100% segura, no modifica nada)</h3></div>
+  <ul class="checklist">
+    <li><input type="checkbox" id="s9-a1"><label for="s9-a1">Lanzar el <strong>Workflow Job Template</strong> con <code>upgrade_mode: precheck</code>, <code>confirm_production_upgrade: false</code>, y <code>upgrade_crq</code>/<code>upgrade_lote</code>/<code>upgrade_ambiente</code> iguales a los datos reales del host de laboratorio en el inventario.</label></li>
+    <li><input type="checkbox" id="s9-a2"><label for="s9-a2">Esperar los 4 nodos en verde. Con <code>upgrade_mode: precheck</code>, los nodos 2 y 3 simplemente repiten el mismo precheck del nodo 1 (no modifican nada — <code>upgrade.yml</code> nunca llega al código que lee <code>upgrade_phase</code> cuando el modo es <code>precheck</code>). Esto solo confirma que el Workflow, el Survey y las credenciales están bien conectados.</label></li>
+  </ul>
+
+  <div class="step-title"><span class="stepnum">B</span><h3>Primera migración real de un solo salto</h3></div>
+  <ul class="checklist">
+    <li><input type="checkbox" id="s9-b1"><label for="s9-b1">Lanzar el Workflow con un modo real (ej. <code>upgrade_mode: sp5_to_sp6</code>), <code>confirm_production_upgrade: true</code>, sobre <strong>un único host de laboratorio no crítico</strong>.</label></li>
+    <li><input type="checkbox" id="s9-b2"><label for="s9-b2">Nodo 2 (Preparar repos) debe quedar OK con los repos de destino habilitados, sin reinicio. Revisar ese reporte completo antes de dejar avanzar al Nodo 3.</label></li>
+    <li><input type="checkbox" id="s9-b3"><label for="s9-b3">Nodo 3 (Aplicar) debe pasar el gate, ejecutar <code>dup -D</code> → <code>dup</code> → reinicio → validación, y quedar OK. Revisar el reporte completo, incluida la sección "Gate obligatorio dup -D".</label></li>
+    <li><input type="checkbox" id="s9-b4"><label for="s9-b4">Nodo 4 (Reporting) debe regenerar <code>resumen.html</code> con el resultado de los 3 nodos anteriores.</label></li>
+  </ul>
+
+  <ul class="checklist">
+    <li><input type="checkbox" id="s9-3"><label for="s9-3">Seguir con <code>docs/CHECKLIST_LABORATORIO.html</code> para el resto del proceso.</label></li>
+  </ul>
 </section>
 
 </div>

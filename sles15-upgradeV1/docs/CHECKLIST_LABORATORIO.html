@@ -219,7 +219,7 @@
     <div class="callout top-note">
       No marcar un punto como resuelto sin haber verificado el valor/dato real,
       nunca inventándolo (ver CLAUDE.md, "Nunca inventar"). Si todavía no existen
-      los objetos de AWX (Project, Inventory, Credential, Job Template, Survey),
+      los objetos de AWX (Project, Inventory, Credential, Survey, Workflow Job Template),
       crearlos primero siguiendo <code>docs/AWX_SETUP.html</code>.
     </div>
   </div>
@@ -354,8 +354,8 @@
     <tr><td>Project</td><td>Apuntando a este repositorio real (rama/commit)</td></tr>
     <tr><td>Inventory</td><td>Hosts/grupos reales de GeoPOS, con <code>ansible_host</code>/<code>ansible_user</code> si aplica</td></tr>
     <tr><td>Credential</td><td>SSH + <code>become</code> con los privilegios de la sección 1</td></tr>
-    <tr><td>Job Template</td><td>Playbook <code>playbooks/upgrade.yml</code></td></tr>
-    <tr><td>Survey</td><td><code>upgrade_mode</code>, <code>confirm_production_upgrade</code>, y <code>upgrade_crq</code>/<code>upgrade_lote</code>/<code>upgrade_ambiente</code> (ver README §13)</td></tr>
+    <tr><td>Workflow Job Template (por defecto)</td><td>4 Job Templates encadenados (Precheck → Preparar repos → Aplicar → Reporting), playbook <code>playbooks/upgrade.yml</code> en 3 de ellos — ver <code>docs/AWX_SETUP.html</code> sección 7</td></tr>
+    <tr><td>Survey</td><td>Se crea en el Workflow Job Template: <code>upgrade_mode</code>, <code>confirm_production_upgrade</code>, y <code>upgrade_crq</code>/<code>upgrade_lote</code>/<code>upgrade_ambiente</code> (ver README §13)</td></tr>
     <tr><td>Selección de host</td><td><code>upgrade_crq</code>/<code>upgrade_lote</code>/<code>upgrade_ambiente</code> deben coincidir exactamente con las columnas CRQ/Lote/Ambiente del host de laboratorio en el inventario — ya no se usa <code>Limit</code></td></tr>
   </table>
 
@@ -394,9 +394,10 @@
     <li><strong>Solo si el host de laboratorio está en SP4</strong>: ejecutar primero <code>upgrade_mode: precheck</code> → <code>validate</code> → <code>sp4_to_sp5</code> con <code>confirm_production_upgrade: true</code>, siguiendo los mismos pasos siguientes pero para esa etapa. <code>sp4_to_sp5</code> es independiente — no continúa automáticamente a SP6/SP7. Una vez el host quede en SP5, seguir con los pasos normales.</li>
     <li><code>upgrade_mode: precheck</code> sobre el host de laboratorio. Revisar el reporte completo antes de continuar — especialmente cualquier <code>FAILED</code> o <code>WARNING</code> en repos, GeoPOS o espacio en disco.</li>
     <li><code>upgrade_mode: validate</code> sobre el mismo host (requiere los repos Foreman de origen y destino ya configurados). Confirmar <code>preflight.status: OK</code> con evidencia real de Zypper, no solo que el playbook termine sin error.</li>
-    <li>Solo si los pasos anteriores fueron satisfactorios: <code>upgrade_mode: sp5_to_sp6</code> con <code>confirm_production_upgrade: true</code> en <strong>un único host no crítico</strong>. Revisar el reporte de la etapa completo, incluida la sección "Inventario final confiable" y el gate de doble evidencia.</li>
-    <li>Repetir <code>validate</code> y luego <code>sp6_to_sp7</code> de la misma forma, de forma independiente, antes de intentar <code>full</code> encadenado.</li>
-    <li><strong>Solo si se planea usar el Workflow Job Template por etapas</strong> (<code>docs/AWX_SETUP.html</code>, sección 9): antes de producción, probar en el laboratorio <code>upgrade_phase: prepare</code> sobre un host, revisar que el reporte muestre los repos de destino habilitados y <em>sin</em> aplicar, y luego <code>upgrade_phase: apply</code> sobre ese mismo host para confirmar que el gate pasa y la migración se completa igual que con <code>both</code>.</li>
+    <li>Solo si los pasos anteriores fueron satisfactorios, probar el <strong>Workflow Job Template</strong> (configuración por defecto, <code>docs/AWX_SETUP.html</code> sección 7) con <code>upgrade_mode: sp5_to_sp6</code> y <code>confirm_production_upgrade: true</code> en <strong>un único host no crítico</strong>: el Nodo 2 (Preparar repos) debe quedar OK con los repos de destino habilitados, <em>sin</em> aplicar todavía — revisar ese reporte completo antes de dejar avanzar al Nodo 3.</li>
+    <li>El Nodo 3 (Aplicar) debe pasar el gate de entrada y completar <code>dup -D</code> → <code>dup</code> → reinicio → validación. Revisar el reporte completo, incluida la sección "Inventario final confiable" y el gate de doble evidencia. El Nodo 4 (Reporting) debe regenerar <code>resumen.html</code>.</li>
+    <li>Repetir <code>validate</code> y luego el mismo Workflow con <code>sp6_to_sp7</code>, de forma independiente, antes de intentar <code>full</code> encadenado.</li>
+    <li><strong>Solo si se usa la alternativa simplificada de un solo Job Template</strong> (<code>docs/AWX_SETUP.html</code>, sección 8): el mismo resultado de los 2 pasos anteriores se obtiene en una sola corrida con <code>upgrade_phase</code> en su valor por defecto (<code>both</code>).</li>
     <li>Solo después de una corrida exitosa documentada, evaluar <code>serial_batch_size</code> mayor a 1 o un grupo de hosts — el valor por defecto sigue siendo 1.</li>
   </ol>
 </section>

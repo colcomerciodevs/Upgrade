@@ -705,9 +705,10 @@ Cada modo produce su propio reporte por host (sección 11).
 ### 10.1 `upgrade_phase`: partir una etapa real en 2 corridas separadas
 
 Para `sp4_to_sp5`/`sp5_to_sp6`/`sp6_to_sp7` (no para `full`, ver más abajo),
-`upgrade_phase` permite dividir lo que hace `run_stage.yml` en 2 pasos — por
-ejemplo, como 2 Job Templates de un Workflow en AWX, con un Approval Node
-entre ambos (ver `docs/AWX_SETUP.html`, sección 9):
+`upgrade_phase` permite dividir lo que hace `run_stage.yml` en 2 pasos — es
+lo que usan, por defecto, los nodos 2 y 3 del Workflow Job Template de AWX,
+con un Approval Node opcional entre ambos (ver `docs/AWX_SETUP.html`,
+sección 7):
 
 | `upgrade_phase` | Qué hace | Modifica el sistema |
 |---|---|---|
@@ -805,16 +806,19 @@ Confirmar ambos puntos en la primera ejecución real revisando el bloque
 ## 13. AWX
 
 Manual paso a paso para crear todo esto desde cero en un AWX nuevo (Credential
-Type, Credential, Project, Inventory Source, Job Template, Survey):
+Type, Credential, Project, Inventory Source, Survey, Workflow Job Template):
 [`docs/AWX_SETUP.html`](docs/AWX_SETUP.html).
 
-**Opción alternativa (opcional): Workflow Job Template por etapas.** En vez
-de un único Job Template, el mismo proyecto soporta partir la ejecución en 4
-Job Templates (Precheck → Preparar repos → Aplicar → Reporting) encadenados
-por un Workflow — ver la variable `upgrade_phase` (sección 10.1) y
-`docs/AWX_SETUP.html`, sección 9, para el diseño completo (incluye dónde
-insertar un Approval Node y cómo conectar notificaciones de AWX, por ejemplo
-a un canal de Teams).
+**Configuración por defecto: Workflow Job Template de 4 etapas.** En vez de
+un único Job Template, la forma recomendada de operar este proyecto es
+partir la ejecución en 4 Job Templates (Precheck → Preparar repos → Aplicar →
+Reporting) encadenados por un Workflow — ver la variable `upgrade_phase`
+(sección 10.1) y `docs/AWX_SETUP.html`, sección 7, para el diseño completo
+campo por campo (incluye dónde insertar un Approval Node y cómo conectar
+notificaciones de AWX, por ejemplo a un canal de Teams). Existe una
+alternativa más simple con un solo Job Template (mismo código, mismo Survey,
+sin las 4 etapas separadas) documentada en `docs/AWX_SETUP.html`, sección 8,
+para casos donde no se necesita el control granular por etapa.
 
 ### Objetos a configurar (con datos reales, no inventados)
 

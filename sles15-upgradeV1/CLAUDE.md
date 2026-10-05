@@ -295,8 +295,21 @@ alcance se define con el match exacto entre `upgrade_crq`/`upgrade_lote`/
 `upgrade_ambiente` del Survey y las columnas `CRQ`/`Lote`/`Ambiente` del
 inventario dinámico — ver `playbooks/upgrade.yml`. Si ningún host coincide
 con los 3 valores declarados, el playbook falla explícito antes de tocar
-cualquier host. `Limit` se deja vacío y sin "Prompt on Launch" en el Job
-Template.
+cualquier host. `Limit` se deja vacío y sin "Prompt on Launch" en todos los
+Job Templates del proyecto.
+
+Configuración de AWX por defecto (decisión explícita del usuario para este
+ambiente, 2026-10-05): un **Workflow Job Template de 4 etapas** (Precheck →
+Preparar repos → Aplicar → Reporting), no un único Job Template. La variable
+`upgrade_phase` (`prepare`/`apply`/`both`) controla esta división en
+`playbooks/tasks/run_stage.yml` — ver `docs/AWX_SETUP.html`, sección 7, para
+el diseño completo campo por campo. Esto permite insertar un Approval Node
+entre "preparar" y "aplicar" para exigir aprobación antes del cambio
+irreversible. Un solo Job Template (`upgrade_phase: both`, el default del
+código) sigue disponible como alternativa simplificada
+(`docs/AWX_SETUP.html`, sección 8) para casos donde no se necesita ese
+control granular — ningún código ni comportamiento se duplica entre ambas
+configuraciones.
 
 El procesamiento productivo por defecto debe ser de un host a la vez:
 

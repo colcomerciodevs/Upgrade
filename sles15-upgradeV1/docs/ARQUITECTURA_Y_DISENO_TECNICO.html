@@ -703,7 +703,7 @@
     <li><strong>Sin mecanismo de rollback automático propio</strong>: si la raíz es Btrfs con snapshots, el procedimiento de SUSE (<code>snapper rollback</code>) ya existe y es real; una capa propia habría añadido complejidad sin garantía adicional.</li>
     <li><strong>Sin plantillas de reposd-dir persistentes</strong>: el directorio de VALIDATE se genera y destruye en cada ejecución.</li>
     <li><strong><code>permanent_repos</code> reducido a informativo</strong>: mantenerlo como mecanismo de exclusión real habría reintroducido el riesgo que el modelo de aislamiento por fases busca eliminar (sección 4).</li>
-    <li><strong>El Workflow por etapas (<code>upgrade_phase</code>, sección 5.1) es opcional, no el camino por defecto</strong>: <code>upgrade_phase: both</code> reproduce exactamente el comportamiento original de un solo Job Template. No se creó un segundo playbook ni un segundo rol de migración para soportarlo — es la misma lógica de <code>run_stage.yml</code>, con <code>when:</code> adicionales.</li>
+    <li><strong>El Workflow por etapas (<code>upgrade_phase</code>, sección 5.1) es la configuración por defecto; el Job Template único es la alternativa simplificada</strong>: no se creó un segundo playbook ni un segundo rol de migración para soportarlo — es la misma lógica de <code>run_stage.yml</code>, con <code>when:</code> adicionales. La alternativa simplificada (<code>upgrade_phase: both</code>) reproduce exactamente el comportamiento original de un solo Job Template, para quien no necesite el control granular por etapa.</li>
   </ul>
 </section>
 
