@@ -261,9 +261,9 @@
   <div class="callout note">
     <span class="label">Automatizado — nada que instalar a mano</span>
     La CA interna real ("CAColdecom", válida hasta 2027-12-20) está versionada en
-    <code>roles/repo_management/files/coldecom-ca.crt</code> y se instala
+    <code>playbooks/roles/repo_management/files/coldecom-ca.crt</code> y se instala
     <strong>automáticamente</strong> en <code>/etc/pki/trust/anchors/coldecom-ca.crt</code>
-    de cada host (vía <code>roles/repo_management/tasks/ensure_ca_trusted.yml</code>),
+    de cada host (vía <code>playbooks/roles/repo_management/tasks/ensure_ca_trusted.yml</code>),
     justo antes de que se agregue o use cualquier repo Foreman real — tanto en
     <code>validate</code> como en los modos reales de <code>UPGRADE</code>. Operación
     idempotente, no afecta servicios. Si <code>update-ca-certificates</code> no existe
@@ -379,9 +379,9 @@
 
   <ul class="checklist">
     <li><input type="checkbox" id="c3-1"><label for="c3-1"><strong>Formato real de <code>zypper --xmlout --non-interactive products -i</code></strong><span class="tag">riesgo principal</span><br>
-      La doble evidencia de Service Pack es un gate obligatorio (ver <code>ARQUITECTURA_Y_DISENO_TECNICO.html</code>, sección 7). Si el formato real no coincide con lo esperado, la etapa quedará <code>FAILED</code> con causa <code>service_pack_sin_evidencia_zypper</code> o <code>service_pack_evidencia_inconsistente</code>. <strong>Acción si ocurre</strong>: capturar la salida real (queda en el reporte, <code>zypper_products_xml_evidence</code>) y ajustar el regex en <code>roles/precheck/tasks/capture_state.yml</code>.</label></li>
+      La doble evidencia de Service Pack es un gate obligatorio (ver <code>ARQUITECTURA_Y_DISENO_TECNICO.html</code>, sección 7). Si el formato real no coincide con lo esperado, la etapa quedará <code>FAILED</code> con causa <code>service_pack_sin_evidencia_zypper</code> o <code>service_pack_evidencia_inconsistente</code>. <strong>Acción si ocurre</strong>: capturar la salida real (queda en el reporte, <code>zypper_products_xml_evidence</code>) y ajustar el regex en <code>playbooks/roles/precheck/tasks/capture_state.yml</code>.</label></li>
     <li><input type="checkbox" id="c3-2"><label for="c3-2"><strong><code>--reposd-dir</code> aislando realmente a Zypper</strong><br>
-      (usado por <code>validate</code> en <code>roles/sp_migration/tasks/preflight.yml</code>, y por el gate de seguridad <code>roles/repo_management/tasks/assert_enabled_repos.yml</code> indirectamente a través de <code>zypper repos -u</code>). Ejecutar primero <code>upgrade_mode: validate</code> y revisar que el reporte muestre <code>preflight.supported: true</code> con datos coherentes.</label></li>
+      (usado por <code>validate</code> en <code>playbooks/roles/sp_migration/tasks/preflight.yml</code>, y por el gate de seguridad <code>playbooks/roles/repo_management/tasks/assert_enabled_repos.yml</code> indirectamente a través de <code>zypper repos -u</code>). Ejecutar primero <code>upgrade_mode: validate</code> y revisar que el reporte muestre <code>preflight.supported: true</code> con datos coherentes.</label></li>
     <li><input type="checkbox" id="c3-3"><label for="c3-3"><strong>Comportamiento y return codes reales de <code>zypper patch --updatestack-only</code></strong> (en particular el código 103 de autoactualización de Zypper).</label></li>
     <li><input type="checkbox" id="c3-4"><label for="c3-4"><strong>Tiempos reales de <code>dup</code>, reinicio y reconexión</strong> — comparar contra los defaults de la sección 2.6.</label></li>
     <li><input type="checkbox" id="c3-5"><label for="c3-5"><strong>Que ningún repositorio preexistente real tenga una configuración atípica</strong> (por ejemplo, un repo con alias que ya empiece con el prefijo <code>ansible-sles-upgrade-</code> por coincidencia, lo que confundiría la limpieza). Revisar <code>zypper repos -u</code> en el host antes de la primera corrida.</label></li>

@@ -92,12 +92,12 @@ serial_batch_size: 1
 # No existe una opción "dry_run" para los modos reales: para ensayar sin
 # modificar el sistema, use upgrade_mode: validate. Un modo real siempre
 # ejecuta internamente "dup -D" como gate obligatorio inmediatamente antes
-# del "dup" real (ver roles/sp_migration/tasks/main.yml); si ese gate
+# del "dup" real (ver playbooks/roles/sp_migration/tasks/main.yml); si ese gate
 # falla, la etapa se detiene con FAILED sin aplicar ningún cambio.
 confirm_production_upgrade: false
 
 # Un upgrade real de Service Pack SIEMPRE requiere reinicio: no existe una
-# opción para omitirlo (ver roles/sp_migration/tasks/main.yml).
+# opción para omitirlo (ver playbooks/roles/sp_migration/tasks/main.yml).
 
 # ---------------------------------------------------------------------------
 # Foreman / Katello — información pendiente del ambiente
@@ -113,7 +113,7 @@ katello:
 
   # CA interna requerida para validar TLS contra Foreman/Katello (CA real
   # "CAColdecom", provista por el administrador; archivo versionado en
-  # roles/repo_management/files/coldecom-ca.crt de este repositorio).
+  # playbooks/roles/repo_management/files/coldecom-ca.crt de este repositorio).
   #
   # IMPORTANTE: esta ruta es en el HOST ADMINISTRADO (SLES), no en el nodo
   # de control. Para el chequeo de PRECHECK (ansible.builtin.uri) alimenta
@@ -121,7 +121,7 @@ katello:
   # VALIDATE/UPGRADE (Zypper no lee esta variable: usa el almacén de
   # confianza del sistema operativo), esta misma CA se instala
   # AUTOMÁTICAMENTE en este path mediante
-  # roles/repo_management/tasks/ensure_ca_trusted.yml — decisión explícita
+  # playbooks/roles/repo_management/tasks/ensure_ca_trusted.yml — decisión explícita
   # del usuario para este ambiente (ver orden de fuentes de verdad en
   # CLAUDE.md): es la única escritura al sistema operativo que ocurre
   # durante upgrade_mode: validate, justificada porque sin ella la propia
@@ -351,7 +351,7 @@ report_enabled: true
 # "localhost". Es solo la ubicación de trabajo mientras corre el playbook.
 report_local_dir: "{{ playbook_dir }}/../reports"
 
-# Destino persistente DEFINITIVO. Se copia aquí (ver roles/reporting/tasks/
+# Destino persistente DEFINITIVO. Se copia aquí (ver playbooks/roles/reporting/tasks/
 # main.yml) con delegate_to: localhost + remote_src: true — es decir, esta
 # ruta se resuelve en el MISMO nodo de control/Execution Environment donde
 # corre Ansible, NUNCA en el servidor SLES administrado.
@@ -365,7 +365,7 @@ report_local_dir: "{{ playbook_dir }}/../reports"
 #      — si el EE es un contenedor que se destruye al terminar el Job, esta
 #      ruta debe estar montada desde fuera de él. Ver
 #      ARQUITECTURA_Y_DISENO_TECNICO.html, sección 9.
-# Sin "CHANGE_ME" en el valor, roles/reporting ya intenta la copia; revisar
+# Sin "CHANGE_ME" en el valor, playbooks/roles/reporting ya intenta la copia; revisar
 # el reporte HTML (bloque "Persistencia del reporte") para confirmar que la
 # copia fue exitosa en la primera ejecución real.
 report_destination: "/data/work/Salida_Upgrade"

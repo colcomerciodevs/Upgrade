@@ -147,14 +147,17 @@ sles15-upgrade/
 │   ├── report_summary.yml         # consolidación final (resumen.html); también usable como Etapa 4 de un Workflow (sección 13)
 │   ├── tasks/run_stage.yml        # lógica común de UNA etapa de migración (soporta upgrade_phase, sección 10.1)
 │   ├── group_vars/all.yml         # variables comunes del proyecto (ver sección 6)
-│   └── host_vars/*.yml.example    # excepciones puntuales por host
-├── roles/
-│   ├── precheck/                  # prechecks + captura de estado + gate GeoPOS
-│   ├── repo_management/           # inventario / backup / staging (origen y destino) / cleanup / CA interna
-│   │   └── files/coldecom-ca.crt   # CA real "CAColdecom"; instalada automáticamente (sección 5)
-│   ├── sp_migration/               # updatestack + dup -D (gate) + dup + reboot + preflight (VALIDATE)
-│   ├── geopos_validation/         # validación 0..N servicios/procesos/puertos/health
-│   └── reporting/                 # generación de reportes HTML/JSON
+│   ├── host_vars/*.yml.example    # excepciones puntuales por host
+│   └── roles/                     # DENTRO de playbooks/ a propósito: Ansible busca
+│       │                          # "roles/" junto al playbook que se ejecuta, sin
+│       │                          # ninguna configuración adicional ni depender del
+│       │                          # cwd real con el que corra AWX (ver sección 13)
+│       ├── precheck/                  # prechecks + captura de estado + gate GeoPOS
+│       ├── repo_management/           # inventario / backup / staging (origen y destino) / cleanup / CA interna
+│       │   └── files/coldecom-ca.crt  # CA real "CAColdecom"; instalada automáticamente (sección 5)
+│       ├── sp_migration/               # updatestack + dup -D (gate) + dup + reboot + preflight (VALIDATE)
+│       ├── geopos_validation/         # validación 0..N servicios/procesos/puertos/health
+│       └── reporting/                 # generación de reportes HTML/JSON
 ├── docs/
 │   ├── CONTEXTO_PROYECTO.md
 │   ├── ARQUITECTURA_Y_DISENO_TECNICO.html # diseño técnico detallado (abrir en el navegador)
@@ -229,13 +232,13 @@ real antes de producción (ver también sección 14):
 - `ca_certificate_path` ya apunta a la ruta real que tendrá la CA interna
   **en el host administrado** (`/etc/pki/trust/anchors/coldecom-ca.crt`).
   La CA real (`CAColdecom`) está versionada en
-  [`roles/repo_management/files/coldecom-ca.crt`](roles/repo_management/files/coldecom-ca.crt)
+  [`playbooks/roles/repo_management/files/coldecom-ca.crt`](playbooks/roles/repo_management/files/coldecom-ca.crt)
   y **se instala automáticamente** en esa ruta —y se actualiza el almacén
   de confianza del sistema con `update-ca-certificates`— justo antes de
   que se agregue o use cualquier repo Foreman real, tanto en `validate`
-  (`roles/sp_migration/tasks/preflight.yml`) como en los modos reales de
-  `UPGRADE` (`roles/repo_management/tasks/add_temp_repos.yml`), vía
-  `roles/repo_management/tasks/ensure_ca_trusted.yml`. Es la única
+  (`playbooks/roles/sp_migration/tasks/preflight.yml`) como en los modos reales de
+  `UPGRADE` (`playbooks/roles/repo_management/tasks/add_temp_repos.yml`), vía
+  `playbooks/roles/repo_management/tasks/ensure_ca_trusted.yml`. Es la única
   escritura al sistema operativo que ocurre durante `validate` —decisión
   explícita para este ambiente, ver `ARQUITECTURA_Y_DISENO_TECNICO.html`,
   sección 1—, idempotente y sin afectar servicios. Las llaves GPG **no**
@@ -456,7 +459,7 @@ propósito propio. No son sinónimos ni pasos intercambiables:
 
 No modifica repositorios ni paquetes (verificado en la sección 16: cero
 llamadas a `addrepo`/`removerepo`/`modifyrepo`, estado de repos
-byte-idéntico antes/después). Valida (ver `roles/precheck/tasks/`):
+byte-idéntico antes/después). Valida (ver `playbooks/roles/precheck/tasks/`):
 
 - **Gate de sistema operativo (primera verificación, obligatoria)**:
   `ansible_facts['distribution'] == 'SLES'`. Si el Inventory incluye
@@ -528,7 +531,7 @@ directorio, porque es el único lugar donde busca definiciones de
 repositorio. **Alcance exacto**: `--reposd-dir` aísla los archivos `.repo`
 (dónde busca Zypper definiciones de repositorio); no se afirma ni se asume
 que también aísle servicios de Zypper (`services.d`) u otros componentes.
-`roles/sp_migration/tasks/preflight.yml`:
+`playbooks/roles/sp_migration/tasks/preflight.yml`:
 
 1. Verifica con `zypper --help` que el Zypper del host soporta
    `--reposd-dir`. Si no lo soporta, **no se inventa una alternativa**: el
@@ -759,7 +762,7 @@ Job. Escribir ahí primero no garantiza nada por sí solo.
 **Estado real**: `report_destination` ya está configurado en
 `playbooks/group_vars/all.yml` como `/data/work/Salida_Upgrade` — una ruta
 de archivo, copiada con `delegate_to: localhost` + `remote_src: true`
-(`roles/reporting/tasks/main.yml`), es decir, **en el mismo nodo de
+(`playbooks/roles/reporting/tasks/main.yml`), es decir, **en el mismo nodo de
 control/Execution Environment donde corre Ansible**, nunca en el servidor
 SLES administrado.
 
@@ -1065,7 +1068,7 @@ Validaciones estáticas ejecutadas (sin conexión a ningún servidor):
 
 ```bash
 ansible-playbook playbooks/upgrade.yml --syntax-check
-ansible-lint --profile production playbooks/upgrade.yml roles/
+ansible-lint --profile production playbooks/upgrade.yml playbooks/roles/
 yamllint playbooks/ roles/ inventory/
 ```
 
@@ -1180,7 +1183,7 @@ pruebas antes/después de la corrección):
   `stage_validated` (sección 8.3) — si el parser no reconoce el formato
   real de un SLES de laboratorio, **cada etapa quedará `FAILED`** con esa
   causa exacta (`service_pack_sin_evidencia_zypper`) hasta corregir el
-  regex de `roles/precheck/tasks/capture_state.yml` con la evidencia real
+  regex de `playbooks/roles/precheck/tasks/capture_state.yml` con la evidencia real
   capturada en el reporte (`zypper_products_xml_evidence`). Es un
   comportamiento intencional (fail-safe), no un defecto — pero es
   virtualmente seguro que requerirá un ajuste en la primera ejecución real.

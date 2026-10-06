@@ -166,7 +166,7 @@
     # Distinto de "precheck": aquí Zypper realmente contacta los repos
     # Foreman de la etapa objetivo (metadata, TLS/CA, GPG, solver) en un
     # directorio aislado con `--reposd-dir` (ver
-    # roles/sp_migration/tasks/preflight.yml).
+    # playbooks/roles/sp_migration/tasks/preflight.yml).
     #
     # Si el preflight no pudo ejecutarse realmente (NOT_CHECKED) o falló
     # (FAILED), el resultado global de validate NUNCA es OK: debe quedar

@@ -328,7 +328,7 @@
     ninguna variable de este proyecto. Sin la CA interna real ("CAColdecom") instalada,
     cualquier conexión real de Zypper contra Foreman/Katello por HTTPS falla — y sin eso,
     la propia promesa de VALIDATE ("¿funcionaría realmente la migración contra Foreman
-    ahora?") no se podría cumplir. Por eso <code>roles/repo_management/tasks/
+    ahora?") no se podría cumplir. Por eso <code>playbooks/roles/repo_management/tasks/
     ensure_ca_trusted.yml</code> instala esa CA (si todavía no está presente) justo antes
     de que VALIDATE o UPGRADE agreguen o usen cualquier repo Foreman real. Es la
     <strong>única</strong> escritura al sistema operativo que ocurre durante
@@ -361,7 +361,7 @@
     </div>
   </div>
 
-  <p><code>roles/sp_migration/tasks/preflight.yml</code> usa este mecanismo para VALIDATE, en dos directorios
+  <p><code>playbooks/roles/sp_migration/tasks/preflight.yml</code> usa este mecanismo para VALIDATE, en dos directorios
   aislados <strong>independientes</strong> (uno para origen con solo <code>refresh</code>, otro para destino con
   <code>refresh</code> + <code>dup -D</code>) — nunca el mismo directorio, para que el solver de <code>dup -D</code>
   jamás vea accidentalmente los repos de la otra fase.</p>
@@ -423,7 +423,7 @@
     Como una etapa depende de <em>dos</em> conjuntos de repos Foreman (origen y destino), y el de origen se necesita
     recién a mitad de la etapa, verificar solo el destino antes de empezar no es suficiente — se podría descubrir a
     mitad de camino, con los repos preexistentes ya deshabilitados, que falta el repo de origen. Por eso
-    <code>roles/precheck/tasks/repos_reachability.yml</code> valida <strong>ambos</strong> conjuntos (configurados,
+    <code>playbooks/roles/precheck/tasks/repos_reachability.yml</code> valida <strong>ambos</strong> conjuntos (configurados,
     sin <code>CHANGE_ME</code>, alcanzables) antes de que <code>repo_management</code> toque cualquier repositorio.
   </div>
 </section>
@@ -602,7 +602,7 @@
     <strong>coincidencia de subcadena</strong>, no por igualdad estricta. Si aun así el parser no reconoce el formato
     real de un SLES de laboratorio, la etapa se reporta <strong>no validada</strong>, con la evidencia cruda completa
     en el reporte (<code>zypper_products_xml_evidence</code>) para ajustar
-    <code>roles/precheck/tasks/capture_state.yml</code> — en vez de continuar sobre un supuesto no confirmado. Es el
+    <code>playbooks/roles/precheck/tasks/capture_state.yml</code> — en vez de continuar sobre un supuesto no confirmado. Es el
     principal punto a observar en la primera ejecución de laboratorio.
   </div>
 

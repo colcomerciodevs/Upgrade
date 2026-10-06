@@ -46,7 +46,7 @@
 
         - name: Renderizar resumen consolidado HTML
           ansible.builtin.template:
-            src: "{{ playbook_dir }}/../roles/reporting/templates/resumen.html.j2"
+            src: "{{ playbook_dir }}/roles/reporting/templates/resumen.html.j2"
             dest: "{{ report_local_dir }}/resumen.html"
             mode: "0644"
           vars:
