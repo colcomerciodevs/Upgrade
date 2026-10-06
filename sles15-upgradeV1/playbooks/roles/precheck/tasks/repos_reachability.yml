@@ -105,6 +105,13 @@
   # fallo real de conexión) se clasifica manualmente en la tarea siguiente
   # usando result.status, nunca se descarta silenciosamente.
   failed_when: false
+  # "until": reintenta SOLO si no hubo respuesta real (timeout/fallo de
+  # conexión -- status ausente o negativo, mismo criterio que
+  # "_reach_no_response" en la tarea siguiente). Un código de error real
+  # (401/403/404/etc.) SÍ cuenta como respuesta y no reintenta.
+  until: (_repo_reachability.status is defined) and ((_repo_reachability.status | int) >= 0)
+  retries: "{{ precheck_repo_reachability_retries }}"
+  delay: "{{ precheck_repo_reachability_retry_delay }}"
   when: not (item.1.name is search('CHANGE_ME')) and not (item.1.url is search('CHANGE_ME'))
 
 - name: Registrar resultado de alcanzabilidad por repositorio de origen/destino (no es validación de uso)

@@ -1104,6 +1104,17 @@ infraestructura y orden recomendado de la primera ejecución real).
 - **Precheck en `WARNING` en `endpoint_alcanzable_*`**: el host respondió
   (HTTP 401/403/404, por ejemplo), pero eso no confirma que el repositorio
   sea utilizable — ejecute `validate` para la comprobación real.
+- **Precheck en `FAILED` en `endpoint_alcanzable_*` con detalle "Connection
+  failure: the read operation timed out"**: confirmado con evidencia real
+  en laboratorio (2026-10-06) que puede ocurrir de forma intermitente por
+  repositorio incluso con `precheck_repo_reachability_timeout` en 30s
+  (posible generación diferida de metadata en Foreman/Pulp en el primer
+  acceso). El chequeo ya reintenta automáticamente
+  (`precheck_repo_reachability_retries`/`_retry_delay`, por defecto 2
+  intentos adicionales / 5s de espera) **solo** cuando no hubo respuesta
+  del servidor — un código de error real (401/403/404/etc.) nunca
+  reintenta, porque ya es una respuesta válida. Si sigue fallando tras los
+  reintentos, es una falla de red real hacia Foreman, no intermitencia.
 - **`geopos_precheck_gate` en `FAILED`**: un componente GeoPOS marcado
   `critical: true` no está saludable y `fail_precheck_if_unhealthy: true`.
   Si existe una excepción operacional autorizada, sobrescribir

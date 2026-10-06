@@ -13,3 +13,14 @@ precheck_target_sp: ""
 # devolvieron "Connection failure: the read operation timed out" con 10s
 # -- ver docs/CHECKLIST_LABORATORIO.html, sección 2.6.
 precheck_repo_reachability_timeout: 30
+
+# Reintentos cuando un repo individual NO responde (timeout/fallo de
+# conexión) -- NO se reintenta si el servidor sí respondió, aunque sea con
+# un código de error real (401/403/404/etc.), porque eso ya es una
+# respuesta válida, no un problema transitorio. Agregado tras confirmarse
+# en laboratorio (2026-10-06) que, incluso con el timeout en 30s, un repo
+# individual puede seguir dando timeout de forma intermitente (posible
+# generación diferida de metadata en Foreman/Pulp en el primer acceso) y
+# responder normalmente al reintentar segundos después.
+precheck_repo_reachability_retries: 2
+precheck_repo_reachability_retry_delay: 5
