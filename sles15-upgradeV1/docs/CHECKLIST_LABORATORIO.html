@@ -365,7 +365,7 @@
     <tr><td><code>sp_migration_reboot_timeout</code></td><td>1800s</td><td>Tiempo real de arranque del host de laboratorio</td></tr>
     <tr><td><code>sp_migration_reboot_connect_timeout</code></td><td>30s</td><td>Tiempo real de disponibilidad de SSH tras el arranque</td></tr>
     <tr><td><code>sp_migration_updatestack_retries</code> / <code>_delay</code></td><td>3 / 2s</td><td>Si <code>updatestack-only</code> con rc 103 necesita más reintentos en la práctica</td></tr>
-    <tr><td><code>precheck_repo_reachability_timeout</code></td><td>10s</td><td>Si la red hacia Foreman es más lenta, ajustar</td></tr>
+    <tr><td><code>precheck_repo_reachability_timeout</code></td><td>30s <span class="muted">(subido de 10s: confirmado con evidencia real en laboratorio el 2026-10-06 que 10s era insuficiente para algunos de los 20 repos)</span></td><td>Si sigue habiendo timeouts intermitentes con 30s, subir más o investigar la red hacia Foreman</td></tr>
     <tr><td><code>repo_management_backup_base_dir</code></td><td><code>/var/backup/ansible-sles-upgrade</code></td><td>Que exista espacio y permisos ahí en el host real</td></tr>
   </table>
 </section>

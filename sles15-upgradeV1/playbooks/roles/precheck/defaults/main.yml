@@ -8,5 +8,8 @@
 precheck_target_sp: ""
 
 # Tiempo de espera (segundos) para el chequeo de alcanzabilidad HTTP/HTTPS
-# de los repositorios Foreman/Katello.
-precheck_repo_reachability_timeout: 10
+# de los repositorios Foreman/Katello. Subido de 10 a 30 tras una prueba
+# real en laboratorio (2026-10-06): algunos de los 20 repos (origen+destino)
+# devolvieron "Connection failure: the read operation timed out" con 10s
+# -- ver docs/CHECKLIST_LABORATORIO.html, sección 2.6.
+precheck_repo_reachability_timeout: 30
