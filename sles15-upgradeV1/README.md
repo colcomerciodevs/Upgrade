@@ -1108,19 +1108,27 @@ infraestructura y orden recomendado de la primera ejecución real).
 - **Precheck falla en `locks_zypper_rpm_libzypp`**: otro proceso
   (PackageKit, otro Zypper/YaST) tiene el gestor de paquetes bloqueado.
   Revisar `ps aux | grep -i zypp` en el host.
-- **"No se pudieron agregar/deshabilitar/eliminar los siguientes
-  repositorios..." con detalle `System management is locked by the
-  application with pid ... (/usr/lib/packagekitd)`**: confirmado con
-  evidencia real en laboratorio (2026-10-06) — es `rc=7`
-  (`ZYPPER_EXIT_ZYPP_LOCKED`, código de salida oficial de zypper: "libzypp
-  is locked, e.g. packagekit is running"). Es un lock **transitorio**
-  (PackageKit lo libera solo, normalmente en segundos). `roles/repo_management`
-  ya reintenta automáticamente ante este código exacto
-  (`repo_management_zypper_lock_retries`/`_delay`, por defecto 5
-  intentos / 5s de espera) — cualquier otro código de error se reporta de
-  inmediato, sin reintentos. Si sigue fallando tras los 5 intentos, hay
-  algo más que mantiene el lock de forma persistente (revisar
-  `ps aux | grep -i zypp`/`packagekitd` en el host).
+- **"No se pudieron agregar/deshabilitar/eliminar/refrescar los siguientes
+  repositorios..." (o el gate `dup -D`/`dup` real) con detalle `System
+  management is locked by the application with pid ... (/usr/lib/packagekitd)`,
+  o "PackageKit is blocking zypper"**: confirmado con evidencia real en
+  laboratorio (2026-10-06) — es `rc=7` (`ZYPPER_EXIT_ZYPP_LOCKED`, código de
+  salida oficial de zypper: "libzypp is locked, e.g. packagekit is
+  running"). Es un lock **transitorio** (PackageKit lo libera solo,
+  normalmente en segundos); se confirmó contra el código fuente oficial de
+  Zypper que, en `--non-interactive`, nunca le pide a PackageKit que suelte
+  el lock por su cuenta — no existe ningún flag de Zypper para forzar esto,
+  reintentar es el único mecanismo real disponible. Por eso **todo** comando
+  Zypper que modifica algo en este proyecto reintenta automáticamente ante
+  este código exacto (`repo_management_zypper_lock_retries`/`_delay`, por
+  defecto 5 intentos / 5s de espera): `addrepo`, `refresh`, el `modifyrepo
+  --disable` de repos preexistentes, `removerepo`, y el gate `dup -D` + el
+  `dup` real de la migración — cualquier otro código de error se reporta de
+  inmediato, sin reintentos. Si sigue fallando tras los 5 intentos, hay algo
+  más que mantiene el lock de forma persistente (revisar `ps aux | grep -i
+  zypp`/`packagekitd` en el host; considerar, como decisión explícita del
+  administrador para ese host, detener `packagekit.service` antes de la
+  ventana de mantenimiento — este proyecto no lo hace automáticamente).
 - **Etapa (prepare) fallaba antes (2026-10-06) en "migracion: No se pudo
   refrescar la metadata de los repositorios temporales..." con detalle
   "File 'repomd.xml' ... is unsigned ... continue? [yes/no] (no): no

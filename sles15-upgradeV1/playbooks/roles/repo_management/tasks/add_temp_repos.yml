@@ -168,6 +168,18 @@
       }}
   become: true
   register: repo_refresh_result
+  # "until": mismo reintento por lock transitorio de PackageKit (rc=7,
+  # ZYPP_LOCKED) que el addrepo de más arriba -- confirmado con evidencia
+  # real en laboratorio (2026-10-06) que este lock también puede aparecer
+  # aquí, no solo en addrepo (PackageKit puede tomar el lock en cualquier
+  # momento; el precheck solo valida un instante puntual, no garantiza que
+  # siga libre minutos después). Zypper en --non-interactive nunca le pide
+  # a PackageKit que suelte el lock por su cuenta (confirmado contra el
+  # código fuente oficial), así que reintentar en Ansible es el único
+  # mecanismo real disponible -- no existe un flag de Zypper para esto.
+  until: (repo_refresh_result.rc | default(1)) != 7
+  retries: "{{ repo_management_zypper_lock_retries }}"
+  delay: "{{ repo_management_zypper_lock_delay }}"
   changed_when: true
   # Captura explícita en lugar de dejar que Ansible falle con el genérico
   # "non-zero return code": ese mensaje, sin stdout/stderr real de Zypper,

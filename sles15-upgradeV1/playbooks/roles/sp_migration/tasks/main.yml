@@ -50,6 +50,15 @@
       dup -D --no-allow-vendor-change --no-recommends
   become: true
   register: sp_migration_dry_run_result
+  # "until": mismo reintento por lock transitorio de PackageKit (rc=7,
+  # ZYPP_LOCKED) que repo_management -- confirmado con evidencia real en
+  # laboratorio (2026-10-06) que el lock puede aparecer en cualquier
+  # comando Zypper del host, no solo en los de repo_management. Cualquier
+  # otro código de error (conflictos reales de dependencias/vendor) se
+  # deja pasar de inmediato, sin agotar reintentos.
+  until: (sp_migration_dry_run_result.rc | default(1)) != 7
+  retries: "{{ repo_management_zypper_lock_retries }}"
+  delay: "{{ repo_management_zypper_lock_delay }}"
   changed_when: false
   failed_when: false
 
@@ -78,6 +87,13 @@
       dup --no-allow-vendor-change --no-recommends
   become: true
   register: sp_migration_dup_result
+  # "until": mismo reintento por lock transitorio de PackageKit (rc=7) que
+  # el gate dup -D de arriba. El dup real ya pasó el gate exitosamente, así
+  # que un rc=7 aquí es casi con certeza el mismo lock transitorio, no un
+  # problema real recién aparecido.
+  until: (sp_migration_dup_result.rc | default(1)) != 7
+  retries: "{{ repo_management_zypper_lock_retries }}"
+  delay: "{{ repo_management_zypper_lock_delay }}"
   changed_when: true
   failed_when: sp_migration_dup_result.rc != 0
 

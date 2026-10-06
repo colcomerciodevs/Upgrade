@@ -121,6 +121,14 @@
             label: "{{ item.name }}"
           become: true
           register: _preflight_origin_addrepo
+          # "until": mismo reintento por lock transitorio de PackageKit
+          # (rc=7, ZYPP_LOCKED) que repo_management -- el lock es del
+          # propio libzypp del host, no de este directorio aislado, así
+          # que puede aparecer aquí igual que en UPGRADE real. Confirmado
+          # con evidencia real en laboratorio (2026-10-06).
+          until: (_preflight_origin_addrepo.rc | default(1)) != 7
+          retries: "{{ repo_management_zypper_lock_retries }}"
+          delay: "{{ repo_management_zypper_lock_delay }}"
           changed_when: false
           failed_when: false
 
@@ -129,6 +137,9 @@
             argv: "{{ ['zypper', '--reposd-dir', _preflight_origin_dir, '--non-interactive', 'refresh', '-f'] + _preflight_origin_aliases }}"
           become: true
           register: _preflight_origin_refresh
+          until: (_preflight_origin_refresh.rc | default(1)) != 7
+          retries: "{{ repo_management_zypper_lock_retries }}"
+          delay: "{{ repo_management_zypper_lock_delay }}"
           changed_when: false
           failed_when: false
 
@@ -192,6 +203,9 @@
             label: "{{ item.name }}"
           become: true
           register: _preflight_addrepo
+          until: (_preflight_addrepo.rc | default(1)) != 7
+          retries: "{{ repo_management_zypper_lock_retries }}"
+          delay: "{{ repo_management_zypper_lock_delay }}"
           changed_when: false
           failed_when: false
 
@@ -206,6 +220,9 @@
               }}
           become: true
           register: _preflight_refresh
+          until: (_preflight_refresh.rc | default(1)) != 7
+          retries: "{{ repo_management_zypper_lock_retries }}"
+          delay: "{{ repo_management_zypper_lock_delay }}"
           changed_when: false
           failed_when: false
 
@@ -219,6 +236,9 @@
               }}
           become: true
           register: _preflight_dup
+          until: (_preflight_dup.rc | default(1)) != 7
+          retries: "{{ repo_management_zypper_lock_retries }}"
+          delay: "{{ repo_management_zypper_lock_delay }}"
           changed_when: false
           failed_when: false
 
