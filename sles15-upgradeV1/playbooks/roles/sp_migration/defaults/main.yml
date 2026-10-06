@@ -3,9 +3,15 @@
 
 # Reintentos para la actualización de la pila de gestión de paquetes
 # (zypper puede pedir que se vuelva a ejecutar tras actualizarse a sí
-# mismo — código de retorno 103).
-sp_migration_updatestack_retries: 3
-sp_migration_updatestack_delay: 2
+# mismo — código de retorno 103). También cubre, como efecto colateral
+# útil, el lock transitorio de PackageKit (rc=7, ver repo_management):
+# subido de 3/2s a 5/5s tras confirmarse en laboratorio (2026-10-06, job
+# AWX #9224) que 3 intentos con 2s de espera NO fueron suficientes --
+# packagekitd (pid distinto cada vez) mantuvo el lock durante toda la
+# ventana de reintentos. 5 intentos / 5s (25s máx.) es el mismo presupuesto
+# ya usado y confirmado suficiente en repo_management_zypper_lock_retries/_delay.
+sp_migration_updatestack_retries: 5
+sp_migration_updatestack_delay: 5
 
 # Parámetros de reinicio tras una migración real aplicada.
 sp_migration_reboot_timeout: 1800

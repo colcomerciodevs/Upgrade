@@ -22,4 +22,24 @@
   retries: "{{ sp_migration_updatestack_retries }}"
   delay: "{{ sp_migration_updatestack_delay }}"
   changed_when: "'Nothing to do' not in (_updatestack_result.stdout | default(''))"
-  failed_when: _updatestack_result.rc != 0
+  # "failed_when: false" aquí es deliberado (mismo principio que el gate
+  # dup -D y los demás comandos de Zypper de este proyecto): captura el
+  # resultado completo ANTES de decidir fallar, para no perder el
+  # stdout/stderr real de Zypper -- sin esto, Ansible aborta con el
+  # genérico "non-zero return code" y el reporte queda sin forma de
+  # diagnosticar sin leer el log crudo del Job (confirmado con evidencia
+  # real en laboratorio, 2026-10-06, job AWX #9224).
+  failed_when: false
+
+- name: "Registrar la salida completa de updatestack (éxito o fallo, para el reporte)"
+  ansible.builtin.set_fact:
+    sp_migration_updatestack_output: >-
+      {{ ((_updatestack_result.stdout | default('')) ~ '\n' ~ (_updatestack_result.stderr | default(''))) | trim | truncate(20000) }}
+
+- name: "Fallar explícitamente, con el detalle real de Zypper, si updatestack no fue exitoso"
+  ansible.builtin.fail:
+    msg: >-
+      zypper patch --updatestack-only no fue exitoso tras
+      {{ sp_migration_updatestack_retries }} reintentos (rc={{ _updatestack_result.rc }}):
+      {{ sp_migration_updatestack_output }}
+  when: _updatestack_result.rc != 0
