@@ -67,6 +67,35 @@ Nunca inventar:
 
 Utilizar `CHANGE_ME` claramente identificados cuando falten datos reales del ambiente.
 
+### Verificación GPG de repositorios Foreman
+
+Decisión explícita del usuario para este ambiente (2026-10-06): se omite la
+verificación de firma GPG (`repomd.xml`) de los repositorios Foreman/Katello
+que usa este proyecto, porque corren exclusivamente sobre la red interna de
+la empresa y nunca son repositorios públicos de Internet (ver regla
+anterior). Esta decisión es solo sobre integridad/firma GPG del contenido —
+**no** afecta ni reemplaza la verificación TLS/CA contra Foreman
+(`katello.ca_certificate_path`), que sigue siendo obligatoria y nunca se
+deshabilita.
+
+Motivo real confirmado por API (no solo "es interno"): al 2026-10-06 este
+Foreman no tenía ninguna GPG key (Content Credential) asociada a ningún
+Product ni Repository, por lo que Zypper rechazaba toda la metadata como no
+firmada (`rc=4`, "unsigned, continue? no"). Se creó y validó la GPG key
+oficial de SUSE para SLE 15 (`SUSE-Linux-Enterprise-15-GPG-KEY`, fingerprint
+`7F00 9157 B127 B994 D5CF BE76 F74F 09BC 3FA1 D6CE`, confirmado contra
+`suse.com/support/security/keys`), pero el usuario decidió, para este
+ambiente, omitir la verificación en vez de asociar esa key a los ~20
+Products/40 Repositories de Foreman.
+
+Implementación: `zypper addrepo --no-gpgcheck` (flag oficial de Zypper, POR
+REPOSITORIO — ver `zypper help addrepo` — no global) únicamente en los
+repositorios que esta automatización agrega (`repo_management/tasks/
+add_temp_repos.yml` y el preflight aislado de `sp_migration/tasks/
+preflight.yml`). Nunca se usa el flag global `--no-gpg-checks` de Zypper, y
+nunca se modifica la configuración GPG de ningún repositorio preexistente
+del cliente.
+
 ## Ruta de upgrade
 
 La ruta operacional del proyecto es:
@@ -129,7 +158,13 @@ La existencia de inventarios o credenciales no constituye autorización para eje
 No:
 
 - ocultar fallos críticos con `ignore_errors: true`;
-- deshabilitar TLS o GPG como solución permanente;
+- deshabilitar TLS como solución permanente;
+- deshabilitar GPG de forma global (`--no-gpg-checks`) o para repositorios
+  preexistentes del cliente — la única excepción vigente es la decisión
+  explícita documentada en "Regla obligatoria de repositorios" →
+  "Verificación GPG de repositorios Foreman", acotada por repositorio
+  (`--no-gpgcheck`) y solo para los repos Foreman que esta automatización
+  agrega;
 - habilitar vendor change por defecto;
 - eliminar indiscriminadamente `/etc/zypp/repos.d/*`;
 - reparar SUSEConnect automáticamente;

@@ -241,14 +241,14 @@ real antes de producción (ver también sección 14):
   `playbooks/roles/repo_management/tasks/ensure_ca_trusted.yml`. Es la única
   escritura al sistema operativo que ocurre durante `validate` —decisión
   explícita para este ambiente, ver `ARQUITECTURA_Y_DISENO_TECNICO.html`,
-  sección 1—, idempotente y sin afectar servicios. Las llaves GPG **no**
-  se automatizan preventivamente: verificado por API que Katello no
-  re-firma este contenido (`gpg_key_id: null` en productos/repos) — son
-  las llaves originales de SUSE, normalmente ya presentes en el keyring
-  del SLES desde su instalación base, y las guías oficiales de SUSE para
-  este procedimiento no mencionan un paso de importación. Si alguna
-  llegara a faltar, `zypper --non-interactive` falla explícito (nunca en
-  silencio); ver sección 15.
+  sección 1—, idempotente y sin afectar servicios. La verificación de firma
+  GPG de estos repos se omite a propósito (`zypper addrepo --no-gpgcheck`,
+  por repositorio, nunca el flag global): decisión explícita del usuario
+  para este ambiente (2026-10-06, ver `CLAUDE.md`), confirmada por API que
+  este Foreman no tenía ninguna GPG key asociada a ningún Product/Repository
+  (`gpg_key_id: null`), y justificada porque estos repos corren
+  exclusivamente en la red interna de la empresa, nunca públicos. Esto no
+  afecta la verificación TLS/CA, que sigue siendo real y obligatoria.
 - Content View y Lifecycle Environment aplicables, si el ambiente llega a
   usar alguno distinto de `Library` (hoy todo el contenido verificado vive
   en `Library`/`Default Organization View`, sin promoción).
@@ -451,7 +451,7 @@ propósito propio. No son sinónimos ni pasos intercambiables:
 |---|---|---|---|
 | Propósito | Salud y preparación del **servidor** | Simulación **real** del upgrade **contra Foreman** | Ejecución real, **con modificación del servidor** |
 | ¿Toca `/etc/zypp/repos.d`? | No | No (usa un directorio de repos aislado y temporal, ver 8.2) | Sí (backup, deshabilitar, agregar temporales, limpiar) |
-| ¿Contacta los repos Foreman? | Solo conectividad HTTP/HTTPS básica | Sí, con Zypper real (metadata, GPG, solver) | Sí (igual que VALIDATE, pero de forma persistida) |
+| ¿Contacta los repos Foreman? | Solo conectividad HTTP/HTTPS básica | Sí, con Zypper real (metadata, TLS/CA, solver; GPG omitido a propósito, ver 8.2) | Sí (igual que VALIDATE, pero de forma persistida) |
 | ¿Puede dejar el sistema modificado? | Solo la CA interna, si faltaba (ver 8.1) | Igual que PRECHECK (misma CA, si faltaba) | Sí, además, únicamente si `confirm_production_upgrade: true` |
 | ¿Puede terminar "OK" sin haber comprobado nada realmente? | N/A | **No** — si el preflight no se pudo ejecutar, el resultado es `FAILED` o `NOT_CHECKED`, nunca `OK` | N/A |
 
@@ -532,9 +532,10 @@ oculta con `ignore_errors`).
 
 `validate` va más allá de una prueba de conectividad: ejecuta un
 **preflight real de Zypper contra los repos Foreman de la etapa
-siguiente**, para comprobar de verdad acceso a metadata, TLS/CA, GPG,
+siguiente**, para comprobar de verdad acceso a metadata, TLS/CA,
 resolución de dependencias, y qué paquetes se actualizarían/instalarían/
-degradarían/eliminarían — **sin modificar `/etc/zypp/repos.d` ni instalar
+degradarían/eliminarían (la verificación de firma GPG se omite a
+propósito, ver más abajo) — **sin modificar `/etc/zypp/repos.d` ni instalar
 nada**.
 
 **Mecanismo — `--reposd-dir` (no `--disable-repositories`/`--plus-repo`):**
@@ -562,8 +563,9 @@ que también aísle servicios de Zypper (`services.d`) u otros componentes.
    **exclusivamente esos alias** (nunca `-s`/`--services`, por la misma
    razón que en UPGRADE: sección 5).
 4. Ejecuta `dup -D --no-allow-vendor-change --no-recommends` contra ese
-   mismo directorio aislado — el chequeo real de metadata + TLS/CA + GPG +
-   solver contra el Service Pack de **destino**.
+   mismo directorio aislado — el chequeo real de metadata + TLS/CA + solver
+   contra el Service Pack de **destino** (GPG omitido a propósito, ver
+   más abajo).
 5. Opcionalmente, si se le indican repos de **origen**
    (`sp_migration_origin_repositories`), hace lo mismo en un **segundo
    directorio aislado independiente** pero solo con `refresh` (sin `dup`,
@@ -573,12 +575,19 @@ que también aísle servicios de Zypper (`services.d`) u otros componentes.
    con los de destino.
 6. **Siempre** (éxito o fallo) elimina ambos directorios temporales al final.
 
-Si el repositorio Foreman requiere una clave GPG que el host aún no tiene
-importada/confiada, el comando fallará limpiamente (no se usa
-`--gpg-auto-import-keys` ni `--no-gpg-checks`): eso es exactamente lo que
-VALIDATE debe detectar, no algo que deba ocultarse. Importar esa clave GPG
-como prerrequisito real del ambiente es responsabilidad del administrador
-(ver sección 14).
+**Verificación GPG omitida por decisión explícita del usuario (2026-10-06,
+ver `CLAUDE.md`)**: el `addrepo` de este preflight (y el de `add_temp_repos.yml`
+en UPGRADE real) usa `--no-gpgcheck` — flag oficial de Zypper, **por
+repositorio** (nunca el global `--no-gpg-checks`) — únicamente sobre los
+repos Foreman que esta automatización agrega. Motivo confirmado por API el
+2026-10-06: este Foreman no tenía ninguna GPG key asociada a ningún
+Product/Repository, por lo que Zypper rechazaba toda la metadata como no
+firmada; el usuario decidió, para este ambiente (repos exclusivamente en
+red interna, nunca públicos), omitir la verificación de firma en vez de
+asociar la GPG key de SUSE ya creada en Foreman (`SUSE-Linux-Enterprise-15-GPG-KEY`)
+a los ~20 Products/40 Repositories involucrados. Esto **no** afecta la
+verificación TLS/CA contra Foreman, que sigue siendo obligatoria y real en
+este mismo preflight.
 
 **Regla explícita: VALIDATE nunca es "OK" si el preflight no se ejecutó
 realmente — ni siquiera parcialmente.** El resultado global combina origen
@@ -704,7 +713,7 @@ internamente, de forma obligatoria, inmediatamente antes del `dup` real.
 | Modo | Qué hace | Modifica el sistema |
 |---|---|---|
 | `precheck` | Salud y preparación del servidor: prechecks de la sección 8.1 (etapa objetivo autodetectada) | No, salvo instalar la CA interna si falta (idempotente, ver sección 8.1) |
-| `validate` | Preflight real del upgrade contra Foreman (sección 8.2): metadata, TLS/CA, GPG y solver de Zypper, más los chequeos básicos de precheck | No |
+| `validate` | Preflight real del upgrade contra Foreman (sección 8.2): metadata, TLS/CA y solver de Zypper (GPG omitido a propósito), más los chequeos básicos de precheck | No |
 | `sp4_to_sp5` | Ejecuta la etapa SP4→SP5 completa (para hosts que todavía están en SP4). **Independiente**: nunca se encadena dentro de `full` | Sí, si `confirm_production_upgrade: true` |
 | `sp5_to_sp6` | Ejecuta la etapa SP5→SP6 completa (ver secciones 8-9) | Sí, si `confirm_production_upgrade: true` |
 | `sp6_to_sp7` | Ejecuta la etapa SP6→SP7 completa | Sí, si `confirm_production_upgrade: true` |
@@ -1112,17 +1121,19 @@ infraestructura y orden recomendado de la primera ejecución real).
   inmediato, sin reintentos. Si sigue fallando tras los 5 intentos, hay
   algo más que mantiene el lock de forma persistente (revisar
   `ps aux | grep -i zypp`/`packagekitd` en el host).
-- **Etapa (prepare) falla en "migracion: No se pudo refrescar la metadata
-  de los repositorios temporales..." con detalle "Signature verification
-  failed for repomd.xml" / "Can't provide /repodata/repomd.xml"**:
-  confirmado con evidencia real en laboratorio (2026-10-06) — es un
-  problema real de **contenido en Foreman/Katello** (metadata/firma del
-  Content View de ese Service Pack no se publicó correctamente), no un
-  problema de red ni de este proyecto. `endpoint_alcanzable_*` en PRECHECK
-  puede dar `OK`/`WARNING` igual (solo prueba que el servidor responde
-  HTTP, no que el contenido del repo sea válido). Revisar en Foreman/Katello
-  la publicación/sincronización del Content View y Lifecycle Environment
-  correspondiente antes de reintentar.
+- **Etapa (prepare) fallaba antes (2026-10-06) en "migracion: No se pudo
+  refrescar la metadata de los repositorios temporales..." con detalle
+  "File 'repomd.xml' ... is unsigned ... continue? [yes/no] (no): no
+  error"**: causa raíz confirmada por API — este Foreman no tenía ninguna
+  GPG key (Content Credential) asociada a ningún Product/Repository
+  (`0` Content Credentials), por lo que Zypper, en modo `--non-interactive`,
+  respondía automáticamente "no" ante metadata sin firma (`rc=4`), de forma
+  consistente para los 10/10 repos de cada fase. Resuelto mediante la
+  decisión explícita del usuario de omitir la verificación GPG
+  (`--no-gpgcheck` por repositorio, ver sección 5 y `CLAUDE.md`) — ya no
+  debería reaparecer. Si vuelve a aparecer un error de "unsigned"/firma
+  pese a esto, revisar que el fix siga presente en
+  `add_temp_repos.yml`/`preflight.yml`.
 - **Precheck en `WARNING` en `endpoint_alcanzable_*`**: el host respondió
   (HTTP 401/403/404, por ejemplo), pero eso no confirma que el repositorio
   sea utilizable — ejecute `validate` para la comprobación real.
@@ -1144,12 +1155,11 @@ infraestructura y orden recomendado de la primera ejecución real).
   (queda registrado en el reporte).
 - **`validate` (preflight) en `FAILED`**: revisar
   `stage_report.preflight.output_summary` en el reporte — contiene la
-  salida completa de Zypper. Las causas más comunes son: clave GPG no
-  importada/confiada en el host (poco probable: Katello no re-firma este
-  contenido, son las llaves originales de SUSE — ver sección 5; si pasa,
-  importarla con `rpm --import` es responsabilidad del administrador, no
-  algo que este proyecto automatice preventivamente), certificado TLS no
-  confiable, URL de repo incorrecta, o conflictos reales del solver.
+  salida completa de Zypper. La verificación de firma GPG se omite a
+  propósito (`--no-gpgcheck`, decisión explícita del usuario, ver sección 5
+  y `CLAUDE.md`), así que ya no es una causa posible. Las causas más
+  comunes son: certificado TLS no confiable, URL de repo incorrecta, o
+  conflictos reales del solver.
 - **`validate` (preflight) en `NOT_CHECKED` con `supported: false`**: el
   Zypper de ese host no expone `--reposd-dir` (muy poco probable en SLES
   15, pero se verifica en cada ejecución en vez de asumirlo). Revisar

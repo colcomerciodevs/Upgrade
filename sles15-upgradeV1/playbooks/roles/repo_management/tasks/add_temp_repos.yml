@@ -79,9 +79,16 @@
   # laboratorio). Cualquier otro código de error se deja pasar de
   # inmediato (sin agotar los reintentos) para que el fallo real se
   # reporte sin demora innecesaria.
+  #
+  # "--no-gpgcheck": decisión explícita del usuario para este ambiente
+  # (ver CLAUDE.md, "Verificación GPG de repositorios Foreman", 2026-10-06)
+  # -- flag OFICIAL de Zypper, POR REPOSITORIO (zypper help addrepo), nunca
+  # el flag global "--no-gpg-checks". Solo afecta a este alias temporal que
+  # esta automatización está creando ahora mismo; nunca toca la
+  # configuración GPG de ningún repositorio preexistente del cliente.
   ansible.builtin.command:
     cmd: >-
-      zypper --non-interactive addrepo -f -n "{{ item.name }}"
+      zypper --non-interactive addrepo -f -n --no-gpgcheck "{{ item.name }}"
       "{{ item.url }}"
       "{{ _phase_temp_aliases[idx] }}"
   loop: "{{ repo_management_phase_repositories }}"
