@@ -452,14 +452,32 @@ propósito propio. No son sinónimos ni pasos intercambiables:
 | Propósito | Salud y preparación del **servidor** | Simulación **real** del upgrade **contra Foreman** | Ejecución real, **con modificación del servidor** |
 | ¿Toca `/etc/zypp/repos.d`? | No | No (usa un directorio de repos aislado y temporal, ver 8.2) | Sí (backup, deshabilitar, agregar temporales, limpiar) |
 | ¿Contacta los repos Foreman? | Solo conectividad HTTP/HTTPS básica | Sí, con Zypper real (metadata, GPG, solver) | Sí (igual que VALIDATE, pero de forma persistida) |
-| ¿Puede dejar el sistema modificado? | Nunca | Nunca (limpia su directorio temporal siempre) | Sí, únicamente si `confirm_production_upgrade: true` |
+| ¿Puede dejar el sistema modificado? | Solo la CA interna, si faltaba (ver 8.1) | Igual que PRECHECK (misma CA, si faltaba) | Sí, además, únicamente si `confirm_production_upgrade: true` |
 | ¿Puede terminar "OK" sin haber comprobado nada realmente? | N/A | **No** — si el preflight no se pudo ejecutar, el resultado es `FAILED` o `NOT_CHECKED`, nunca `OK` | N/A |
 
-### 8.1 PRECHECK (rol `precheck`) — completamente no destructivo
+### 8.1 PRECHECK (rol `precheck`) — no destructivo, con una única excepción documentada
 
 No modifica repositorios ni paquetes (verificado en la sección 16: cero
 llamadas a `addrepo`/`removerepo`/`modifyrepo`, estado de repos
-byte-idéntico antes/después). Valida (ver `playbooks/roles/precheck/tasks/`):
+byte-idéntico antes/después).
+
+**Única excepción, decisión explícita del usuario para este ambiente**:
+`repos_reachability.yml` instala la CA interna real ("CAColdecom",
+`playbooks/roles/repo_management/files/coldecom-ca.crt`) en el almacén de
+confianza del sistema, **si todavía no está presente**, antes de probar
+conectividad HTTPS contra Foreman. Sin esto, un host que nunca ejecutó
+`validate`/un upgrade real antes reportaría `FAILED` en esos checks
+únicamente por falta de confianza TLS, no por un problema real de
+red/Foreman (confirmado en laboratorio: 20 checks `endpoint_alcanzable_*`
+con `CERTIFICATE_VERIFY_FAILED`). Es una operación idempotente y no
+destructiva — agrega una CA de confianza si falta; no reinicia nada, no
+toca servicios, no elimina ninguna CA existente (ver
+`playbooks/roles/repo_management/tasks/ensure_ca_trusted.yml`). Al ejecutarse
+siempre antes que `UPGRADE` real (ver `playbooks/tasks/run_stage.yml`),
+esta misma instalación cubre también a `UPGRADE`, que ya no necesita
+instalarla por su cuenta.
+
+Valida (ver `playbooks/roles/precheck/tasks/`):
 
 - **Gate de sistema operativo (primera verificación, obligatoria)**:
   `ansible_facts['distribution'] == 'SLES'`. Si el Inventory incluye
@@ -679,7 +697,7 @@ internamente, de forma obligatoria, inmediatamente antes del `dup` real.
 
 | Modo | Qué hace | Modifica el sistema |
 |---|---|---|
-| `precheck` | Salud y preparación del servidor: prechecks de la sección 8.1 (etapa objetivo autodetectada) | No |
+| `precheck` | Salud y preparación del servidor: prechecks de la sección 8.1 (etapa objetivo autodetectada) | No, salvo instalar la CA interna si falta (idempotente, ver sección 8.1) |
 | `validate` | Preflight real del upgrade contra Foreman (sección 8.2): metadata, TLS/CA, GPG y solver de Zypper, más los chequeos básicos de precheck | No |
 | `sp4_to_sp5` | Ejecuta la etapa SP4→SP5 completa (para hosts que todavía están en SP4). **Independiente**: nunca se encadena dentro de `full` | Sí, si `confirm_production_upgrade: true` |
 | `sp5_to_sp6` | Ejecuta la etapa SP5→SP6 completa (ver secciones 8-9) | Sí, si `confirm_production_upgrade: true` |
@@ -783,6 +801,46 @@ desde el desarrollo de este proyecto):
 Confirmar ambos puntos en la primera ejecución real revisando el bloque
 "Persistencia del reporte" del reporte HTML generado.
 
+### 11.1 Estructura de carpetas de los reportes
+
+Tanto `report_local_dir` como `report_destination` organizan los reportes
+individuales (HTML + JSON) con el mismo árbol de 3 niveles:
+
+```
+<CRQ sanitizado>/<hostname>/<etapa>/<etapa>_<timestamp>.html
+<CRQ sanitizado>/<hostname>/<etapa>/<etapa>_<timestamp>.json
+```
+
+- **CRQ sanitizado**: `upgrade_crq` (el CRQ/RFC declarado en el Survey, sección 13),
+  con espacios y caracteres especiales convertidos a `_` (ej. `RFC 2026-PRUEBA` →
+  `RFC_2026-PRUEBA`). Si quedó vacío (ejecución local sin Survey), la carpeta es
+  `SIN_CRQ`.
+- **etapa**: `{{ action }}` para `precheck`/`validate`/`full`, o
+  `{{ action }}_{{ phase }}` cuando `upgrade_phase` (sección 10.1) es `prepare` o
+  `apply` (ej. `sp5_to_sp6_prepare`, `sp5_to_sp6_apply`) — `both` no se agrega al
+  nombre, para no generar una carpeta redundante.
+
+`run_summary.jsonl` y `resumen.html` (el resumen consolidado) se quedan en la raíz
+de `report_local_dir`/`report_destination`, fuera de este árbol — abarcan todos los
+CRQ/hosts/etapas, no uno en particular.
+
+### 11.2 Sincronización a SharePoint (Etapa 5 opcional del Workflow)
+
+`playbooks/sync_sharepoint.yml` sube hacia una carpeta real de SharePoint (sitio
+`AreaInfraestructura`, misma cuenta que usa el inventario dinámico — ver
+`playbooks/group_vars/all.yml`, `sharepoint_sync`) el subárbol completo de
+`report_destination/<CRQ sanitizado>/` correspondiente al `upgrade_crq` de esta
+ejecución — **nunca** `report_local_dir`, que es efímero y no sobrevive entre
+nodos separados del Workflow (cada nodo es un Job de AWX independiente). Usa la
+API REST de Microsoft Graph directamente (sin dependencias de Python
+adicionales): token por client credentials, resolución del sitio, y un `PUT` por
+archivo. Requiere las mismas credenciales que el inventario dinámico
+(`TENANT_ID`/`CLIENT_ID`/`CLIENT_SECRET`) adjuntas también a este Job Template, y
+que el App Registration de Azure AD tenga permiso de **escritura** en SharePoint
+(`Sites.ReadWrite.All`) — el inventario dinámico solo necesitaba lectura; esto no
+se pudo confirmar desde el desarrollo de este proyecto. Ver
+`docs/AWX_SETUP.html`, sección 7, para la configuración completa de esta etapa.
+
 ---
 
 ## 12. Comportamiento ante fallos
@@ -812,15 +870,16 @@ Manual paso a paso para crear todo esto desde cero en un AWX nuevo (Credential
 Type, Credential, Project, Inventory Source, Survey, Workflow Job Template):
 [`docs/AWX_SETUP.html`](docs/AWX_SETUP.html).
 
-**Configuración por defecto: Workflow Job Template de 4 etapas.** En vez de
+**Configuración por defecto: Workflow Job Template de 5 etapas.** En vez de
 un único Job Template, la forma recomendada de operar este proyecto es
-partir la ejecución en 4 Job Templates (Precheck → Preparar repos → Aplicar →
-Reporting) encadenados por un Workflow — ver la variable `upgrade_phase`
-(sección 10.1) y `docs/AWX_SETUP.html`, sección 7, para el diseño completo
-campo por campo (incluye dónde insertar un Approval Node y cómo conectar
-notificaciones de AWX, por ejemplo a un canal de Teams). Existe una
+partir la ejecución en 5 Job Templates (Precheck → Preparar repos → Aplicar →
+Reporting → Sincronizar SharePoint) encadenados por un Workflow — ver la
+variable `upgrade_phase` (sección 10.1), `sharepoint_sync` (sección 11) y
+`docs/AWX_SETUP.html`, sección 7, para el diseño completo campo por campo
+(incluye dónde insertar un Approval Node y cómo conectar notificaciones de
+AWX, por ejemplo a un canal de Teams). Existe una
 alternativa más simple con un solo Job Template (mismo código, mismo Survey,
-sin las 4 etapas separadas) documentada en `docs/AWX_SETUP.html`, sección 8,
+sin las 5 etapas separadas) documentada en `docs/AWX_SETUP.html`, sección 8,
 para casos donde no se necesita el control granular por etapa.
 
 ### Objetos a configurar (con datos reales, no inventados)
@@ -1069,7 +1128,7 @@ Validaciones estáticas ejecutadas (sin conexión a ningún servidor):
 ```bash
 ansible-playbook playbooks/upgrade.yml --syntax-check
 ansible-lint --profile production playbooks/upgrade.yml playbooks/roles/
-yamllint playbooks/ roles/ inventory/
+yamllint playbooks/ inventory/
 ```
 
 Las tres, limpias.
@@ -1080,8 +1139,9 @@ simulados y **sin tocar ningún sistema real**, los archivos reales del
 proyecto (solo se neutralizó el paso de reinicio real, reemplazado por un
 no-op simulable como éxito o fallo, por seguridad), probando:
 
-- **PRECHECK no modifica nada**: estado de repos byte-idéntico antes/después,
-  cero llamadas de escritura a Zypper.
+- **PRECHECK no modifica repositorios ni paquetes**: estado de repos byte-idéntico antes/después,
+  cero llamadas de escritura a Zypper (la única excepción real, agregada después de esta
+  prueba simulada, es la instalación idempotente de la CA interna si faltaba — sección 8.1).
 - **`confirm_production_upgrade: false` no modifica absolutamente nada**:
   mismo resultado — cero cambios, cero llamadas a `updatestack`/`dup`.
 - **Un repo de origen ausente bloquea en PRECHECK**, antes de deshabilitar

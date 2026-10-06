@@ -299,8 +299,9 @@ cualquier host. `Limit` se deja vacío y sin "Prompt on Launch" en todos los
 Job Templates del proyecto.
 
 Configuración de AWX por defecto (decisión explícita del usuario para este
-ambiente, 2026-10-05): un **Workflow Job Template de 4 etapas** (Precheck →
-Preparar repos → Aplicar → Reporting), no un único Job Template. La variable
+ambiente, 2026-10-05): un **Workflow Job Template de 5 etapas** (Precheck →
+Preparar repos → Aplicar → Reporting → Sincronizar SharePoint), no un único
+Job Template. La variable
 `upgrade_phase` (`prepare`/`apply`/`both`) controla esta división en
 `playbooks/tasks/run_stage.yml` — ver `docs/AWX_SETUP.html`, sección 7, para
 el diseño completo campo por campo. Esto permite insertar un Approval Node

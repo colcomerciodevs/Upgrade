@@ -167,7 +167,7 @@
     <div class="subtitle">
       Manual paso a paso para crear en un AWX nuevo (sin nada reutilizable de otro
       ambiente) todos los objetos necesarios para ejecutar este proyecto: inventario
-      dinámico, credenciales, Project, Survey y el Workflow Job Template de 4 etapas
+      dinámico, credenciales, Project, Survey y el Workflow Job Template de 5 etapas
       (configuración por defecto).
     </div>
   </div>
@@ -334,7 +334,7 @@ ANSIBLE_INVENTORY_PLUGINS: "/runner/project/&lt;CARPETA_DEL_PROJECT&gt;/inventor
 </section>
 
 <section class="main-section" id="s6">
-  <div class="section-head"><div class="section-num">6</div><h2>Survey (preguntas compartidas por las 4 etapas)</h2></div>
+  <div class="section-head"><div class="section-num">6</div><h2>Survey (preguntas compartidas por las 5 etapas)</h2></div>
   <p>Estas 5 preguntas son las mismas en todo el proyecto. En la configuración
   <strong>por defecto</strong> (paso 7, Workflow) se crean <strong>una sola vez</strong>,
   en el <strong>Workflow Job Template</strong>, y se propagan a cada etapa que las
@@ -399,14 +399,16 @@ ANSIBLE_INVENTORY_PLUGINS: "/runner/project/&lt;CARPETA_DEL_PROJECT&gt;/inventor
         ejecuta aparte con sp4_to_sp5. (Si esta pregunta incluye precheck/validate
         -- alternativa simplificada --: precheck solo diagnostica, validate además
         contacta de verdad los repos Foreman del destino; ninguno de los dos
-        modifica nada.)
+        modifica repositorios ni paquetes -- la única excepción es que ambos
+        pueden instalar la CA interna si todavía no está presente, operación
+        idempotente, ver docs/ARQUITECTURA_Y_DISENO_TECNICO.html sección 1.)
       </td>
     </tr>
     <tr>
       <td>¿Confirma ejecución real en producción?</td>
       <td><code>confirm_production_upgrade</code></td>
       <td>Selección múltiple, con <strong>exactamente dos opciones: <code>true</code> y <code>false</code></strong> (ver nota abajo)</td>
-      <td>Obligatorio para los modos reales (sp4_to_sp5, sp5_to_sp6, sp6_to_sp7, full). Si el Modo de ejecución es precheck o validate, este valor se ignora por completo, sea true o false — esos dos modos nunca modifican el servidor bajo ninguna combinación. Déjalo en false para solo diagnosticar/ensayar un modo real. Ponlo en true únicamente cuando quieras aplicar la migración real, con reinicio incluido. Es independiente del Ambiente seleccionado abajo: todos los servidores de este proyecto se tratan como productivos, sin excepción.</td>
+      <td>Obligatorio para los modos reales (sp4_to_sp5, sp5_to_sp6, sp6_to_sp7, full). Si el Modo de ejecución es precheck o validate, este valor se ignora por completo, sea true o false — esos dos modos nunca modifican repositorios ni paquetes bajo ninguna combinación (la única excepción es instalar la CA interna si faltaba, operación idempotente). Déjalo en false para solo diagnosticar/ensayar un modo real. Ponlo en true únicamente cuando quieras aplicar la migración real, con reinicio incluido. Es independiente del Ambiente seleccionado abajo: todos los servidores de este proyecto se tratan como productivos, sin excepción.</td>
     </tr>
     <tr>
       <td>Ingrese el CRQ/RFC</td>
@@ -479,7 +481,7 @@ ANSIBLE_INVENTORY_PLUGINS: "/runner/project/&lt;CARPETA_DEL_PROJECT&gt;/inventor
 <section class="main-section" id="s7">
   <div class="section-head"><div class="section-num">7</div><h2>Workflow Job Template — configuración por defecto</h2></div>
   <p>Esta es la forma <strong>recomendada y por defecto</strong> de operar el proyecto
-  en AWX: partir la ejecución en <strong>4 Job Templates</strong> encadenados por un
+  en AWX: partir la ejecución en <strong>5 Job Templates</strong> encadenados por un
   <strong>Workflow Job Template</strong>. Cada etapa queda como un nodo visible en el
   diagrama, se puede reintentar solo la que falló, y se puede insertar un
   <strong>Approval Node</strong> entre "preparar" y "aplicar" (para exigir aprobación de
@@ -509,7 +511,7 @@ ANSIBLE_INVENTORY_PLUGINS: "/runner/project/&lt;CARPETA_DEL_PROJECT&gt;/inventor
     <code>dup</code> real por error en el nodo que se supone que solo prepara.
   </div>
 
-  <h3>7.2 Resumen de los 4 Job Templates</h3>
+  <h3>7.2 Resumen de los 5 Job Templates</h3>
   <p>Todos reutilizan el Inventory (paso 5), Project (paso 4) y Credential (paso 3).
   <strong>Resources → Templates → Add → Job Template</strong>, uno por fila:</p>
   <table class="clean">
@@ -518,6 +520,7 @@ ANSIBLE_INVENTORY_PLUGINS: "/runner/project/&lt;CARPETA_DEL_PROJECT&gt;/inventor
     <tr><td>2</td><td><code>SLES Upgrade - 2 Preparar repos</code></td><td><code>playbooks/upgrade.yml</code></td><td><code>upgrade_phase: prepare</code></td></tr>
     <tr><td>3</td><td><code>SLES Upgrade - 3 Aplicar</code></td><td><code>playbooks/upgrade.yml</code></td><td><code>upgrade_phase: apply</code></td></tr>
     <tr><td>4</td><td><code>SLES Upgrade - 4 Reporting</code></td><td><code>playbooks/report_summary.yml</code></td><td>(ninguno)</td></tr>
+    <tr><td>5</td><td><code>SLES Upgrade - 5 Sincronizar SharePoint</code></td><td><code>playbooks/sync_sharepoint.yml</code></td><td>(ninguno)</td></tr>
   </table>
 
   <div class="callout decision">
@@ -646,9 +649,45 @@ ANSIBLE_INVENTORY_PLUGINS: "/runner/project/&lt;CARPETA_DEL_PROJECT&gt;/inventor
     esa lógica en dos lugares.
   </div>
 
+  <div class="step-title"><span class="stepnum">5</span><h3>Etapa 5 — Sincronizar reportes a SharePoint (opcional)</h3></div>
+  <table class="clean">
+    <tr><th>Campo</th><th>Valor</th></tr>
+    <tr><td>Name</td><td><code>SLES Upgrade - 5 Sincronizar SharePoint</code></td></tr>
+    <tr><td>Job Type</td><td>Run</td></tr>
+    <tr><td>Inventory</td><td>el del paso 5 (el playbook solo usa <code>localhost</code>, pero AWX exige seleccionar un Inventory)</td></tr>
+    <tr><td>Project</td><td>el del paso 4</td></tr>
+    <tr><td>Playbook</td><td><code>playbooks/sync_sharepoint.yml</code></td></tr>
+    <tr><td>Credentials</td><td><strong>el del paso 2</strong> (<code>SharePoint Excel Inventory</code> — el mismo que usa el Inventory Source) <strong>además</strong> del del paso 3 (Machine); sin este primero, el Job no tiene <code>TENANT_ID</code>/<code>CLIENT_ID</code>/<code>CLIENT_SECRET</code> y falla</td></tr>
+    <tr><td>Limit</td><td>vacío, <strong>sin</strong> "Prompt on Launch"</td></tr>
+    <tr><td>Variables</td><td>vacío</td></tr>
+    <tr><td>Prompt on Launch (checkbox junto a Variables)</td><td><strong>Activar</strong> (necesita <code>upgrade_crq</code> del Survey del Workflow para saber qué carpeta sincronizar)</td></tr>
+    <tr><td>Survey propio</td><td>No — lo trae el Workflow (7.4)</td></tr>
+    <tr><td>Al agregarlo como nodo en el Workflow</td><td>No hace falta ningún PROMPT</td></tr>
+  </table>
+  <div class="callout risk">
+    <span class="label">Permiso de ESCRITURA en SharePoint (pendiente de confirmar)</span>
+    El Credential Type <code>SharePoint Excel Inventory</code> (paso 1-2) hoy solo se usa
+    para <strong>leer</strong> el Excel del inventario. Para que este nodo pueda subir
+    archivos, el App Registration de Azure AD detrás de ese Credential necesita permiso
+    de <strong>escritura</strong> en SharePoint (<code>Sites.ReadWrite.All</code>, tipo
+    Application) — confirmar con el administrador de Azure AD antes de la primera
+    sincronización real. Carpeta de destino real (dato dado por el administrador):
+    <code>colcomerciocom.sharepoint.com/sites/AreaInfraestructura</code>, biblioteca
+    "Documentos compartidos", ruta <code>General/Reportes_Automatizacion/Upgrade_ServicePack_SLES</code>
+    (ver <code>playbooks/group_vars/all.yml</code>, <code>sharepoint_sync</code>).
+  </div>
+  <div class="callout note">
+    <span class="label">Por qué sincroniza desde report_destination, no desde report_local_dir</span>
+    <code>report_local_dir</code> es el área de trabajo efímera de CADA Job por
+    separado — un nodo del Workflow no puede ver los archivos que escribió otro nodo ahí,
+    porque cada nodo es un Job de AWX independiente. <code>report_destination</code> (el
+    destino persistente real, sección 11 del README) sí es compartido entre nodos, así
+    que es la única fuente confiable para sincronizar.
+  </div>
+
   <h3>7.3 Crear el Workflow Job Template (el objeto que agrupa todo)</h3>
   <p>Este es el objeto "padre": el que el operador realmente lanza, con su propio
-  Survey (7.4) y su propio diagrama con los 4 nodos de 7.2 adentro.</p>
+  Survey (7.4) y su propio diagrama con los 5 nodos de 7.2 adentro.</p>
 
   <div class="step-title"><span class="stepnum">1</span><h3>Crear el objeto Workflow Job Template</h3></div>
   <p><strong>Resources → Templates → Add → Workflow Job Template</strong> (es un tipo
@@ -666,7 +705,7 @@ ANSIBLE_INVENTORY_PLUGINS: "/runner/project/&lt;CARPETA_DEL_PROJECT&gt;/inventor
   <strong>"Visualizer"</strong> (si no se abre solo, Templates → clic en el nombre
   del Workflow → pestaña Visualizer).</p>
 
-  <div class="step-title"><span class="stepnum">2</span><h3>Armar el diagrama: agregar y encadenar los 4 nodos</h3></div>
+  <div class="step-title"><span class="stepnum">2</span><h3>Armar el diagrama: agregar y encadenar los 5 nodos</h3></div>
   <p>El Visualizer arranca con un único recuadro llamado <strong>START</strong>. Todo
   se construye haciendo clic en el <strong>símbolo "+"</strong> que aparece sobre un
   recuadro ya puesto (empezando por START) para agregar el siguiente paso.</p>
@@ -700,6 +739,10 @@ ANSIBLE_INVENTORY_PLUGINS: "/runner/project/&lt;CARPETA_DEL_PROJECT&gt;/inventor
       enlace Nodo 3 → Nodo 4 → se abre un selector con 3 opciones (<strong>On
       Success</strong> / <strong>On Failure</strong> / <strong>Always</strong>) →
       elegir <strong>Always</strong> → Save.</li>
+    <li>Clic en el <strong>"+"</strong> sobre el Nodo 4 → elegir
+      <code>SLES Upgrade - 5 Sincronizar SharePoint</code> → Select → Save. Igual que
+      el enlace anterior, por defecto queda en "On Success" — <strong>cambiarlo a
+      Always</strong> de la misma forma (clic en la línea del enlace Nodo 4 → Nodo 5).</li>
     <li>Clic en <strong>"Save"</strong> (arriba del Visualizer, no el de cada nodo) para
       guardar el diagrama completo.</li>
   </ol>
@@ -709,12 +752,15 @@ ANSIBLE_INVENTORY_PLUGINS: "/runner/project/&lt;CARPETA_DEL_PROJECT&gt;/inventor
     <tr><td>Nodo 1 (Precheck) → Nodo 2 (Preparar repos)</td><td>On Success <span class="muted">(default, no tocar)</span></td></tr>
     <tr><td>Nodo 2 (Preparar repos) → [Approval opcional] → Nodo 3 (Aplicar)</td><td>On Success <span class="muted">(default, no tocar)</span></td></tr>
     <tr><td>Nodo 3 (Aplicar) → Nodo 4 (Reporting)</td><td><strong>Always</strong> <span class="muted">(hay que cambiarlo a mano — por defecto AWX pone "On Success")</span></td></tr>
+    <tr><td>Nodo 4 (Reporting) → Nodo 5 (Sincronizar SharePoint)</td><td><strong>Always</strong> <span class="muted">(igual, cambiar a mano)</span></td></tr>
   </table>
   <div class="callout decision">
-    <span class="label">Por qué el último enlace es "Always" y no "On Success"</span>
+    <span class="label">Por qué esos 2 últimos enlaces son "Always" y no "On Success"</span>
     Si el Nodo 3 falla, igual se quiere el resumen consolidado al día (para ver el
     fallo sin conectarse por SSH ni leer el log del Job) — "On Success" dejaría el
-    reporte desactualizado justo cuando más se necesita.
+    reporte desactualizado justo cuando más se necesita. Por la misma razón, el Nodo 5
+    debe sincronizar a SharePoint incluso cuando algo falló antes: el reporte de un
+    fallo es tan importante de tener disponible como el de un éxito.
   </div>
 
   <h3>7.4 Survey: se crea en el Workflow Job Template</h3>
@@ -735,7 +781,7 @@ ANSIBLE_INVENTORY_PLUGINS: "/runner/project/&lt;CARPETA_DEL_PROJECT&gt;/inventor
 
 <section class="main-section" id="s8">
   <div class="section-head"><div class="section-num">8</div><h2>Alternativa simplificada: un solo Job Template</h2></div>
-  <p>Mismo código, mismo Survey (sección 6) — sin las 4 etapas separadas ni el punto
+  <p>Mismo código, mismo Survey (sección 6) — sin las 5 etapas separadas ni el punto
   de aprobación intermedio. Útil para un laboratorio rápido o un ambiente donde no
   interesa el control granular del paso 7.</p>
   <p><strong>Resources → Templates → Add → Job Template</strong></p>

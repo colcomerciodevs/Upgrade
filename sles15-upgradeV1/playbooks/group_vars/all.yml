@@ -369,3 +369,29 @@ report_local_dir: "{{ playbook_dir }}/../reports"
 # el reporte HTML (bloque "Persistencia del reporte") para confirmar que la
 # copia fue exitosa en la primera ejecución real.
 report_destination: "/data/work/Salida_Upgrade"
+
+# ---------------------------------------------------------------------------
+# Sincronización de reportes hacia SharePoint (etapa 5 opcional del Workflow)
+# ---------------------------------------------------------------------------
+# playbooks/sync_sharepoint.yml sube hacia esta carpeta real de SharePoint
+# (dato real dado por el administrador, no inventado) los reportes YA
+# ESCRITOS en report_destination para el CRQ de la ejecución -- nunca
+# report_local_dir, que es efímero y puede no sobrevivir entre nodos
+# separados del Workflow (ver README, sección 11). Mismo sitio de
+# SharePoint que usa el inventario dinámico (inventory/linux_excel_inventory.yml),
+# pero una carpeta distinta.
+#
+# Requiere las MISMAS credenciales que el inventario dinámico
+# (TENANT_ID/CLIENT_ID/CLIENT_SECRET, Credential "SharePoint Excel
+# Inventory") adjuntas también a este Job Template -- ver docs/AWX_SETUP.html.
+#
+# PENDIENTE DE CONFIRMAR: que el App Registration de Azure AD usado para
+# esas credenciales tenga permiso de ESCRITURA en SharePoint
+# (Sites.ReadWrite.All), no solo lectura -- el inventario dinámico solo
+# necesitaba leer. No se puede verificar desde el desarrollo de este
+# proyecto; confirmar en la primera sincronización real.
+sharepoint_sync:
+  enabled: true
+  site_hostname: "colcomerciocom.sharepoint.com"
+  site_path: "/sites/AreaInfraestructura"
+  folder_path: "General/Reportes_Automatizacion/Upgrade_ServicePack_SLES"

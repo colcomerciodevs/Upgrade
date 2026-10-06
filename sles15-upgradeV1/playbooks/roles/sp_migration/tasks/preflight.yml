@@ -65,6 +65,13 @@
   when: sp_migration_preflight_supported
   block:
     - name: Asegurar que la CA interna esté instalada antes de usar repos Foreman reales (VALIDATE)
+      # Este archivo SÍ conserva su propia llamada (a diferencia de
+      # add_temp_repos.yml): upgrade_mode: validate NO pasa por
+      # roles/precheck/tasks/repos_reachability.yml (que ahora es el lugar
+      # donde PRECHECK asegura la CA) -- validate solo incluye sp_version.yml/
+      # repo_inventory.yml/critical_services.yml antes de llegar aquí. Sin
+      # esta llamada, un VALIDATE independiente en un host que nunca corrió
+      # PRECHECK antes fallaría por falta de confianza TLS.
       ansible.builtin.include_role:
         name: repo_management
         tasks_from: ensure_ca_trusted.yml

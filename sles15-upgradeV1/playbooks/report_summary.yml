@@ -23,6 +23,7 @@
   hosts: localhost
   connection: local
   gather_facts: false
+  become: false
   tasks:
     - name: Verificar si existe historial de ejecuciones (run_summary.jsonl)
       ansible.builtin.stat:

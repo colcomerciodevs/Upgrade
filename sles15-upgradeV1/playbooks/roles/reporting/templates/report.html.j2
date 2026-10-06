@@ -25,11 +25,11 @@
 
 <h1>Reporte de upgrade SLES 15 — {{ stage_report.hostname }}</h1>
 <p class="subtitle">Etapa: <strong>{{ stage_report.stage }}</strong> · Acción solicitada: {{ stage_report.action }} · Fase: <strong>{{ stage_report.phase | default('both') }}</strong> · Generado: {{ stage_report.finished_at | default('N/D') }}</p>
-{% if stage_report.phase == 'prepare' %}
+{% if (stage_report.phase | default('')) == 'prepare' %}
 <p class="muted">Esta corrida solo PREPARÓ los repositorios (updatestack real + repos de destino habilitados) — no ejecutó dup -D, dup, ni reinicio. Ejecute la fase "apply" para continuar con la migración real.</p>
-{% elif stage_report.phase == 'apply' %}
+{% elif (stage_report.phase | default('')) == 'apply' %}
 <p class="muted">Esta corrida asume que una fase "prepare" previa ya dejó los repos de destino habilitados; no repite backup/deshabilitar preexistentes/updatestack (ver esos datos en el reporte de esa fase anterior).</p>
-{% elif stage_report.phase == 'skip' %}
+{% elif (stage_report.phase | default('')) == 'skip' %}
 <p class="muted">upgrade_mode=full con fase=prepare: esta etapa no modificó nada — full prepara y aplica cada salto internamente al ejecutar la fase "apply"/"both".</p>
 {% endif %}
 

@@ -324,9 +324,9 @@ add_box(s, "VALIDATE\n\n¿Funcionaría la migración\nahora mismo?", x0 + col_w 
 add_box(s, "UPGRADE\n\nEjecución real,\ncon cambios", x0 + 2 * (col_w + gap), top, col_w, h, fill=NAVY, size=16)
 
 add_bullets(s, [
-    "PRECHECK nunca modifica nada: revisa salud del servidor y su preparación.",
-    "VALIDATE hace un ensayo real contra los repositorios Foreman, sin dejar ningún cambio permanente en el servidor.",
-    "Solo UPGRADE modifica el servidor, y únicamente tras una confirmación explícita adicional.",
+    "PRECHECK revisa salud del servidor y su preparación; no modifica repositorios ni paquetes (única excepción: puede instalar la CA interna si todavía no está presente, operación idempotente).",
+    "VALIDATE hace un ensayo real contra los repositorios Foreman, sin dejar ningún cambio permanente en el servidor (misma excepción de la CA interna).",
+    "Solo UPGRADE modifica repositorios y paquetes del servidor, y únicamente tras una confirmación explícita adicional.",
     "Estos tres niveles no son intercambiables: nunca se presenta un ensayo como si fuera la ejecución real, ni al revés.",
 ], top=Inches(3.4), size=16)
 add_footer(s, "ansible-sles-upgrade · Presentación ejecutiva")

@@ -114,7 +114,9 @@
           playbooks/group_vars/all.yml para el significado de cada valor.
 
     # -----------------------------------------------------------------
-    # MODO: precheck (independiente, no modifica nada)
+    # MODO: precheck (independiente; de solo lectura salvo una excepción
+    # documentada: puede instalar la CA interna si todavía no está
+    # presente, ver roles/precheck/tasks/repos_reachability.yml)
     # -----------------------------------------------------------------
     - name: "Modo precheck"
       when: upgrade_mode == 'precheck'
@@ -432,7 +434,7 @@
         msg: >-
           El host {{ inventory_hostname }} terminó con estado {{ host_overall_status }}
           para upgrade_mode={{ upgrade_mode }}. Revise el reporte HTML/JSON en
-          {{ report_local_dir }}/{{ inventory_hostname }}/ para el detalle exacto.
+          {{ _report_stage_dir | default(report_local_dir ~ '/' ~ inventory_hostname) }}/ para el detalle exacto.
       when: host_overall_status in ['FAILED', 'NOT_CHECKED']
 
 # =============================================================================

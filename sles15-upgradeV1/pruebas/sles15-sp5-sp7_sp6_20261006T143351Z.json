@@ -1,0 +1,393 @@
+{
+    "action": "sp5_to_sp6",
+    "ambiente": "pruebas",
+    "critical_services_after": [],
+    "critical_services_before": [],
+    "crq": "RFC 2026-PRUEBA",
+    "failure_stage": "precheck",
+    "finished_at": "2026-10-06T14:33:51Z",
+    "fqdn": "suse15-sp5-sp7",
+    "geopos_after": {
+        "categories": {},
+        "critical_unhealthy": false,
+        "enabled": false,
+        "overall_status": "NOT_CHECKED"
+    },
+    "geopos_before": {
+        "categories": {
+            "health_checks": {
+                "category_status": "NOT_CHECKED",
+                "enabled": false,
+                "items": []
+            },
+            "java_processes": {
+                "category_status": "OK",
+                "enabled": true,
+                "items": []
+            },
+            "services": {
+                "category_status": "OK",
+                "enabled": true,
+                "items": []
+            },
+            "tcp_ports": {
+                "category_status": "OK",
+                "enabled": true,
+                "items": []
+            }
+        },
+        "critical_unhealthy": false,
+        "enabled": true,
+        "overall_status": "OK",
+        "phase": "before"
+    },
+    "hostname": "sles15-sp5-sp7",
+    "kernel_antes": "5.14.21-150500.55.52-default",
+    "kernel_despues": "N/A (sin migraci\u00f3n real aplicada en esta etapa)",
+    "lote": "Lote_1",
+    "migration": {},
+    "phase": "both",
+    "precheck": {
+        "checks": [
+            {
+                "detail": "SLES 15.5",
+                "name": "distribucion_sistema_operativo",
+                "status": "OK"
+            },
+            {
+                "detail": "host=suse15-sp5-sp7 arch=x86_64 kernel=5.14.21-150500.55.52-default uptime_s=73625",
+                "name": "informacion_sistema",
+                "status": "OK"
+            },
+            {
+                "detail": "actual=sp5 esperado=sp5 objetivo=sp6",
+                "name": "service_pack_actual",
+                "status": "OK"
+            },
+            {
+                "detail": "os-release VERSION_ID=15.5 / zypper products version=15.5",
+                "name": "service_pack_doble_evidencia",
+                "status": "OK"
+            },
+            {
+                "detail": "gather_facts exitoso",
+                "name": "conectividad_ansible",
+                "status": "OK"
+            },
+            {
+                "detail": "usuario efectivo=root",
+                "name": "privilegios_escalamiento",
+                "status": "OK"
+            },
+            {
+                "detail": "/usr/bin/zypper",
+                "name": "disponibilidad_zypper",
+                "status": "OK"
+            },
+            {
+                "detail": "",
+                "name": "locks_zypper_rpm_libzypp",
+                "status": "OK"
+            },
+            {
+                "detail": "precheck_disk_checks vac\u00edo; definir umbrales reales por filesystem antes de producci\u00f3n",
+                "name": "espacio_disco_filesystems",
+                "status": "NOT_CHECKED"
+            },
+            {
+                "detail": "la ra\u00edz no usa Btrfs (fstype=xfs)",
+                "name": "espacio_btrfs_doble",
+                "status": "NOT_CHECKED"
+            },
+            {
+                "detail": "Basesystem-Module_15.5-0=False, Basesystem_Module_15_SP5_x86_64:SLE-Module-Basesystem15-SP5-Debuginfo-Pool=False, Basesystem_Module_15_SP5_x86_64:SLE-Module-Basesystem15-SP5-Debuginfo-Updates=False, Basesystem_Module_15_SP5_x86_64:SLE-Module-Basesystem15-SP5-Pool=True, Basesystem_Module_15_SP5_x86_64:SLE-Module-Basesystem15-SP5-Source-Pool=False, Basesystem_Module_15_SP5_x86_64:SLE-Module-Basesystem15-SP5-Updates=True, Desktop-Applications-Module_15.5-0=False, Python_3_Module_15_SP5_x86_64:SLE-Module-Python3-15-SP5-Debuginfo-Pool=False, Python_3_Module_15_SP5_x86_64:SLE-Module-Python3-15-SP5-Debuginfo-Updates=False, Python_3_Module_15_SP5_x86_64:SLE-Module-Python3-15-SP5-Pool=True, Python_3_Module_15_SP5_x86_64:SLE-Module-Python3-15-SP5-Source-Pool=False, Python_3_Module_15_SP5_x86_64:SLE-Module-Python3-15-SP5-Updates=True, SLES15-SP5-15.5-0=False, SUSE_Linux_Enterprise_Server_15_SP5_x86_64:SLE-Product-SLES15-SP5-Debuginfo-Pool=False, SUSE_Linux_Enterprise_Server_15_SP5_x86_64:SLE-Product-SLES15-SP5-Debuginfo-Updates=False, SUSE_Linux_Enterprise_Server_15_SP5_x86_64:SLE-Product-SLES15-SP5-Pool=True, SUSE_Linux_Enterprise_Server_15_SP5_x86_64:SLE-Product-SLES15-SP5-Source-Pool=False, SUSE_Linux_Enterprise_Server_15_SP5_x86_64:SLE-Product-SLES15-SP5-Updates=True, Server-Applications-Module_15.5-0=False, Server_Applications_Module_15_SP5_x86_64:SLE-Module-Server-Applications15-SP5-Debuginfo-Pool=False, Server_Applications_Module_15_SP5_x86_64:SLE-Module-Server-Applications15-SP5-Debuginfo-Updates=False, Server_Applications_Module_15_SP5_x86_64:SLE-Module-Server-Applications15-SP5-Pool=True, Server_Applications_Module_15_SP5_x86_64:SLE-Module-Server-Applications15-SP5-Source-Pool=False, Server_Applications_Module_15_SP5_x86_64:SLE-Module-Server-Applications15-SP5-Updates=True",
+                "name": "inventario_repositorios",
+                "status": "OK"
+            },
+            {
+                "detail": "permanent_repos vac\u00edo; no es posible determinar qu\u00e9 repos son esperados. Repos actuales: Basesystem-Module_15.5-0, Basesystem_Module_15_SP5_x86_64:SLE-Module-Basesystem15-SP5-Debuginfo-Pool, Basesystem_Module_15_SP5_x86_64:SLE-Module-Basesystem15-SP5-Debuginfo-Updates, Basesystem_Module_15_SP5_x86_64:SLE-Module-Basesystem15-SP5-Pool, Basesystem_Module_15_SP5_x86_64:SLE-Module-Basesystem15-SP5-Source-Pool, Basesystem_Module_15_SP5_x86_64:SLE-Module-Basesystem15-SP5-Updates, Desktop-Applications-Module_15.5-0, Python_3_Module_15_SP5_x86_64:SLE-Module-Python3-15-SP5-Debuginfo-Pool, Python_3_Module_15_SP5_x86_64:SLE-Module-Python3-15-SP5-Debuginfo-Updates, Python_3_Module_15_SP5_x86_64:SLE-Module-Python3-15-SP5-Pool, Python_3_Module_15_SP5_x86_64:SLE-Module-Python3-15-SP5-Source-Pool, Python_3_Module_15_SP5_x86_64:SLE-Module-Python3-15-SP5-Updates, SLES15-SP5-15.5-0, SUSE_Linux_Enterprise_Server_15_SP5_x86_64:SLE-Product-SLES15-SP5-Debuginfo-Pool, SUSE_Linux_Enterprise_Server_15_SP5_x86_64:SLE-Product-SLES15-SP5-Debuginfo-Updates, SUSE_Linux_Enterprise_Server_15_SP5_x86_64:SLE-Product-SLES15-SP5-Pool, SUSE_Linux_Enterprise_Server_15_SP5_x86_64:SLE-Product-SLES15-SP5-Source-Pool, SUSE_Linux_Enterprise_Server_15_SP5_x86_64:SLE-Product-SLES15-SP5-Updates, Server-Applications-Module_15.5-0, Server_Applications_Module_15_SP5_x86_64:SLE-Module-Server-Applications15-SP5-Debuginfo-Pool, Server_Applications_Module_15_SP5_x86_64:SLE-Module-Server-Applications15-SP5-Debuginfo-Updates, Server_Applications_Module_15_SP5_x86_64:SLE-Module-Server-Applications15-SP5-Pool, Server_Applications_Module_15_SP5_x86_64:SLE-Module-Server-Applications15-SP5-Source-Pool, Server_Applications_Module_15_SP5_x86_64:SLE-Module-Server-Applications15-SP5-Updates",
+                "name": "repositorios_no_esperados",
+                "status": "NOT_CHECKED"
+            },
+            {
+                "detail": "sin repos de preparaci\u00f3n pendientes",
+                "name": "repos_preparacion_pendiente",
+                "status": "OK"
+            },
+            {
+                "detail": "katello.sp5_repositories: 10 repo(s) configurados",
+                "name": "repos_foreman_configurados_origen",
+                "status": "OK"
+            },
+            {
+                "detail": "katello.sp6_repositories: 10 repo(s) configurados",
+                "name": "repos_foreman_configurados_destino",
+                "status": "OK"
+            },
+            {
+                "detail": "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/SUSE_Linux_Enterprise_Server_15_SP5_x86_64_id_2465_/2465_SLE-Product-SLES15-SP5-Pool_for_sle-15-x86_64/ -> sin respuesta HTTP: Status code was -1 and not [200, 201, 204, 301, 302, 400, 401, 403, 404, 500, 502, 503]: Request failed: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed (_ssl.c:852)>",
+                "name": "endpoint_alcanzable_origen_SLE-Product-SLES15-SP5-Pool",
+                "status": "FAILED"
+            },
+            {
+                "detail": "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/SUSE_Linux_Enterprise_Server_15_SP5_x86_64_id_2465_/2465_SLE-Product-SLES15-SP5-Updates_for_sle-15-x86_64/ -> sin respuesta HTTP: Status code was -1 and not [200, 201, 204, 301, 302, 400, 401, 403, 404, 500, 502, 503]: Request failed: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed (_ssl.c:852)>",
+                "name": "endpoint_alcanzable_origen_SLE-Product-SLES15-SP5-Updates",
+                "status": "FAILED"
+            },
+            {
+                "detail": "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Basesystem_Module_15_SP5_x86_64_id_2474_/2474_SLE-Module-Basesystem15-SP5-Pool_for_sle-15-x86_64/ -> sin respuesta HTTP: Status code was -1 and not [200, 201, 204, 301, 302, 400, 401, 403, 404, 500, 502, 503]: Request failed: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed (_ssl.c:852)>",
+                "name": "endpoint_alcanzable_origen_SLE-Module-Basesystem15-SP5-Pool",
+                "status": "FAILED"
+            },
+            {
+                "detail": "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Basesystem_Module_15_SP5_x86_64_id_2474_/2474_SLE-Module-Basesystem15-SP5-Updates_for_sle-15-x86_64/ -> sin respuesta HTTP: Status code was -1 and not [200, 201, 204, 301, 302, 400, 401, 403, 404, 500, 502, 503]: Request failed: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed (_ssl.c:852)>",
+                "name": "endpoint_alcanzable_origen_SLE-Module-Basesystem15-SP5-Updates",
+                "status": "FAILED"
+            },
+            {
+                "detail": "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Server_Applications_Module_15_SP5_x86_64_id_2482_/2482_SLE-Module-Server-Applications15-SP5-Pool_for_sle-15-x86_64/ -> sin respuesta HTTP: Status code was -1 and not [200, 201, 204, 301, 302, 400, 401, 403, 404, 500, 502, 503]: Request failed: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed (_ssl.c:852)>",
+                "name": "endpoint_alcanzable_origen_SLE-Module-Server-Applications15-SP5-Pool",
+                "status": "FAILED"
+            },
+            {
+                "detail": "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Server_Applications_Module_15_SP5_x86_64_id_2482_/2482_SLE-Module-Server-Applications15-SP5-Updates_for_sle-15-x86_64/ -> sin respuesta HTTP: Status code was -1 and not [200, 201, 204, 301, 302, 400, 401, 403, 404, 500, 502, 503]: Request failed: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed (_ssl.c:852)>",
+                "name": "endpoint_alcanzable_origen_SLE-Module-Server-Applications15-SP5-Updates",
+                "status": "FAILED"
+            },
+            {
+                "detail": "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Desktop_Applications_Module_15_SP5_x86_64_id_2478_/2478_SLE-Module-Desktop-Applications15-SP5-Pool_for_sle-15-x86_64/ -> sin respuesta HTTP: Status code was -1 and not [200, 201, 204, 301, 302, 400, 401, 403, 404, 500, 502, 503]: Request failed: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed (_ssl.c:852)>",
+                "name": "endpoint_alcanzable_origen_SLE-Module-Desktop-Applications15-SP5-Pool",
+                "status": "FAILED"
+            },
+            {
+                "detail": "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Desktop_Applications_Module_15_SP5_x86_64_id_2478_/2478_SLE-Module-Desktop-Applications15-SP5-Updates_for_sle-15-x86_64/ -> sin respuesta HTTP: Status code was -1 and not [200, 201, 204, 301, 302, 400, 401, 403, 404, 500, 502, 503]: Request failed: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed (_ssl.c:852)>",
+                "name": "endpoint_alcanzable_origen_SLE-Module-Desktop-Applications15-SP5-Updates",
+                "status": "FAILED"
+            },
+            {
+                "detail": "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Python_3_Module_15_SP5_x86_64_id_2536_/2536_SLE-Module-Python3-15-SP5-Pool_for_sle-15-x86_64/ -> sin respuesta HTTP: Status code was -1 and not [200, 201, 204, 301, 302, 400, 401, 403, 404, 500, 502, 503]: Request failed: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed (_ssl.c:852)>",
+                "name": "endpoint_alcanzable_origen_SLE-Module-Python3-15-SP5-Pool",
+                "status": "FAILED"
+            },
+            {
+                "detail": "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Python_3_Module_15_SP5_x86_64_id_2536_/2536_SLE-Module-Python3-15-SP5-Updates_for_sle-15-x86_64/ -> sin respuesta HTTP: Status code was -1 and not [200, 201, 204, 301, 302, 400, 401, 403, 404, 500, 502, 503]: Request failed: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed (_ssl.c:852)>",
+                "name": "endpoint_alcanzable_origen_SLE-Module-Python3-15-SP5-Updates",
+                "status": "FAILED"
+            },
+            {
+                "detail": "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/SUSE_Linux_Enterprise_Server_15_SP6_x86_64_id_2609_/2609_SLE-Product-SLES15-SP6-Pool_for_sle-15-x86_64/ -> sin respuesta HTTP: Status code was -1 and not [200, 201, 204, 301, 302, 400, 401, 403, 404, 500, 502, 503]: Request failed: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed (_ssl.c:852)>",
+                "name": "endpoint_alcanzable_destino_SLE-Product-SLES15-SP6-Pool",
+                "status": "FAILED"
+            },
+            {
+                "detail": "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/SUSE_Linux_Enterprise_Server_15_SP6_x86_64_id_2609_/2609_SLE-Product-SLES15-SP6-Updates_for_sle-15-x86_64/ -> sin respuesta HTTP: Status code was -1 and not [200, 201, 204, 301, 302, 400, 401, 403, 404, 500, 502, 503]: Request failed: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed (_ssl.c:852)>",
+                "name": "endpoint_alcanzable_destino_SLE-Product-SLES15-SP6-Updates",
+                "status": "FAILED"
+            },
+            {
+                "detail": "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Basesystem_Module_15_SP6_x86_64_id_2618_/2618_SLE-Module-Basesystem15-SP6-Pool_for_sle-15-x86_64/ -> sin respuesta HTTP: Status code was -1 and not [200, 201, 204, 301, 302, 400, 401, 403, 404, 500, 502, 503]: Request failed: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed (_ssl.c:852)>",
+                "name": "endpoint_alcanzable_destino_SLE-Module-Basesystem15-SP6-Pool",
+                "status": "FAILED"
+            },
+            {
+                "detail": "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Basesystem_Module_15_SP6_x86_64_id_2618_/2618_SLE-Module-Basesystem15-SP6-Updates_for_sle-15-x86_64/ -> sin respuesta HTTP: Status code was -1 and not [200, 201, 204, 301, 302, 400, 401, 403, 404, 500, 502, 503]: Request failed: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed (_ssl.c:852)>",
+                "name": "endpoint_alcanzable_destino_SLE-Module-Basesystem15-SP6-Updates",
+                "status": "FAILED"
+            },
+            {
+                "detail": "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Server_Applications_Module_15_SP6_x86_64_id_2626_/2626_SLE-Module-Server-Applications15-SP6-Pool_for_sle-15-x86_64/ -> sin respuesta HTTP: Status code was -1 and not [200, 201, 204, 301, 302, 400, 401, 403, 404, 500, 502, 503]: Request failed: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed (_ssl.c:852)>",
+                "name": "endpoint_alcanzable_destino_SLE-Module-Server-Applications15-SP6-Pool",
+                "status": "FAILED"
+            },
+            {
+                "detail": "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Server_Applications_Module_15_SP6_x86_64_id_2626_/2626_SLE-Module-Server-Applications15-SP6-Updates_for_sle-15-x86_64/ -> sin respuesta HTTP: Status code was -1 and not [200, 201, 204, 301, 302, 400, 401, 403, 404, 500, 502, 503]: Request failed: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed (_ssl.c:852)>",
+                "name": "endpoint_alcanzable_destino_SLE-Module-Server-Applications15-SP6-Updates",
+                "status": "FAILED"
+            },
+            {
+                "detail": "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Desktop_Applications_Module_15_SP6_x86_64_id_2622_/2622_SLE-Module-Desktop-Applications15-SP6-Pool_for_sle-15-x86_64/ -> sin respuesta HTTP: Status code was -1 and not [200, 201, 204, 301, 302, 400, 401, 403, 404, 500, 502, 503]: Request failed: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed (_ssl.c:852)>",
+                "name": "endpoint_alcanzable_destino_SLE-Module-Desktop-Applications15-SP6-Pool",
+                "status": "FAILED"
+            },
+            {
+                "detail": "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Desktop_Applications_Module_15_SP6_x86_64_id_2622_/2622_SLE-Module-Desktop-Applications15-SP6-Updates_for_sle-15-x86_64/ -> sin respuesta HTTP: Status code was -1 and not [200, 201, 204, 301, 302, 400, 401, 403, 404, 500, 502, 503]: Request failed: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed (_ssl.c:852)>",
+                "name": "endpoint_alcanzable_destino_SLE-Module-Desktop-Applications15-SP6-Updates",
+                "status": "FAILED"
+            },
+            {
+                "detail": "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Python_3_Module_15_SP6_x86_64_id_2683_/2683_SLE-Module-Python3-15-SP6-Pool_for_sle-15-x86_64/ -> sin respuesta HTTP: Status code was -1 and not [200, 201, 204, 301, 302, 400, 401, 403, 404, 500, 502, 503]: Request failed: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed (_ssl.c:852)>",
+                "name": "endpoint_alcanzable_destino_SLE-Module-Python3-15-SP6-Pool",
+                "status": "FAILED"
+            },
+            {
+                "detail": "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Python_3_Module_15_SP6_x86_64_id_2683_/2683_SLE-Module-Python3-15-SP6-Updates_for_sle-15-x86_64/ -> sin respuesta HTTP: Status code was -1 and not [200, 201, 204, 301, 302, 400, 401, 403, 404, 500, 502, 503]: Request failed: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed (_ssl.c:852)>",
+                "name": "endpoint_alcanzable_destino_SLE-Module-Python3-15-SP6-Updates",
+                "status": "FAILED"
+            },
+            {
+                "detail": "critical_services vac\u00edo",
+                "name": "servicios_criticos",
+                "status": "OK"
+            },
+            {
+                "detail": "GeoPOS saludable u OK",
+                "name": "geopos_precheck_gate",
+                "status": "OK"
+            }
+        ],
+        "overall_status": "FAILED",
+        "repo_inventory": [
+            {
+                "alias": "Basesystem-Module_15.5-0",
+                "enabled": false,
+                "name": "sle-module-basesystem"
+            },
+            {
+                "alias": "Basesystem_Module_15_SP5_x86_64:SLE-Module-Basesystem15-SP5-Debuginfo-Pool",
+                "enabled": false,
+                "name": "SLE-Module-Basesystem15-SP5-Debuginfo-Pool"
+            },
+            {
+                "alias": "Basesystem_Module_15_SP5_x86_64:SLE-Module-Basesystem15-SP5-Debuginfo-Updates",
+                "enabled": false,
+                "name": "SLE-Module-Basesystem15-SP5-Debuginfo-Updates"
+            },
+            {
+                "alias": "Basesystem_Module_15_SP5_x86_64:SLE-Module-Basesystem15-SP5-Pool",
+                "enabled": true,
+                "name": "SLE-Module-Basesystem15-SP5-Pool"
+            },
+            {
+                "alias": "Basesystem_Module_15_SP5_x86_64:SLE-Module-Basesystem15-SP5-Source-Pool",
+                "enabled": false,
+                "name": "SLE-Module-Basesystem15-SP5-Source-Pool"
+            },
+            {
+                "alias": "Basesystem_Module_15_SP5_x86_64:SLE-Module-Basesystem15-SP5-Updates",
+                "enabled": true,
+                "name": "SLE-Module-Basesystem15-SP5-Updates"
+            },
+            {
+                "alias": "Desktop-Applications-Module_15.5-0",
+                "enabled": false,
+                "name": "sle-module-desktop-applications"
+            },
+            {
+                "alias": "Python_3_Module_15_SP5_x86_64:SLE-Module-Python3-15-SP5-Debuginfo-Pool",
+                "enabled": false,
+                "name": "SLE-Module-Python3-15-SP5-Debuginfo-Pool"
+            },
+            {
+                "alias": "Python_3_Module_15_SP5_x86_64:SLE-Module-Python3-15-SP5-Debuginfo-Updates",
+                "enabled": false,
+                "name": "SLE-Module-Python3-15-SP5-Debuginfo-Updates"
+            },
+            {
+                "alias": "Python_3_Module_15_SP5_x86_64:SLE-Module-Python3-15-SP5-Pool",
+                "enabled": true,
+                "name": "SLE-Module-Python3-15-SP5-Pool"
+            },
+            {
+                "alias": "Python_3_Module_15_SP5_x86_64:SLE-Module-Python3-15-SP5-Source-Pool",
+                "enabled": false,
+                "name": "SLE-Module-Python3-15-SP5-Source-Pool"
+            },
+            {
+                "alias": "Python_3_Module_15_SP5_x86_64:SLE-Module-Python3-15-SP5-Updates",
+                "enabled": true,
+                "name": "SLE-Module-Python3-15-SP5-Updates"
+            },
+            {
+                "alias": "SLES15-SP5-15.5-0",
+                "enabled": false,
+                "name": "SLES15-SP5-15.5-0"
+            },
+            {
+                "alias": "SUSE_Linux_Enterprise_Server_15_SP5_x86_64:SLE-Product-SLES15-SP5-Debuginfo-Pool",
+                "enabled": false,
+                "name": "SLE-Product-SLES15-SP5-Debuginfo-Pool"
+            },
+            {
+                "alias": "SUSE_Linux_Enterprise_Server_15_SP5_x86_64:SLE-Product-SLES15-SP5-Debuginfo-Updates",
+                "enabled": false,
+                "name": "SLE-Product-SLES15-SP5-Debuginfo-Updates"
+            },
+            {
+                "alias": "SUSE_Linux_Enterprise_Server_15_SP5_x86_64:SLE-Product-SLES15-SP5-Pool",
+                "enabled": true,
+                "name": "SLE-Product-SLES15-SP5-Pool"
+            },
+            {
+                "alias": "SUSE_Linux_Enterprise_Server_15_SP5_x86_64:SLE-Product-SLES15-SP5-Source-Pool",
+                "enabled": false,
+                "name": "SLE-Product-SLES15-SP5-Source-Pool"
+            },
+            {
+                "alias": "SUSE_Linux_Enterprise_Server_15_SP5_x86_64:SLE-Product-SLES15-SP5-Updates",
+                "enabled": true,
+                "name": "SLE-Product-SLES15-SP5-Updates"
+            },
+            {
+                "alias": "Server-Applications-Module_15.5-0",
+                "enabled": false,
+                "name": "sle-module-server-applications"
+            },
+            {
+                "alias": "Server_Applications_Module_15_SP5_x86_64:SLE-Module-Server-Applications15-SP5-Debuginfo-Pool",
+                "enabled": false,
+                "name": "SLE-Module-Server-Applications15-SP5-Debuginfo-Pool"
+            },
+            {
+                "alias": "Server_Applications_Module_15_SP5_x86_64:SLE-Module-Server-Applications15-SP5-Debuginfo-Updates",
+                "enabled": false,
+                "name": "SLE-Module-Server-Applications15-SP5-Debuginfo-Updates"
+            },
+            {
+                "alias": "Server_Applications_Module_15_SP5_x86_64:SLE-Module-Server-Applications15-SP5-Pool",
+                "enabled": true,
+                "name": "SLE-Module-Server-Applications15-SP5-Pool"
+            },
+            {
+                "alias": "Server_Applications_Module_15_SP5_x86_64:SLE-Module-Server-Applications15-SP5-Source-Pool",
+                "enabled": false,
+                "name": "SLE-Module-Server-Applications15-SP5-Source-Pool"
+            },
+            {
+                "alias": "Server_Applications_Module_15_SP5_x86_64:SLE-Module-Server-Applications15-SP5-Updates",
+                "enabled": true,
+                "name": "SLE-Module-Server-Applications15-SP5-Updates"
+            }
+        ],
+        "target_sp": "sp6"
+    },
+    "preflight": {},
+    "reboot": {},
+    "repos": {
+        "backup_dir": "N/A",
+        "cleanup_note": "conservados para diagn\u00f3stico (cleanup_repositories_on_failure=false)",
+        "final_inventory_detail": "inventario final confiable (8 repo(s) habilitado(s))",
+        "final_inventory_status": "OK",
+        "phase_note": "",
+        "repos_disabled_before": [],
+        "repos_disabled_by_upgrade": [],
+        "repos_enabled_after": [
+            "Basesystem_Module_15_SP5_x86_64:SLE-Module-Basesystem15-SP5-Pool",
+            "Basesystem_Module_15_SP5_x86_64:SLE-Module-Basesystem15-SP5-Updates",
+            "Python_3_Module_15_SP5_x86_64:SLE-Module-Python3-15-SP5-Pool",
+            "Python_3_Module_15_SP5_x86_64:SLE-Module-Python3-15-SP5-Updates",
+            "SUSE_Linux_Enterprise_Server_15_SP5_x86_64:SLE-Product-SLES15-SP5-Pool",
+            "SUSE_Linux_Enterprise_Server_15_SP5_x86_64:SLE-Product-SLES15-SP5-Updates",
+            "Server_Applications_Module_15_SP5_x86_64:SLE-Module-Server-Applications15-SP5-Pool",
+            "Server_Applications_Module_15_SP5_x86_64:SLE-Module-Server-Applications15-SP5-Updates"
+        ],
+        "repos_enabled_before": [],
+        "repos_temporary_created": [],
+        "repos_temporary_removed": []
+    },
+    "sp_final": "sp5",
+    "sp_inicial": "sp5",
+    "sp_objetivo": "sp6",
+    "stage": "sp6",
+    "started_at": "2026-10-06T14:33:07Z",
+    "status": "FAILED"
+}

@@ -21,9 +21,30 @@
   ansible.builtin.set_fact:
     _report_timestamp: "{{ lookup('pipe', 'date -u +%Y%m%dT%H%M%SZ') }}"
 
-- name: Asegurar directorio local de reportes para este host
+- name: Calcular carpeta de etapa legible (acción + fase, cuando la fase no es "both")
+  # "both" (todo en una sola corrida, el comportamiento de siempre) no se
+  # agrega al nombre para no generar una carpeta "sp6_both" cuando no hay
+  # ninguna fase real que distinguir -- ver playbooks/group_vars/all.yml
+  # para los valores posibles de upgrade_phase.
+  ansible.builtin.set_fact:
+    _report_stage_folder: >-
+      {{
+        stage_report.action
+        if (stage_report.phase | default('both')) in ['both', '']
+        else (stage_report.action ~ '_' ~ stage_report.phase)
+      }}
+
+- name: Calcular carpeta RFC/CRQ segura para el nombre de directorio (sin espacios ni caracteres especiales)
+  ansible.builtin.set_fact:
+    _report_crq_folder: "{{ (stage_report.crq | default('') | trim | length > 0) | ternary(stage_report.crq | trim | regex_replace('[^A-Za-z0-9_-]', '_'), 'SIN_CRQ') }}"
+
+- name: Calcular ruta base del reporte de esta etapa (RFC/CRQ -> hostname -> etapa)
+  ansible.builtin.set_fact:
+    _report_stage_dir: "{{ report_local_dir }}/{{ _report_crq_folder }}/{{ inventory_hostname }}/{{ _report_stage_folder }}"
+
+- name: Asegurar el directorio local del reporte (RFC/CRQ -> hostname -> etapa)
   ansible.builtin.file:
-    path: "{{ report_local_dir }}/{{ inventory_hostname }}"
+    path: "{{ _report_stage_dir }}"
     state: directory
     mode: "0755"
   delegate_to: localhost
@@ -32,7 +53,7 @@
 - name: Renderizar reporte HTML de la etapa
   ansible.builtin.template:
     src: report.html.j2
-    dest: "{{ report_local_dir }}/{{ inventory_hostname }}/{{ stage_report.stage }}_{{ _report_timestamp }}.html"
+    dest: "{{ _report_stage_dir }}/{{ _report_stage_folder }}_{{ _report_timestamp }}.html"
     mode: "0644"
   delegate_to: localhost
   become: false
@@ -40,7 +61,7 @@
 - name: Guardar reporte en formato JSON (para el resumen consolidado y auditoría)
   ansible.builtin.copy:
     content: "{{ stage_report | to_nice_json }}"
-    dest: "{{ report_local_dir }}/{{ inventory_hostname }}/{{ stage_report.stage }}_{{ _report_timestamp }}.json"
+    dest: "{{ _report_stage_dir }}/{{ _report_stage_folder }}_{{ _report_timestamp }}.json"
     mode: "0644"
   delegate_to: localhost
   become: false
@@ -55,7 +76,7 @@
         'action': stage_report.action,
         'status': stage_report.status,
         'timestamp': _report_timestamp,
-        'report_html': (report_local_dir ~ '/' ~ inventory_hostname ~ '/' ~ stage_report.stage ~ '_' ~ _report_timestamp ~ '.html')
+        'report_html': (_report_stage_dir ~ '/' ~ _report_stage_folder ~ '_' ~ _report_timestamp ~ '.html')
       } | to_json }}
     create: true
     insertafter: EOF
@@ -63,10 +84,28 @@
   delegate_to: localhost
   become: false
 
+- name: Asegurar el subdirectorio RFC/CRQ -> hostname -> etapa en el destino persistente, si ya está configurado
+  # "copy" (tarea siguiente) no crea directorios padre inexistentes -- a
+  # diferencia de antes (un solo archivo plano directamente en
+  # report_destination), ahora hace falta crear este árbol de carpetas
+  # explícitamente. Tolerante a fallo (igual que la copia): si
+  # report_destination no existe o no tiene permisos, esto no detiene la
+  # ejecución -- la copia de abajo fallará igual y quedará advertida.
+  ansible.builtin.file:
+    path: "{{ report_destination }}/{{ _report_crq_folder }}/{{ inventory_hostname }}/{{ _report_stage_folder }}"
+    state: directory
+    mode: "0755"
+  delegate_to: localhost
+  become: false
+  when: not (report_destination is search('CHANGE_ME'))
+  failed_when: false
+
 - name: Copiar el reporte HTML y JSON al destino persistente definitivo, si ya está configurado
+  # Mismo árbol RFC/CRQ -> hostname -> etapa que en report_local_dir (ver
+  # arriba), para que report_destination quede organizado igual.
   ansible.builtin.copy:
-    src: "{{ report_local_dir }}/{{ inventory_hostname }}/{{ stage_report.stage }}_{{ _report_timestamp }}.{{ item }}"
-    dest: "{{ report_destination }}/{{ inventory_hostname }}_{{ stage_report.stage }}_{{ _report_timestamp }}.{{ item }}"
+    src: "{{ _report_stage_dir }}/{{ _report_stage_folder }}_{{ _report_timestamp }}.{{ item }}"
+    dest: "{{ report_destination }}/{{ _report_crq_folder }}/{{ inventory_hostname }}/{{ _report_stage_folder }}/{{ _report_stage_folder }}_{{ _report_timestamp }}.{{ item }}"
     remote_src: true
     mode: "0644"
   loop: ["html", "json"]

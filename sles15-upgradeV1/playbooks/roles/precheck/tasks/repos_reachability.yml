@@ -66,13 +66,24 @@
         else ('katello.' ~ phase.sp ~ '_repositories: ' ~ (phase.repos | length | string) ~ ' repo(s) configurados')))
       }}
 
-- name: Verificar si el archivo de ca_certificate_path ya existe en este host
-  # Evita pasarle a "uri" una ca_path inexistente (el módulo fallaría duro
-  # en vez de degradar limpiamente): si la CA interna todavía no se instaló
-  # en este host (ver ensure_ca_trusted.yml, que corre en VALIDATE/UPGRADE,
-  # no en PRECHECK), se omite y el sistema usa su almacén de confianza por
-  # defecto -- un fallo real de TLS se sigue clasificando correctamente más
-  # abajo (nunca se oculta).
+- name: Asegurar que la CA interna esté instalada antes de probar conectividad HTTPS real
+  # Decisión explícita del usuario para este ambiente: PRECHECK instala
+  # aquí la CA interna ("CAColdecom") -- operación idempotente y no
+  # destructiva (ver roles/repo_management/tasks/ensure_ca_trusted.yml:
+  # solo agrega una CA de confianza si no está presente; no reinicia nada,
+  # no toca servicios, no elimina ninguna CA existente). Es la ÚNICA
+  # escritura al sistema operativo que hace PRECHECK, y se hace a propósito
+  # para que esta prueba de alcanzabilidad sea representativa del TLS real
+  # que usará Zypper más adelante -- sin esto, un host que nunca corrió
+  # VALIDATE/UPGRADE antes reportaría FAILED aquí únicamente por falta de
+  # confianza TLS, no por un problema real de red/Foreman.
+  ansible.builtin.include_role:
+    name: repo_management
+    tasks_from: ensure_ca_trusted.yml
+
+- name: Verificar si el archivo de ca_certificate_path quedó instalado
+  # Chequeo honesto en vez de asumir éxito ciego: alimenta el "ca_path" de
+  # abajo solo si el archivo realmente existe.
   ansible.builtin.stat:
     path: "{{ katello.ca_certificate_path }}"
   register: _ca_cert_stat

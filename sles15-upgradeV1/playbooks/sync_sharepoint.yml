@@ -1,0 +1,137 @@
+---
+# playbooks/sync_sharepoint.yml
+#
+# Etapa 5 (opcional) del Workflow: sincroniza hacia SharePoint los reportes
+# que YA quedaron escritos en report_destination para el CRQ de esta
+# ejecución (upgrade_crq) -- nunca report_local_dir, que es efímero y puede
+# no sobrevivir entre nodos separados del Workflow (cada nodo es un Job de
+# AWX independiente, posiblemente en otro Execution Environment).
+#
+# No toca ningún host SLES: corre enteramente en localhost/control node,
+# igual que playbooks/report_summary.yml.
+#
+# Requiere las MISMAS credenciales que el inventario dinámico
+# (TENANT_ID/CLIENT_ID/CLIENT_SECRET, Credential "SharePoint Excel
+# Inventory") adjuntas TAMBIÉN a este Job Template -- ver docs/AWX_SETUP.html,
+# sección 7. El App Registration de Azure AD debe tener permiso de
+# ESCRITURA en SharePoint (Sites.ReadWrite.All), no solo lectura.
+#
+# Usa la API REST de Microsoft Graph directamente (POST para el token,
+# GET para resolver el sitio, PUT para subir cada archivo) -- sin
+# dependencias de Python adicionales, a diferencia del plugin de
+# inventario (que sí usa las librerías msal/requests dentro de Python).
+
+- name: Sincronizar reportes locales de este CRQ hacia SharePoint
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  become: false
+  tasks:
+    - name: No hacer nada si la sincronización a SharePoint está deshabilitada
+      ansible.builtin.meta: end_play
+      when: not (sharepoint_sync.enabled | default(false))
+
+    - name: Verificar que upgrade_crq esté declarado (determina qué subcarpeta sincronizar)
+      ansible.builtin.assert:
+        that:
+          - (upgrade_crq | default('') | trim | length) > 0
+        fail_msg: >-
+          upgrade_crq vacío: no se puede determinar qué reportes sincronizar
+          hacia SharePoint. No se sincronizó nada.
+
+    - name: Calcular carpeta CRQ sanitizada (misma fórmula que roles/reporting)
+      ansible.builtin.set_fact:
+        _sync_crq_folder: "{{ upgrade_crq | trim | regex_replace('[^A-Za-z0-9_-]', '_') }}"
+        _sync_local_base: "{{ report_destination }}/{{ upgrade_crq | trim | regex_replace('[^A-Za-z0-9_-]', '_') }}"
+
+    - name: Verificar que exista el subdirectorio local de este CRQ en report_destination
+      ansible.builtin.stat:
+        path: "{{ _sync_local_base }}"
+      register: _sync_local_dir
+
+    - name: Informar que no hay nada que sincronizar todavía para este CRQ
+      ansible.builtin.debug:
+        msg: >-
+          No existe {{ _sync_local_base }} todavía (ningún reporte escrito
+          ahí para este CRQ) -- nada que sincronizar hacia SharePoint.
+      when: not _sync_local_dir.stat.exists
+
+    - name: "Sincronizar los reportes de este CRQ hacia SharePoint"
+      when: _sync_local_dir.stat.exists
+      block:
+        - name: Listar todos los archivos locales de este CRQ (recursivo)
+          ansible.builtin.find:
+            paths: "{{ _sync_local_base }}"
+            recurse: true
+            file_type: file
+          register: _sync_files
+
+        - name: Informar que no hay archivos para subir
+          ansible.builtin.debug:
+            msg: "{{ _sync_local_base }} existe pero no contiene archivos -- nada que subir."
+          when: (_sync_files.files | length) == 0
+
+        - name: "Obtener token de acceso de Microsoft Graph y subir cada archivo"
+          when: (_sync_files.files | length) > 0
+          block:
+            - name: Obtener token de acceso de Microsoft Graph (client credentials)
+              ansible.builtin.uri:
+                url: "https://login.microsoftonline.com/{{ lookup('env', 'TENANT_ID') }}/oauth2/v2.0/token"
+                method: POST
+                body_format: form-urlencoded
+                body:
+                  grant_type: client_credentials
+                  client_id: "{{ lookup('env', 'CLIENT_ID') }}"
+                  client_secret: "{{ lookup('env', 'CLIENT_SECRET') }}"
+                  scope: "https://graph.microsoft.com/.default"
+                status_code: [200]
+              register: _sync_token
+              no_log: true
+
+            - name: Resolver el site_id de SharePoint
+              ansible.builtin.uri:
+                url: "https://graph.microsoft.com/v1.0/sites/{{ sharepoint_sync.site_hostname }}:{{ sharepoint_sync.site_path }}"
+                method: GET
+                headers:
+                  Authorization: "Bearer {{ _sync_token.json.access_token }}"
+                status_code: [200]
+              register: _sync_site
+              no_log: true
+
+            - name: "Subir cada archivo a SharePoint (PUT; sobreescribe si ya existe)"
+              ansible.builtin.uri:
+                url: >-
+                  https://graph.microsoft.com/v1.0/sites/{{ _sync_site.json.id }}/drive/root:/{{ sharepoint_sync.folder_path }}/{{ _sync_crq_folder }}/{{ item.path | replace(_sync_local_base ~ '/', '') }}:/content
+                method: PUT
+                headers:
+                  Authorization: "Bearer {{ _sync_token.json.access_token }}"
+                  Content-Type: application/octet-stream
+                src: "{{ item.path }}"
+                status_code: [200, 201]
+              loop: "{{ _sync_files.files }}"
+              loop_control:
+                label: "{{ item.path | replace(_sync_local_base ~ '/', '') }}"
+              register: _sync_upload_results
+              failed_when: false
+              no_log: true
+
+            - name: Reportar archivos que no se pudieron subir
+              ansible.builtin.debug:
+                msg: "FALLÓ subir {{ result.item.path | replace(_sync_local_base ~ '/', '') }}: HTTP {{ result.status | default('N/D') }}"
+              loop: "{{ _sync_upload_results.results | default([]) }}"
+              loop_control:
+                loop_var: result
+                label: "{{ result.item.path | default('') | replace(_sync_local_base ~ '/', '') }}"
+              when: (result.status | default(0)) not in [200, 201]
+
+            - name: Fallar explícitamente si algún archivo no se pudo subir
+              ansible.builtin.fail:
+                msg: >-
+                  {{ (_sync_upload_results.results | default([]) | rejectattr('status', 'defined') | list | length)
+                     + (_sync_upload_results.results | default([]) | selectattr('status', 'defined') | rejectattr('status', 'in', [200, 201]) | list | length) }}
+                  de {{ _sync_files.files | length }} archivo(s) no se pudieron subir a SharePoint
+                  (carpeta destino: {{ sharepoint_sync.folder_path }}/{{ _sync_crq_folder }}). Ver detalle arriba.
+                  Los reportes locales en {{ _sync_local_base }} siguen disponibles sin cambios.
+              when: >-
+                (_sync_upload_results.results | default([]) | rejectattr('status', 'defined') | list | length) > 0
+                or (_sync_upload_results.results | default([]) | selectattr('status', 'defined') | rejectattr('status', 'in', [200, 201]) | list | length) > 0

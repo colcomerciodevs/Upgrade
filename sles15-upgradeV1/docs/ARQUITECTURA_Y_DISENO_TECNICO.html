@@ -309,33 +309,45 @@
 
   <table class="clean">
     <tr><th>Nivel</th><th>Responde</th><th>¿Modifica el sistema?</th></tr>
-    <tr><td><strong>PRECHECK</strong></td><td>Sistema operativo, espacio, locks, servicios, GeoPOS, conectividad básica</td><td>Nunca</td></tr>
-    <tr><td><strong>VALIDATE</strong></td><td>Usa Zypper de verdad (metadata, GPG, TLS, solver), aislado y reversible</td><td>No, salvo una excepción documentada (CA interna, ver abajo)</td></tr>
+    <tr><td><strong>PRECHECK</strong></td><td>Sistema operativo, espacio, locks, servicios, GeoPOS, conectividad básica</td><td>No, salvo una excepción documentada (CA interna, ver abajo)</td></tr>
+    <tr><td><strong>VALIDATE</strong></td><td>Usa Zypper de verdad (metadata, GPG, TLS, solver), aislado y reversible</td><td>No, salvo la misma excepción (CA interna, ver abajo)</td></tr>
     <tr><td><strong>UPGRADE</strong></td><td>La migración real</td><td>Sí, con <code>confirm_production_upgrade: true</code></td></tr>
   </table>
 
   <div class="callout decision">
     <span class="label">Decisión de arquitectura</span>
-    La tentación más común sería fusionar PRECHECK y VALIDATE (ambos "no modifican nada"), o VALIDATE y UPGRADE
-    (ambos "usan Zypper de verdad"). Se evitó deliberadamente: PRECHECK debe poder ejecutarse con mucha frecuencia
-    y ser barato (sin invocar el solver de Zypper contra Foreman); VALIDATE debe dar una respuesta autoritativa sin
-    ningún riesgo de dejar el sistema modificado; UPGRADE es la única que puede dejar el sistema distinto de como estaba.
+    La tentación más común sería fusionar PRECHECK y VALIDATE (ambos de solo lectura, salvo la CA interna), o
+    VALIDATE y UPGRADE (ambos "usan Zypper de verdad"). Se evitó deliberadamente: PRECHECK debe poder ejecutarse
+    con mucha frecuencia y ser barato (sin invocar el solver de Zypper contra Foreman); VALIDATE debe dar una
+    respuesta autoritativa sin ningún riesgo de dejar el sistema modificado más allá de esa misma excepción;
+    UPGRADE es la única que puede dejar el sistema realmente distinto de como estaba (paquetes, Service Pack).
   </div>
 
   <div class="callout risk">
     <span class="label">Única excepción documentada: instalación de la CA interna</span>
     Zypper valida TLS contra el almacén de confianza del sistema operativo, no contra
     ninguna variable de este proyecto. Sin la CA interna real ("CAColdecom") instalada,
-    cualquier conexión real de Zypper contra Foreman/Katello por HTTPS falla — y sin eso,
-    la propia promesa de VALIDATE ("¿funcionaría realmente la migración contra Foreman
-    ahora?") no se podría cumplir. Por eso <code>playbooks/roles/repo_management/tasks/
-    ensure_ca_trusted.yml</code> instala esa CA (si todavía no está presente) justo antes
-    de que VALIDATE o UPGRADE agreguen o usen cualquier repo Foreman real. Es la
-    <strong>única</strong> escritura al sistema operativo que ocurre durante
-    <code>upgrade_mode: validate</code> — decisión explícita del usuario para este
-    ambiente (ver orden de fuentes de verdad en CLAUDE.md), no una ampliación silenciosa
-    del alcance. La operación es idempotente (solo agrega confianza si falta; nunca
-    elimina ninguna CA existente) y no reinicia ni afecta ningún servicio.
+    cualquier conexión real por HTTPS contra Foreman/Katello falla con un error de TLS
+    — incluida la propia prueba de alcanzabilidad de PRECHECK, que entonces reportaría
+    <code>FAILED</code> únicamente por falta de confianza TLS, no por un problema real de
+    red/Foreman (esto se confirmó en un laboratorio real: un host que nunca había corrido
+    nada antes fallaba los 20 checks <code>endpoint_alcanzable_*</code> con
+    <code>CERTIFICATE_VERIFY_FAILED</code>).
+    <p style="margin-top:8px">Por eso <code>playbooks/roles/repo_management/tasks/ensure_ca_trusted.yml</code>
+    instala esa CA (si todavía no está presente) desde 2 lugares, decisión explícita del
+    usuario para este ambiente (ver orden de fuentes de verdad en CLAUDE.md), no una
+    ampliación silenciosa del alcance:</p>
+    <ul style="margin:4px 0 0 0">
+      <li><strong>PRECHECK</strong> (<code>roles/precheck/tasks/repos_reachability.yml</code>) — así
+        la propia prueba de alcanzabilidad de PRECHECK es representativa del TLS real, y
+        UPGRADE ya no necesita instalarla por su cuenta (siempre ejecuta PRECHECK primero,
+        ver <code>playbooks/tasks/run_stage.yml</code>).</li>
+      <li><strong>VALIDATE</strong> (<code>roles/sp_migration/tasks/preflight.yml</code>) — porque
+        VALIDATE no pasa por <code>repos_reachability.yml</code>, así que necesita asegurarla
+        por su cuenta para seguir funcionando de forma independiente.</li>
+    </ul>
+    <p style="margin-top:8px">La operación es idempotente (solo agrega confianza si falta; nunca
+    elimina ninguna CA existente) y no reinicia ni afecta ningún servicio.</p>
   </div>
 </section>
 
@@ -691,6 +703,35 @@
     que sea un volumen/mount realmente persistente y no una carpeta dentro
     de un contenedor de Execution Environment que se destruye al terminar
     el Job — en cuyo caso no cumpliría su propósito.
+  </div>
+
+  <div class="callout note">
+    <span class="label">Estructura de carpetas: CRQ → hostname → etapa</span>
+    Tanto <code>report_local_dir</code> como <code>report_destination</code> organizan
+    cada reporte individual en <code>&lt;CRQ sanitizado&gt;/&lt;hostname&gt;/&lt;etapa&gt;/</code>
+    (<code>upgrade_crq</code> con espacios/caracteres especiales convertidos a <code>_</code>;
+    <code>etapa</code> = <code>action</code>, o <code>action_phase</code> cuando
+    <code>upgrade_phase</code> es <code>prepare</code>/<code>apply</code>). Decisión
+    explícita del usuario para este ambiente. Como la copia hacia
+    <code>report_destination</code> ahora crea varios niveles de subcarpetas (no un
+    solo archivo plano como antes), se agregó un paso explícito de creación de
+    directorio antes de copiar (<code>roles/reporting/tasks/main.yml</code>) — el
+    módulo <code>copy</code> nunca crea directorios padre por sí mismo.
+  </div>
+
+  <div class="callout note">
+    <span class="label">Sincronización a SharePoint: por qué es una etapa separada, no parte de "Reporting"</span>
+    <code>playbooks/sync_sharepoint.yml</code> sube ese mismo árbol
+    (<code>report_destination/&lt;CRQ&gt;/</code>) a SharePoint vía Microsoft Graph
+    (token por client credentials + un <code>PUT</code> por archivo, sin dependencias
+    de Python adicionales). Se mantuvo como una 5ª etapa aparte de "Reporting" (en vez
+    de agregarla ahí mismo) porque depende de una credencial distinta (la misma
+    del inventario dinámico, con permiso de escritura) y de una red externa (SharePoint) que
+    puede no estar disponible — un fallo de red hacia SharePoint nunca debe impedir que
+    el resumen local (<code>resumen.html</code>) se genere. Sincroniza desde
+    <code>report_destination</code>, nunca desde <code>report_local_dir</code>: este
+    último es el área de trabajo efímera de CADA Job por separado, y un nodo del
+    Workflow no puede ver los archivos que escribió otro nodo ahí.
   </div>
 </section>
 

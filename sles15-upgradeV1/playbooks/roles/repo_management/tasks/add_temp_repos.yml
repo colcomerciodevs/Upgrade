@@ -11,6 +11,14 @@
 #   repo_management_alias_suffix       : "src" (origen/updatestack) | "dst" (destino/dup)
 #   repo_management_phase_repositories : lista [{name, url}, ...] de katello.*
 #   repo_management_phase_releasever   : "" | "15-SP7" (solo aplica al refresh de esta fase)
+#
+# NOTA: ya NO instala aquí la CA interna (antes lo hacía). Se movió a
+# roles/precheck/tasks/repos_reachability.yml, que SIEMPRE corre antes que
+# este archivo dentro de la misma ejecución (ver playbooks/tasks/
+# run_stage.yml: "Ejecutar precheck de la etapa" es el primer paso real,
+# antes de "Preparar repos y migrar"). Para el camino de VALIDATE, que NO
+# pasa por repos_reachability.yml, la CA se sigue asegurando por su cuenta
+# en roles/sp_migration/tasks/preflight.yml.
 
 - name: "Validar que hay repositorios Foreman/Katello configurados para la fase {{ repo_management_alias_suffix }}"
   ansible.builtin.assert:
@@ -20,9 +28,6 @@
       No hay repositorios definidos en katello.{{ repo_management_phase_sp }}_repositories.
       Complete este dato real (CHANGE_ME) antes de ejecutar una migración real.
     success_msg: "Repositorios Foreman/Katello definidos para {{ repo_management_phase_sp }} ({{ repo_management_alias_suffix }}): {{ repo_management_phase_repositories | length }}"
-
-- name: "Asegurar que la CA interna esté instalada antes de usar repos Foreman reales ({{ repo_management_alias_suffix }})"
-  ansible.builtin.include_tasks: ensure_ca_trusted.yml
 
 - name: Calcular alias de los repositorios temporales de esta fase
   ansible.builtin.set_fact:

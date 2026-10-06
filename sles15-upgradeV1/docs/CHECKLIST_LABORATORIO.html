@@ -354,7 +354,7 @@
     <tr><td>Project</td><td>Apuntando a este repositorio real (rama/commit)</td></tr>
     <tr><td>Inventory</td><td>Hosts/grupos reales de GeoPOS, con <code>ansible_host</code>/<code>ansible_user</code> si aplica</td></tr>
     <tr><td>Credential</td><td>SSH + <code>become</code> con los privilegios de la sección 1</td></tr>
-    <tr><td>Workflow Job Template (por defecto)</td><td>4 Job Templates encadenados (Precheck → Preparar repos → Aplicar → Reporting), playbook <code>playbooks/upgrade.yml</code> en 3 de ellos — ver <code>docs/AWX_SETUP.html</code> sección 7</td></tr>
+    <tr><td>Workflow Job Template (por defecto)</td><td>5 Job Templates encadenados (Precheck → Preparar repos → Aplicar → Reporting → Sincronizar SharePoint), playbook <code>playbooks/upgrade.yml</code> en 3 de ellos — ver <code>docs/AWX_SETUP.html</code> sección 7</td></tr>
     <tr><td>Survey</td><td>Se crea en el Workflow Job Template: <code>upgrade_mode</code>, <code>confirm_production_upgrade</code>, y <code>upgrade_crq</code>/<code>upgrade_lote</code>/<code>upgrade_ambiente</code> (ver README §13)</td></tr>
     <tr><td>Selección de host</td><td><code>upgrade_crq</code>/<code>upgrade_lote</code>/<code>upgrade_ambiente</code> deben coincidir exactamente con las columnas CRQ/Lote/Ambiente del host de laboratorio en el inventario — ya no se usa <code>Limit</code></td></tr>
   </table>
