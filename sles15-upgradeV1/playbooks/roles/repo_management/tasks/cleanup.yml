@@ -52,11 +52,26 @@
   ansible.builtin.set_fact:
     repos_temporary_removed: "{{ repos_temporary_removed + _removerepo_ok }}"
 
+- name: "Calcular el detalle real (stdout/stderr de Zypper) de los repositorios que no se pudieron eliminar"
+  # Mismo principio que ya se aplicó al gate dup -D, add_temp_repos.yml y
+  # disable_preexisting.yml: decir SOLO "cuáles" fallaron, sin la salida
+  # real de Zypper, no basta para diagnosticar sin leer el log crudo del Job.
+  ansible.builtin.set_fact:
+    _removerepo_failed_details: |-
+      {% set result = [] %}
+      {% for r in _removerepo_result.results %}
+      {% if (r.rc | default(1)) != 0 %}
+      {% set _ = result.append(r.item ~ ': ' ~ ((r.stdout | default('')) ~ ' ' ~ (r.stderr | default(''))) | trim) %}
+      {% endif %}
+      {% endfor %}
+      {{ result }}
+  when: _removerepo_failed | length > 0
+
 - name: Fallar explícitamente si algún repositorio temporal no pudo eliminarse
   ansible.builtin.fail:
     msg: >-
       No se pudieron eliminar los siguientes repositorios temporales:
-      {{ _removerepo_failed | join(', ') }}. Los que sí se eliminaron
+      {{ _removerepo_failed_details | default(_removerepo_failed) | join(' | ') }}. Los que sí se eliminaron
       correctamente antes del fallo quedaron registrados:
       {{ _removerepo_ok | join(', ') or 'ninguno' }}.
   when: _removerepo_failed | length > 0

@@ -33,11 +33,26 @@
     repos_disabled_by_upgrade: "{{ _disable_result.results | selectattr('rc', 'defined') | selectattr('rc', 'equalto', 0) | map(attribute='item') | list }}"
     _disable_failed_items: "{{ _disable_result.results | selectattr('rc', 'defined') | rejectattr('rc', 'equalto', 0) | map(attribute='item') | list }}"
 
+- name: "Calcular el detalle real (stdout/stderr de Zypper) de los repositorios que no se pudieron deshabilitar"
+  # Mismo principio que ya se aplicó al gate dup -D y a add_temp_repos.yml:
+  # decir SOLO "cuáles" fallaron, sin la salida real de Zypper, no basta
+  # para diagnosticar sin ir a leer el log crudo del Job.
+  ansible.builtin.set_fact:
+    _disable_failed_details: |-
+      {% set result = [] %}
+      {% for r in _disable_result.results %}
+      {% if (r.rc | default(1)) != 0 %}
+      {% set _ = result.append(r.item ~ ': ' ~ ((r.stdout | default('')) ~ ' ' ~ (r.stderr | default(''))) | trim) %}
+      {% endif %}
+      {% endfor %}
+      {{ result }}
+  when: _disable_failed_items | length > 0
+
 - name: Fallar explícitamente si algún repositorio preexistente no pudo deshabilitarse
   ansible.builtin.fail:
     msg: >-
       No se pudieron deshabilitar los siguientes repositorios preexistentes:
-      {{ _disable_failed_items | join(', ') }}. Los que sí se deshabilitaron
+      {{ _disable_failed_details | default(_disable_failed_items) | join(' | ') }}. Los que sí se deshabilitaron
       correctamente antes del fallo quedaron registrados:
       {{ repos_disabled_by_upgrade | join(', ') or 'ninguno' }}.
   when: _disable_failed_items | length > 0

@@ -76,11 +76,27 @@
   ansible.builtin.set_fact:
     repos_temporary_created: "{{ repos_temporary_created + _phase_created_aliases }}"
 
+- name: "Calcular el detalle real (stdout/stderr de Zypper) de los repositorios que no se pudieron agregar"
+  # Mismo principio que ya se aplicó al gate dup -D: decir SOLO "cuáles"
+  # fallaron, sin la salida real de Zypper, no es suficiente para
+  # diagnosticar (ej. "ya existe un repositorio con ese alias" vs. un
+  # problema de red/URL) sin tener que ir a leer el log crudo del Job.
+  ansible.builtin.set_fact:
+    _phase_failed_details: |-
+      {% set result = [] %}
+      {% for pair in _phase_temp_aliases | zip(_addrepo_result.results) %}
+      {% if pair[1].rc | default(1) != 0 %}
+      {% set _ = result.append(pair[0] ~ ': ' ~ ((pair[1].stdout | default('')) ~ ' ' ~ (pair[1].stderr | default(''))) | trim) %}
+      {% endif %}
+      {% endfor %}
+      {{ result }}
+  when: _phase_failed_aliases | length > 0
+
 - name: "Fallar explícitamente si algún repositorio temporal no pudo agregarse en esta fase {{ repo_management_alias_suffix }}"
   ansible.builtin.fail:
     msg: >-
       No se pudieron agregar los siguientes repositorios temporales:
-      {{ _phase_failed_aliases | join(', ') }}. Los que sí se agregaron
+      {{ _phase_failed_details | join(' | ') }}. Los que sí se agregaron
       correctamente antes del fallo quedaron registrados:
       {{ _phase_created_aliases | join(', ') or 'ninguno' }}.
   when: _phase_failed_aliases | length > 0
