@@ -20,11 +20,16 @@
 # evidencia real, nunca se oculta.
 
 - name: Deshabilitar los repositorios preexistentes que estaban habilitados
+  # "until": mismo reintento por lock transitorio de PackageKit (rc=7,
+  # ZYPP_LOCKED) que add_temp_repos.yml -- ver roles/repo_management/defaults/main.yml.
   ansible.builtin.command:
     cmd: "zypper --non-interactive modifyrepo --disable {{ item }}"
   loop: "{{ repos_enabled_before }}"
   become: true
   register: _disable_result
+  until: (_disable_result.rc | default(1)) != 7
+  retries: "{{ repo_management_zypper_lock_retries }}"
+  delay: "{{ repo_management_zypper_lock_delay }}"
   changed_when: "'nothing to change' not in (_disable_result.stdout | default(''))"
   failed_when: false
 

@@ -43,6 +43,13 @@
   # deben quedar registrados en repos_temporary_created de todos modos. El
   # loop nunca aborta a mitad de camino (failed_when: false); el fallo se
   # reporta explícitamente DESPUÉS de consolidar la evidencia real.
+  #
+  # "until" reintenta SOLO si Zypper devuelve rc=7 (ZYPP_LOCKED -- libzypp
+  # bloqueado, típicamente por PackageKit u otra herramienta de gestión de
+  # paquetes corriendo en ese momento; confirmado con evidencia real en
+  # laboratorio). Cualquier otro código de error se deja pasar de
+  # inmediato (sin agotar los reintentos) para que el fallo real se
+  # reporte sin demora innecesaria.
   ansible.builtin.command:
     cmd: >-
       zypper --non-interactive addrepo -f -n "{{ item.name }}"
@@ -54,6 +61,9 @@
     label: "{{ item.name }}"
   become: true
   register: _addrepo_result
+  until: (_addrepo_result.rc | default(1)) != 7
+  retries: "{{ repo_management_zypper_lock_retries }}"
+  delay: "{{ repo_management_zypper_lock_delay }}"
   changed_when: true
   failed_when: false
 

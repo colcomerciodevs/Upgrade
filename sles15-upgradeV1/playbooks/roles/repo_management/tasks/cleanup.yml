@@ -35,11 +35,16 @@
       }}
 
 - name: Eliminar repositorios temporales de esta automatización
+  # "until": mismo reintento por lock transitorio de PackageKit (rc=7,
+  # ZYPP_LOCKED) que add_temp_repos.yml -- ver roles/repo_management/defaults/main.yml.
   ansible.builtin.command:
     cmd: "zypper --non-interactive removerepo {{ item }}"
   loop: "{{ _repos_to_remove }}"
   become: true
   register: _removerepo_result
+  until: (_removerepo_result.rc | default(1)) != 7
+  retries: "{{ repo_management_zypper_lock_retries }}"
+  delay: "{{ repo_management_zypper_lock_delay }}"
   changed_when: true
   failed_when: false
 

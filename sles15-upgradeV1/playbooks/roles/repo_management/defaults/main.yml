@@ -15,3 +15,15 @@ repo_management_backup_base_dir: /var/backup/ansible-sles-upgrade
 #
 # repos_temporary_created y repos_temporary_removed deben inicializarse en
 # [] al comenzar cada etapa (ver playbooks/tasks/run_stage.yml).
+
+# Reintentos para cualquier comando de Zypper de este rol (addrepo,
+# modifyrepo --disable, removerepo) que falle con rc=7
+# (ZYPPER_EXIT_ZYPP_LOCKED: "libzypp is locked, e.g. packagekit is
+# running" -- confirmado contra el código fuente oficial de zypper,
+# https://github.com/openSUSE/zypper/blob/master/src/main.h). Es un lock
+# TRANSITORIO (PackageKit u otra herramienta de gestión de paquetes
+# soltándolo normalmente en segundos) -- confirmado con evidencia real en
+# laboratorio el 2026-10-06, donde un addrepo individual falló así una vez
+# y, al reintentar la corrida completa, pasó sin problema.
+repo_management_zypper_lock_retries: 5
+repo_management_zypper_lock_delay: 5
