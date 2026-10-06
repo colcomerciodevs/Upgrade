@@ -111,8 +111,10 @@
           # "--no-gpgcheck": decisión explícita del usuario para este ambiente
           # (CLAUDE.md, "Verificación GPG de repositorios Foreman", 2026-10-06),
           # flag oficial de Zypper por-repositorio, nunca el global "--no-gpg-checks".
+          # Debe ir ANTES de "-n" (que consume el siguiente token como su
+          # valor); confirmado con evidencia real en laboratorio (2026-10-06).
           ansible.builtin.command:
-            argv: ['zypper', '--reposd-dir', "{{ _preflight_origin_dir }}", '--non-interactive', 'addrepo', '-f', '-n', '--no-gpgcheck', "{{ item.name }}", "{{ item.url }}", "{{ _preflight_origin_aliases[idx] }}"]
+            argv: ['zypper', '--reposd-dir', "{{ _preflight_origin_dir }}", '--non-interactive', 'addrepo', '-f', '--no-gpgcheck', '-n', "{{ item.name }}", "{{ item.url }}", "{{ _preflight_origin_aliases[idx] }}"]
           loop: "{{ sp_migration_origin_repositories }}"
           loop_control:
             index_var: idx
@@ -180,8 +182,10 @@
         - name: Agregar los repos Foreman de destino únicamente en el directorio aislado
           # "--no-gpgcheck": misma decisión explícita del usuario (ver arriba,
           # y CLAUDE.md "Verificación GPG de repositorios Foreman", 2026-10-06).
+          # Debe ir ANTES de "-n" (que consume el siguiente token como su
+          # valor); confirmado con evidencia real en laboratorio (2026-10-06).
           ansible.builtin.command:
-            argv: ['zypper', '--reposd-dir', "{{ _preflight_reposd_dir }}", '--non-interactive', 'addrepo', '-f', '-n', '--no-gpgcheck', "{{ item.name }}", "{{ item.url }}", "{{ _preflight_aliases[idx] }}"]
+            argv: ['zypper', '--reposd-dir', "{{ _preflight_reposd_dir }}", '--non-interactive', 'addrepo', '-f', '--no-gpgcheck', '-n', "{{ item.name }}", "{{ item.url }}", "{{ _preflight_aliases[idx] }}"]
           loop: "{{ sp_migration_repositories }}"
           loop_control:
             index_var: idx

@@ -86,9 +86,14 @@
   # el flag global "--no-gpg-checks". Solo afecta a este alias temporal que
   # esta automatización está creando ahora mismo; nunca toca la
   # configuración GPG de ningún repositorio preexistente del cliente.
+  # IMPORTANTE: debe ir ANTES de "-n" -- "-n" consume el siguiente token
+  # como su valor (el nombre descriptivo), así que colocarlo entre "-n" y
+  # el nombre real hace que zypper use "--no-gpgcheck" como nombre y deje
+  # un argumento posicional de más ("Too many arguments"); confirmado con
+  # evidencia real en laboratorio (2026-10-06).
   ansible.builtin.command:
     cmd: >-
-      zypper --non-interactive addrepo -f -n --no-gpgcheck "{{ item.name }}"
+      zypper --non-interactive addrepo -f --no-gpgcheck -n "{{ item.name }}"
       "{{ item.url }}"
       "{{ _phase_temp_aliases[idx] }}"
   loop: "{{ repo_management_phase_repositories }}"
