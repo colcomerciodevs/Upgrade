@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Reporte consolidado — Lote {{ consolidado_lote }}</title>
+<style>
+  body { font-family: -apple-system, Segoe UI, Arial, sans-serif; margin: 2rem; color: #1a1a1a; background: #fafafa; }
+  h1 { font-size: 1.4rem; }
+  h2 { font-size: 1.1rem; margin-top: 2rem; }
+  table { border-collapse: collapse; width: 100%; margin-top: 1rem; background: #fff; }
+  th, td { border: 1px solid #ddd; padding: 0.5rem 0.7rem; text-align: left; font-size: 0.92rem; vertical-align: top; }
+  th { background: #f0f0f0; }
+  .badge { display: inline-block; padding: 0.15rem 0.6rem; border-radius: 0.8rem; font-weight: 600; font-size: 0.85rem; color: #fff; }
+  .badge-OK { background: #2e7d32; }
+  .badge-WARNING { background: #b8860b; }
+  .badge-FAILED { background: #c62828; }
+  .badge-NOT_CHECKED { background: #757575; }
+  .muted { color: #777; font-size: 0.85rem; }
+  .phases-table { margin-top: 0.4rem; }
+  .phases-table th, .phases-table td { font-size: 0.85rem; padding: 0.3rem 0.5rem; }
+</style>
+</head>
+<body>
+
+<h1>Reporte consolidado — Lote {{ consolidado_lote }}</h1>
+<table>
+  <tr><th>CRQ</th><td>{{ consolidado_crq | default('N/D') }}</td>
+      <th>Lote</th><td>{{ consolidado_lote }}</td>
+      <th>Ambiente</th><td>{{ consolidado_ambiente | default('N/D') }}</td></tr>
+  <tr><th>Generado</th><td>{{ consolidado_generated_at }}</td>
+      <th>Estado global del Lote</th><td><span class="badge badge-{{ consolidado_lote_status }}">{{ consolidado_lote_status }}</span></td>
+      <th>Hosts</th><td>{{ consolidado_hosts | length }}</td></tr>
+</table>
+<p class="muted">Estado global del Lote: <strong>OK</strong> únicamente si TODOS los hosts de este
+   Lote están en OK. Fuente del historial: <code>{{ consolidado_source }}</code>.</p>
+
+<h2>Estado final por host</h2>
+<table>
+  <tr><th>Host</th><th>Estado final</th><th>Nota</th><th>Fases registradas</th></tr>
+  {% for h in consolidado_hosts %}
+  <tr>
+    <td>{{ h.hostname }}</td>
+    <td><span class="badge badge-{{ h.final_status }}">{{ h.final_status }}</span></td>
+    <td>{{ h.final_note }}</td>
+    <td>
+      {% if h.phases | length > 0 %}
+      <table class="phases-table">
+        <tr><th>Fase</th><th>Acción</th><th>Estado</th><th>Fecha/hora</th><th>Reporte</th></tr>
+        {% for p in h.phases %}
+        <tr>
+          <td>{{ p.stage }}{{ (' (' ~ p.phase ~ ')') if (p.phase | default('')) not in ['', 'both'] else '' }}</td>
+          <td>{{ p.action }}</td>
+          <td><span class="badge badge-{{ p.status }}">{{ p.status }}</span></td>
+          <td>{{ p.timestamp }}</td>
+          <td><code>{{ p.report_html }}</code></td>
+        </tr>
+        {% endfor %}
+      </table>
+      {% else %}
+      <span class="muted">sin ejecución registrada todavía</span>
+      {% endif %}
+    </td>
+  </tr>
+  {% else %}
+  <tr><td colspan="4" class="muted">No se encontraron hosts para este Lote (ni en el inventario ni en el historial).</td></tr>
+  {% endfor %}
+</table>
+
+<p class="muted">Generado automáticamente por ansible-sles-upgrade. No contiene secretos.</p>
+
+</body>
+</html>

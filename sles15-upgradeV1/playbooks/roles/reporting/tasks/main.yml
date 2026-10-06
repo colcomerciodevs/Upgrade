@@ -66,23 +66,54 @@
   delegate_to: localhost
   become: false
 
-- name: Registrar línea de resumen en run_summary.jsonl
+- name: "Calcular la línea de historial de esta etapa (para el consolidado por Lote)"
+  # Incluye crq/lote/ambiente/phase explícitamente: el consolidado
+  # (playbooks/report_consolidado.yml) filtra por estos campos y agrupa
+  # por host+fase -- sin ellos no podría saber a qué Lote/CRQ pertenece
+  # cada línea ni distinguir "preparar" de "aplicar" para el mismo stage.
+  ansible.builtin.set_fact:
+    _run_summary_entry:
+      hostname: "{{ inventory_hostname }}"
+      crq: "{{ stage_report.crq | default('') }}"
+      lote: "{{ stage_report.lote | default('') }}"
+      ambiente: "{{ stage_report.ambiente | default('') }}"
+      stage: "{{ stage_report.stage }}"
+      action: "{{ stage_report.action }}"
+      phase: "{{ stage_report.phase | default('') }}"
+      status: "{{ stage_report.status }}"
+      timestamp: "{{ _report_timestamp }}"
+      report_html: "{{ _report_stage_dir ~ '/' ~ _report_stage_folder ~ '_' ~ _report_timestamp ~ '.html' }}"
+
+- name: "Registrar línea de historial en run_summary.jsonl (área de trabajo local de esta ejecución)"
   ansible.builtin.lineinfile:
     path: "{{ report_local_dir }}/run_summary.jsonl"
-    line: >-
-      {{ {
-        'hostname': inventory_hostname,
-        'stage': stage_report.stage,
-        'action': stage_report.action,
-        'status': stage_report.status,
-        'timestamp': _report_timestamp,
-        'report_html': (_report_stage_dir ~ '/' ~ _report_stage_folder ~ '_' ~ _report_timestamp ~ '.html')
-      } | to_json }}
+    line: "{{ _run_summary_entry | to_json }}"
     create: true
     insertafter: EOF
     mode: "0644"
   delegate_to: localhost
   become: false
+
+- name: "Registrar la misma línea en el destino persistente (sobrevive entre nodos separados del Workflow)"
+  # CRÍTICO para el consolidado: en el Workflow de 5 etapas, cada nodo
+  # (Precheck/Preparar/Aplicar) es un Job de AWX separado, normalmente en
+  # su propio Execution Environment -- report_local_dir NO sobrevive entre
+  # esos nodos (ver advertencia en playbooks/group_vars/all.yml). Sin esta
+  # copia, el consolidado generado en un nodo posterior nunca vería lo que
+  # registraron los nodos anteriores, y mostraría estados incompletos o
+  # desactualizados (ej. una etapa "Aplicar" que falló, pero el consolidado
+  # seguiría mostrando solo el último estado que SÍ pudo leer -- "OK" de
+  # una etapa anterior -- en vez del fallo real).
+  ansible.builtin.lineinfile:
+    path: "{{ report_destination }}/run_summary.jsonl"
+    line: "{{ _run_summary_entry | to_json }}"
+    create: true
+    insertafter: EOF
+    mode: "0644"
+  delegate_to: localhost
+  become: false
+  when: not (report_destination is search('CHANGE_ME'))
+  failed_when: false
 
 - name: Asegurar el subdirectorio RFC/CRQ -> hostname -> etapa en el destino persistente, si ya está configurado
   # "copy" (tarea siguiente) no crea directorios padre inexistentes -- a

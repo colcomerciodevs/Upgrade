@@ -15,15 +15,13 @@ repo_management_backup_base_dir: /var/backup/ansible-sles-upgrade
 #
 # repos_temporary_created y repos_temporary_removed deben inicializarse en
 # [] al comenzar cada etapa (ver playbooks/tasks/run_stage.yml).
-
-# Reintentos para cualquier comando de Zypper de este rol (addrepo,
-# modifyrepo --disable, removerepo) que falle con rc=7
-# (ZYPPER_EXIT_ZYPP_LOCKED: "libzypp is locked, e.g. packagekit is
-# running" -- confirmado contra el código fuente oficial de zypper,
-# https://github.com/openSUSE/zypper/blob/master/src/main.h). Es un lock
-# TRANSITORIO (PackageKit u otra herramienta de gestión de paquetes
-# soltándolo normalmente en segundos) -- confirmado con evidencia real en
-# laboratorio el 2026-10-06, donde un addrepo individual falló así una vez
-# y, al reintentar la corrida completa, pasó sin problema.
-repo_management_zypper_lock_retries: 5
-repo_management_zypper_lock_delay: 5
+#
+# NOTA: zypper_lock_retries/_delay (reintento ante el lock
+# transitorio de PackageKit) YA NO vive aquí -- se movió a
+# playbooks/group_vars/all.yml porque sp_migration (otro rol) también la
+# necesita (dup -D/dup real, preflight.yml), y un "include_role" dinámico
+# NO expone los defaults de un rol a otro rol (confirmado con una prueba
+# aislada, 2026-10-06: "role_a_default_var" quedó UNDEFINED dentro de
+# "role_b" tras incluir ambos con include_role sin "public: true"). Un
+# default de rol solo es visible dentro de las propias tareas de ESE rol;
+# una variable compartida entre roles debe vivir en group_vars.

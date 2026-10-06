@@ -86,3 +86,6 @@
           {{ _report_stage_dir | default(report_local_dir ~ '/' ~ inventory_hostname) }}/
           para el detalle exacto.
       when: host_overall_status in ['FAILED', 'NOT_CHECKED']
+
+- name: Generar/actualizar el reporte consolidado del Lote (siempre, incluso si algún host falló el precheck)
+  ansible.builtin.import_playbook: report_consolidado.yml

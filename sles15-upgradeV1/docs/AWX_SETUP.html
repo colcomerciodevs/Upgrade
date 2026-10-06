@@ -519,7 +519,7 @@ ANSIBLE_INVENTORY_PLUGINS: "/runner/project/&lt;CARPETA_DEL_PROJECT&gt;/inventor
     <tr><td>1</td><td><code>SLES Upgrade - 1 Precheck</code></td><td><code>playbooks/precheck_only.yml</code></td><td>(ninguno — este playbook nunca lee <code>upgrade_mode</code>)</td></tr>
     <tr><td>2</td><td><code>SLES Upgrade - 2 Preparar repos</code></td><td><code>playbooks/upgrade.yml</code></td><td><code>upgrade_phase: prepare</code></td></tr>
     <tr><td>3</td><td><code>SLES Upgrade - 3 Aplicar</code></td><td><code>playbooks/upgrade.yml</code></td><td><code>upgrade_phase: apply</code></td></tr>
-    <tr><td>4</td><td><code>SLES Upgrade - 4 Reporting</code></td><td><code>playbooks/report_summary.yml</code></td><td>(ninguno)</td></tr>
+    <tr><td>4</td><td><code>SLES Upgrade - 4 Reporting</code></td><td><code>playbooks/report_consolidado.yml</code></td><td>(ninguno)</td></tr>
     <tr><td>5</td><td><code>SLES Upgrade - 5 Sincronizar SharePoint</code></td><td><code>playbooks/sync_sharepoint.yml</code></td><td>(ninguno)</td></tr>
   </table>
 
@@ -613,20 +613,25 @@ ANSIBLE_INVENTORY_PLUGINS: "/runner/project/&lt;CARPETA_DEL_PROJECT&gt;/inventor
     <tr><td>Job Type</td><td>Run</td></tr>
     <tr><td>Inventory</td><td>el del paso 5 (el playbook solo usa <code>localhost</code>, pero AWX exige seleccionar un Inventory)</td></tr>
     <tr><td>Project</td><td>el del paso 4</td></tr>
-    <tr><td>Playbook</td><td><code>playbooks/report_summary.yml</code></td></tr>
+    <tr><td>Playbook</td><td><code>playbooks/report_consolidado.yml</code></td></tr>
     <tr><td>Credentials</td><td>no se usa ninguna (no toca ningún host remoto); si AWX exige seleccionar una, puede reutilizarse la del paso 3 sin efecto</td></tr>
     <tr><td>Limit</td><td>vacío</td></tr>
-    <tr><td>Variables / Prompt on Launch</td><td>No activar — este playbook no lee <code>upgrade_mode</code>/<code>upgrade_crq</code>/etc., solo <code>reports/run_summary.jsonl</code></td></tr>
+    <tr><td>Variables / Prompt on Launch</td><td>No activar — no lee <code>upgrade_mode</code>, pero SÍ necesita <code>upgrade_crq</code>/<code>upgrade_lote</code>/<code>upgrade_ambiente</code> (para saber qué Lote consolidar); le llegan automáticamente del Survey del Workflow igual que a los Nodos 2/3, sin configuración adicional en este Job Template</td></tr>
     <tr><td>Survey propio</td><td>No necesita</td></tr>
     <tr><td>Al agregarlo como nodo en el Workflow</td><td>No hace falta ningún PROMPT</td></tr>
   </table>
   <div class="callout note">
     <span class="label">Por qué un playbook distinto</span>
-    <code>playbooks/report_summary.yml</code> es la misma consolidación
-    (<code>resumen.html</code>) que ya corre automáticamente al final de
-    <code>playbooks/upgrade.yml</code> en cualquier modo — se extrajo a su propio
-    archivo justo para que este nodo pueda apuntar ahí directamente, sin duplicar
-    esa lógica en dos lugares.
+    <code>playbooks/report_consolidado.yml</code> genera el mismo reporte
+    consolidado por Lote (<code>consolidado_&lt;LOTE&gt;.html</code>) que ya
+    corre automáticamente al final de <code>playbooks/upgrade.yml</code> y
+    <code>playbooks/precheck_only.yml</code> en cualquier modo — se extrajo a
+    su propio archivo justo para que este nodo pueda apuntar ahí
+    directamente, sin duplicar esa lógica en varios lugares. Lee el
+    historial de <code>run_summary.jsonl</code> desde <code>report_destination</code>
+    (no <code>report_local_dir</code>, que no sobrevive entre los Jobs
+    separados de este Workflow) para ver realmente lo que hicieron los
+    Nodos 1-3.
   </div>
 
   <div class="step-title"><span class="stepnum">5</span><h3>Etapa 5 — Sincronizar reportes a SharePoint (opcional)</h3></div>
@@ -736,7 +741,7 @@ ANSIBLE_INVENTORY_PLUGINS: "/runner/project/&lt;CARPETA_DEL_PROJECT&gt;/inventor
   </table>
   <div class="callout decision">
     <span class="label">Por qué esos 2 últimos enlaces son "Always" y no "On Success"</span>
-    Si el Nodo 3 falla, igual se quiere el resumen consolidado al día (para ver el
+    Si el Nodo 3 falla, igual se quiere el reporte consolidado al día (para ver el
     fallo sin conectarse por SSH ni leer el log del Job) — "On Success" dejaría el
     reporte desactualizado justo cuando más se necesita. Por la misma razón, el Nodo 5
     debe sincronizar a SharePoint incluso cuando algo falló antes: el reporte de un
@@ -791,7 +796,7 @@ ANSIBLE_INVENTORY_PLUGINS: "/runner/project/&lt;CARPETA_DEL_PROJECT&gt;/inventor
   para que el Nodo 2 falle de forma controlada ANTES de tocar el sistema.</p>
   <ul class="checklist">
     <li><input type="checkbox" id="s9-a1"><label for="s9-a1">Lanzar el <strong>Workflow Job Template</strong> con un modo real (ej. <code>upgrade_mode: sp5_to_sp6</code>), <code>confirm_production_upgrade: false</code>, y <code>upgrade_crq</code>/<code>upgrade_lote</code>/<code>upgrade_ambiente</code> iguales a los datos reales del host de laboratorio en el inventario.</label></li>
-    <li><input type="checkbox" id="s9-a2"><label for="s9-a2">El Nodo 1 (Precheck) debe quedar OK (es de solo lectura, corre siempre). El Nodo 2 (Preparar repos) debe <strong>fallar</strong> explícito con el mensaje <code>confirm_production_upgrade=false: no se ejecutará ningún cambio real</code> — <em>antes</em> de tocar ningún repositorio. El Nodo 3 no llega a correr (el enlace 2→3 es "On Success"). El Nodo 4 (Reporting, enlazado como "Always") sí corre y regenera <code>resumen.html</code>.</label></li>
+    <li><input type="checkbox" id="s9-a2"><label for="s9-a2">El Nodo 1 (Precheck) debe quedar OK (es de solo lectura, corre siempre). El Nodo 2 (Preparar repos) debe <strong>fallar</strong> explícito con el mensaje <code>confirm_production_upgrade=false: no se ejecutará ningún cambio real</code> — <em>antes</em> de tocar ningún repositorio. El Nodo 3 no llega a correr (el enlace 2→3 es "On Success"). El Nodo 4 (Reporting, enlazado como "Always") sí corre y regenera el reporte consolidado del Lote (<code>consolidado_&lt;LOTE&gt;.html</code>), mostrando el fallo real del Nodo 2 — nunca un <code>OK</code> que no corresponda.</label></li>
     <li><input type="checkbox" id="s9-a3"><label for="s9-a3">Este resultado (Nodo 1 OK, Nodo 2 FAILED por confirmación, Nodo 4 OK) confirma que el Workflow, el Survey, las credenciales y el enlace "Always" hacia Reporting están bien conectados — sin haber modificado nada todavía.</label></li>
   </ul>
 
@@ -800,7 +805,7 @@ ANSIBLE_INVENTORY_PLUGINS: "/runner/project/&lt;CARPETA_DEL_PROJECT&gt;/inventor
     <li><input type="checkbox" id="s9-b1"><label for="s9-b1">Lanzar el Workflow con un modo real (ej. <code>upgrade_mode: sp5_to_sp6</code>), <code>confirm_production_upgrade: true</code>, sobre <strong>un único host de laboratorio no crítico</strong>.</label></li>
     <li><input type="checkbox" id="s9-b2"><label for="s9-b2">Nodo 2 (Preparar repos) debe quedar OK con los repos de destino habilitados, sin reinicio. Revisar ese reporte completo antes de dejar avanzar al Nodo 3.</label></li>
     <li><input type="checkbox" id="s9-b3"><label for="s9-b3">Nodo 3 (Aplicar) debe pasar el gate, ejecutar <code>dup -D</code> → <code>dup</code> → reinicio → validación, y quedar OK. Revisar el reporte completo, incluida la sección "Gate obligatorio dup -D".</label></li>
-    <li><input type="checkbox" id="s9-b4"><label for="s9-b4">Nodo 4 (Reporting) debe regenerar <code>resumen.html</code> con el resultado de los 3 nodos anteriores.</label></li>
+    <li><input type="checkbox" id="s9-b4"><label for="s9-b4">Nodo 4 (Reporting) debe regenerar el reporte consolidado del Lote (<code>consolidado_&lt;LOTE&gt;.html</code>) con el resultado de los 3 nodos anteriores.</label></li>
   </ul>
 
   <ul class="checklist">

@@ -1,0 +1,47 @@
+---
+# roles/repo_management/tasks/resume_security_agents.yml
+#
+# Reinicia ÚNICAMENTE los agentes de seguridad que ESTA MISMA ejecución
+# detuvo en pause_security_agents.yml (security_agents_paused). Nunca
+# inicia un servicio que no fue detenido por esta automatización.
+#
+# Quien incluye este archivo (playbooks/tasks/run_stage.yml) decide CUÁNDO
+# corresponde llamarlo -- nunca entre los 2 saltos encadenados de
+# upgrade_mode: full (ahí se deja detenido a propósito para el siguiente
+# salto), solo al llegar al Service Pack final (SP7) o si la etapa falló.
+#
+# No se considera un fallo bloqueante si un agente no logra reiniciarse:
+# se advierte explícitamente (quien incluya este archivo decide si eso
+# escala la etapa a WARNING) en vez de ocultarlo, porque dejar un agente
+# de seguridad corporativo detenido indefinidamente sin que el operador lo
+# note sería peor que un WARNING en el reporte.
+
+- name: "Reiniciar los agentes de seguridad detenidos temporalmente por esta automatización"
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    state: started
+  loop: "{{ security_agents_paused | default([]) }}"
+  become: true
+  register: _security_agents_resume_result
+  failed_when: false
+
+- name: "Calcular detalle real de los agentes que no se pudieron reiniciar (si alguno falló)"
+  ansible.builtin.set_fact:
+    security_agents_resume_failed_details: |-
+      {% set result = [] %}
+      {% for r in _security_agents_resume_result.results | default([]) %}
+      {% if r.failed | default(false) %}
+      {% set _ = result.append(r.item ~ ': ' ~ (r.msg | default('error desconocido'))) %}
+      {% endif %}
+      {% endfor %}
+      {{ result }}
+  when: (security_agents_paused | default([])) | length > 0
+
+- name: "Advertir si algún agente de seguridad no pudo reiniciarse (revisar manualmente)"
+  ansible.builtin.fail:
+    msg: >-
+      No se pudieron reiniciar los siguientes agentes de seguridad detenidos
+      temporalmente: {{ security_agents_resume_failed_details | join(' | ') }}.
+      No deben quedar detenidos indefinidamente -- revisar y reiniciar
+      manualmente en el host.
+  when: (security_agents_resume_failed_details | default([])) | length > 0

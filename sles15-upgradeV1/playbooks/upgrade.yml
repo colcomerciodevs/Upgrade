@@ -384,11 +384,12 @@
       when: host_overall_status in ['FAILED', 'NOT_CHECKED']
 
 # =============================================================================
-# Resumen consolidado (independiente de si algún host falló en la fase
-# anterior). Extraído a su propio archivo (playbooks/report_summary.yml)
-# para que también pueda usarse como entrypoint propio -- por ejemplo, como
-# la "Etapa 4: Reporting" de un Workflow Job Template en AWX (ver
-# docs/AWX_SETUP.html) -- sin duplicar esta lógica en dos lugares.
+# Reporte consolidado del Lote (independiente de si algún host falló en la
+# fase anterior). Extraído a su propio archivo
+# (playbooks/report_consolidado.yml) para que también pueda usarse como
+# entrypoint propio -- por ejemplo, como la "Etapa 4: Reporting" de un
+# Workflow Job Template en AWX (ver docs/AWX_SETUP.html) -- sin duplicar
+# esta lógica en dos lugares.
 # =============================================================================
-- name: Generar resumen consolidado de la ejecución
-  ansible.builtin.import_playbook: report_summary.yml
+- name: Generar/actualizar el reporte consolidado del Lote
+  ansible.builtin.import_playbook: report_consolidado.yml

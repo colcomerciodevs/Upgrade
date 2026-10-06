@@ -28,8 +28,8 @@
   become: true
   register: _disable_result
   until: (_disable_result.rc | default(1)) != 7
-  retries: "{{ repo_management_zypper_lock_retries }}"
-  delay: "{{ repo_management_zypper_lock_delay }}"
+  retries: "{{ zypper_lock_retries }}"
+  delay: "{{ zypper_lock_delay }}"
   changed_when: "'nothing to change' not in (_disable_result.stdout | default(''))"
   failed_when: false
 

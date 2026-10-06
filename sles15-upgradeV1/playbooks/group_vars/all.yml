@@ -242,6 +242,41 @@ katello:
 # automatización (nunca se usa para nombrar repos permanentes).
 temporary_repo_prefix: "ansible-sles-upgrade-"
 
+# Reintentos ante el lock TRANSITORIO de PackageKit en cualquier comando de
+# Zypper que modifica algo (addrepo, modifyrepo --disable, removerepo,
+# refresh, dup -D, dup real) -- rc=7, ZYPPER_EXIT_ZYPP_LOCKED, confirmado
+# contra el código fuente oficial de zypper
+# (https://github.com/openSUSE/zypper/blob/master/src/main.h). Vive aquí
+# (no como default de un rol) porque la usan dos roles distintos
+# (repo_management y sp_migration) y "include_role" dinámico no expone los
+# defaults de un rol a otro (confirmado con prueba aislada, 2026-10-06).
+zypper_lock_retries: 5
+zypper_lock_delay: 5
+
+# Agentes de seguridad corporativos que, confirmado con evidencia real en
+# laboratorio (sles15-sp5-sp7 / 10.181.8.36, 2026-10-06), toman
+# intermitentemente el lock de libzypp vía PackageKit (D-Bus) durante sus
+# escaneos de vulnerabilidades/parches -- cada escaneo activa un
+# "packagekitd" nuevo (PID distinto cada vez), que puede ganarle el lock a
+# Zypper incluso con los reintentos de zypper_lock_retries/_delay
+# agotados. Se confirmó en el host (systemctl, ps, journalctl) que no hay
+# timer/cron propio de este proyecto ni de parchado corporativo causando
+# esto -- es exclusivamente la actividad rutinaria de estos 2 agentes.
+#
+# roles/repo_management/tasks/pause_security_agents.yml los detiene
+# TEMPORALMENTE (nunca los deshabilita/desinstala) justo antes de
+# modificar cualquier repositorio o paquete, y
+# resume_security_agents.yml los reinicia al terminar -- ver
+# playbooks/tasks/run_stage.yml para las condiciones exactas de cuándo se
+# reinician (nunca entre los 2 saltos encadenados de upgrade_mode: full,
+# solo al llegar a SP7 o si la etapa falló).
+#
+# Lista vacía es válida: un host sin estos agentes (o una decisión de no
+# tocarlos) simplemente no activa este mecanismo.
+zypper_lock_competing_services:
+  - ds_agent
+  - nessusagent
+
 # Ante un fallo, por defecto NO se limpian los repositorios temporales
 # ni el respaldo, para preservar información de diagnóstico.
 cleanup_repositories_on_failure: false

@@ -1,0 +1,206 @@
+---
+# playbooks/report_consolidado.yml
+#
+# Genera el reporte CONSOLIDADO de un Lote (consolidado_<LOTE>.html/.json):
+# una vista por host de TODAS las fases ejecutadas (precheck/preparar/
+# aplicar/validar) con su estado REAL, más el estado final de ese host
+# (OK únicamente si TODAS sus fases están OK; en caso contrario, el peor
+# estado registrado) y la lista de hosts que pertenecen a este Lote según
+# el inventario, aunque todavía no tengan ninguna ejecución registrada.
+#
+# CRÍTICO: lee el historial desde report_destination (destino persistente),
+# NUNCA desde report_local_dir en solitario -- en el Workflow de 5 etapas,
+# cada nodo (Precheck/Preparar/Aplicar) es un Job de AWX separado, cada uno
+# en su propio Execution Environment efímero. report_local_dir de un nodo
+# no sobrevive para que lo lea otro nodo; report_destination sí (ver
+# playbooks/group_vars/all.yml). Si report_destination todavía es
+# CHANGE_ME, se usa report_local_dir como alternativa (solo verá lo que
+# esta misma ejecución alcanzó a escribir).
+#
+# Se importa automáticamente al final de playbooks/upgrade.yml y
+# playbooks/precheck_only.yml (para que cualquier corrida deje el
+# consolidado de su Lote al día), y además puede usarse como entrypoint
+# propio -- la "Etapa 4: Reporting" del Workflow Job Template en AWX.
+#
+# Requiere upgrade_crq/upgrade_lote (del Survey) para saber qué Lote
+# consolidar y en qué carpeta CRQ guardarlo.
+
+- name: Generar el reporte consolidado del Lote de esta ejecución
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  become: false
+  tasks:
+    - name: Verificar que haya un Lote para consolidar
+      ansible.builtin.debug:
+        msg: >-
+          No hay upgrade_lote definido en esta ejecución; no hay ningún
+          Lote que consolidar. Esto es normal si se ejecutó este playbook
+          por fuera del flujo normal (upgrade.yml/precheck_only.yml).
+      when: (upgrade_lote | default('')) | trim | length == 0
+
+    - name: Consolidar el Lote
+      when: (upgrade_lote | default('')) | trim | length > 0
+      block:
+        - name: Calcular carpeta CRQ segura (misma sanitización que roles/reporting)
+          ansible.builtin.set_fact:
+            _consolidado_crq_folder: "{{ (upgrade_crq | default('') | trim | length > 0) | ternary(upgrade_crq | trim | regex_replace('[^A-Za-z0-9_-]', '_'), 'SIN_CRQ') }}"
+            _consolidado_lote_folder: "{{ upgrade_lote | trim | regex_replace('[^A-Za-z0-9_-]', '_') }}"
+
+        - name: "Elegir fuente del historial (persistente si ya está configurada, local si no)"
+          ansible.builtin.set_fact:
+            _consolidado_source_dir: >-
+              {{
+                report_local_dir if (report_destination is search('CHANGE_ME'))
+                else report_destination
+              }}
+
+        - name: Verificar si existe historial (run_summary.jsonl) en la fuente elegida
+          ansible.builtin.stat:
+            path: "{{ _consolidado_source_dir }}/run_summary.jsonl"
+          register: _run_summary_file
+
+        - name: "Leer el historial completo (todas las líneas, sin colapsar -- cada fase se muestra)"
+          ansible.builtin.set_fact:
+            _summary_entries_all: >-
+              {{
+                (lookup('file', _consolidado_source_dir ~ '/run_summary.jsonl').splitlines() | select | list | map('from_json') | list)
+                if _run_summary_file.stat.exists else []
+              }}
+
+        - name: "Filtrar el historial a este CRQ+Lote exactos"
+          ansible.builtin.set_fact:
+            _summary_entries_lote: |-
+              {% set result = [] %}
+              {% for e in _summary_entries_all %}
+              {% if (e.lote | default('')) == upgrade_lote and (e.crq | default('')) == (upgrade_crq | default('')) %}
+              {% set _ = result.append(e) %}
+              {% endif %}
+              {% endfor %}
+              {{ result }}
+
+        - name: "Calcular hosts del inventario que pertenecen a este Lote (aunque no tengan ejecución todavía)"
+          # hostvars/groups están disponibles para TODO el inventario en
+          # cualquier play, incluso hosts: localhost -- no depende de qué
+          # hosts seleccionó select_target_hosts.yml para esta corrida.
+          ansible.builtin.set_fact:
+            _consolidado_inventory_hosts: |-
+              {% set result = [] %}
+              {% for h in groups['all'] | default([]) %}
+              {% if (hostvars[h].lote | default('')) == upgrade_lote %}
+              {% set _ = result.append(h) %}
+              {% endif %}
+              {% endfor %}
+              {{ result }}
+
+        - name: "Calcular el conjunto de hosts a mostrar (inventario del Lote + cualquiera con historial, por si no está en el inventario)"
+          ansible.builtin.set_fact:
+            _consolidado_hostnames: |-
+              {% set result = _consolidado_inventory_hosts %}
+              {% for e in _summary_entries_lote %}
+              {% if e.hostname not in result %}
+              {% set _ = result.append(e.hostname) %}
+              {% endif %}
+              {% endfor %}
+              {{ result | sort }}
+
+        - name: "Ensamblar, por host, sus fases (ordenadas por fecha) y su estado final real"
+          # Estado final de un host = OK únicamente si TODAS sus fases
+          # registradas están OK; si alguna fase es FAILED/NOT_CHECKED/
+          # WARNING, el estado final refleja el peor caso (misma
+          # precedencia FAILED > NOT_CHECKED > WARNING > OK que el resto
+          # del proyecto). Un host del Lote sin ninguna fase registrada
+          # queda NOT_CHECKED con nota explícita (no se inventa un OK).
+          ansible.builtin.set_fact:
+            consolidado_hosts: |-
+              {% set hosts_result = [] %}
+              {% for h in _consolidado_hostnames %}
+              {%   set host_entries = [] %}
+              {%   for e in _summary_entries_lote %}
+              {%     if e.hostname == h %}
+              {%       set _ = host_entries.append(e) %}
+              {%     endif %}
+              {%   endfor %}
+              {%   set host_entries = host_entries | sort(attribute='timestamp') %}
+              {%   set has_failed = host_entries | selectattr('status', 'equalto', 'FAILED') | list | length > 0 %}
+              {%   set has_not_checked = host_entries | selectattr('status', 'equalto', 'NOT_CHECKED') | list | length > 0 %}
+              {%   set has_warning = host_entries | selectattr('status', 'equalto', 'WARNING') | list | length > 0 %}
+              {%   set final_status = (
+                     'NOT_CHECKED' if host_entries | length == 0
+                     else ('FAILED' if has_failed
+                     else ('NOT_CHECKED' if has_not_checked
+                     else ('WARNING' if has_warning
+                     else 'OK')))
+                   ) %}
+              {%   set final_note = (
+                     'sin ninguna ejecución registrada todavía para este Lote' if host_entries | length == 0
+                     else (host_entries | length | string) ~ ' fase(s) registrada(s)'
+                   ) %}
+              {%   set _ = hosts_result.append({
+                     'hostname': h,
+                     'final_status': final_status,
+                     'final_note': final_note,
+                     'phases': host_entries
+                   }) %}
+              {% endfor %}
+              {{ hosts_result }}
+
+        - name: "Calcular estado global del Lote (OK únicamente si todos los hosts están OK)"
+          ansible.builtin.set_fact:
+            consolidado_lote_status: >-
+              {{
+                'FAILED' if (consolidado_hosts | selectattr('final_status', 'equalto', 'FAILED') | list | length > 0)
+                else ('NOT_CHECKED' if (consolidado_hosts | selectattr('final_status', 'equalto', 'NOT_CHECKED') | list | length > 0)
+                else ('WARNING' if (consolidado_hosts | selectattr('final_status', 'equalto', 'WARNING') | list | length > 0)
+                else 'OK'))
+              }}
+
+        - name: Asegurar la carpeta del CRQ en el área de trabajo local
+          ansible.builtin.file:
+            path: "{{ report_local_dir }}/{{ _consolidado_crq_folder }}"
+            state: directory
+            mode: "0755"
+
+        - name: Renderizar el reporte consolidado HTML
+          ansible.builtin.template:
+            src: "{{ playbook_dir }}/roles/reporting/templates/consolidado.html.j2"
+            dest: "{{ report_local_dir }}/{{ _consolidado_crq_folder }}/consolidado_{{ _consolidado_lote_folder }}.html"
+            mode: "0644"
+          vars:
+            consolidado_generated_at: "{{ lookup('pipe', 'date -u +%Y-%m-%dT%H:%M:%SZ') }}"
+            consolidado_crq: "{{ upgrade_crq | default('') }}"
+            consolidado_lote: "{{ upgrade_lote }}"
+            consolidado_ambiente: "{{ upgrade_ambiente | default('') }}"
+            consolidado_source: "{{ _consolidado_source_dir }}"
+
+        - name: Guardar el reporte consolidado también en JSON (para auditoría/integraciones)
+          ansible.builtin.copy:
+            content: >-
+              {{ {
+                'crq': (upgrade_crq | default('')),
+                'lote': upgrade_lote,
+                'ambiente': (upgrade_ambiente | default('')),
+                'generated_at': lookup('pipe', 'date -u +%Y-%m-%dT%H:%M:%SZ'),
+                'lote_status': consolidado_lote_status,
+                'hosts': consolidado_hosts
+              } | to_nice_json }}
+            dest: "{{ report_local_dir }}/{{ _consolidado_crq_folder }}/consolidado_{{ _consolidado_lote_folder }}.json"
+            mode: "0644"
+
+        - name: Asegurar la carpeta del CRQ en el destino persistente, si ya está configurado
+          ansible.builtin.file:
+            path: "{{ report_destination }}/{{ _consolidado_crq_folder }}"
+            state: directory
+            mode: "0755"
+          when: not (report_destination is search('CHANGE_ME'))
+          failed_when: false
+
+        - name: Copiar el reporte consolidado (HTML + JSON) al destino persistente, si ya está configurado
+          ansible.builtin.copy:
+            src: "{{ report_local_dir }}/{{ _consolidado_crq_folder }}/consolidado_{{ _consolidado_lote_folder }}.{{ item }}"
+            dest: "{{ report_destination }}/{{ _consolidado_crq_folder }}/consolidado_{{ _consolidado_lote_folder }}.{{ item }}"
+            remote_src: true
+            mode: "0644"
+          loop: ["html", "json"]
+          when: not (report_destination is search('CHANGE_ME'))
+          failed_when: false

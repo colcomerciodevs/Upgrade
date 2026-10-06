@@ -103,8 +103,8 @@
   become: true
   register: _addrepo_result
   until: (_addrepo_result.rc | default(1)) != 7
-  retries: "{{ repo_management_zypper_lock_retries }}"
-  delay: "{{ repo_management_zypper_lock_delay }}"
+  retries: "{{ zypper_lock_retries }}"
+  delay: "{{ zypper_lock_delay }}"
   changed_when: true
   failed_when: false
 
@@ -178,8 +178,8 @@
   # código fuente oficial), así que reintentar en Ansible es el único
   # mecanismo real disponible -- no existe un flag de Zypper para esto.
   until: (repo_refresh_result.rc | default(1)) != 7
-  retries: "{{ repo_management_zypper_lock_retries }}"
-  delay: "{{ repo_management_zypper_lock_delay }}"
+  retries: "{{ zypper_lock_retries }}"
+  delay: "{{ zypper_lock_delay }}"
   changed_when: true
   # Captura explícita en lugar de dejar que Ansible falle con el genérico
   # "non-zero return code": ese mensaje, sin stdout/stderr real de Zypper,

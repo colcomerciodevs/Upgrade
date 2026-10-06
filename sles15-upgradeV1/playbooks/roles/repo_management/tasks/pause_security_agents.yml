@@ -1,0 +1,52 @@
+---
+# roles/repo_management/tasks/pause_security_agents.yml
+#
+# Detiene TEMPORALMENTE los agentes de seguridad corporativos listados en
+# zypper_lock_competing_services (ver playbooks/group_vars/all.yml para la
+# evidencia real que justifica esto) ANTES de modificar cualquier
+# repositorio o paquete. Confirmado con evidencia real en laboratorio
+# (sles15-sp5-sp7 / 10.181.8.36, 2026-10-06): estos agentes toman
+# intermitentemente el lock de libzypp vía PackageKit (D-Bus) durante sus
+# escaneos, haciendo fallar operaciones reales de Zypper incluso con los
+# reintentos de zypper_lock_retries/_delay agotados.
+#
+# Solo detiene los que:
+#   - están presentes en este host (unit systemd existente);
+#   - están activos ("running") en este momento.
+# Nunca "inicia" nada aquí, y nunca los deshabilita (disable) ni
+# desinstala: únicamente los detiene (stop) de forma temporal. Se
+# reinician en resume_security_agents.yml.
+#
+# Registra EXACTAMENTE cuáles se detuvieron en security_agents_paused
+# (debe inicializarse en [] al comenzar la etapa, ver
+# playbooks/tasks/run_stage.yml), para reiniciar únicamente esos -- nunca
+# un servicio que ya estaba detenido por otra razón ajena a esta
+# automatización.
+
+- name: Detectar servicios presentes y su estado actual en este host
+  ansible.builtin.service_facts: {}
+
+- name: "Calcular qué agentes de seguridad configurados están presentes y activos ahora"
+  ansible.builtin.set_fact:
+    _security_agents_to_pause: |-
+      {% set result = [] %}
+      {% for svc in zypper_lock_competing_services %}
+      {% set unit = svc ~ '.service' %}
+      {% if unit in ansible_facts.services and ansible_facts.services[unit].state == 'running' %}
+      {% set _ = result.append(svc) %}
+      {% endif %}
+      {% endfor %}
+      {{ result }}
+
+- name: "Detener temporalmente los agentes de seguridad que interfieren con Zypper (si hay alguno activo)"
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    state: stopped
+  loop: "{{ _security_agents_to_pause }}"
+  become: true
+  when: _security_agents_to_pause | length > 0
+
+- name: Registrar qué agentes se detuvieron realmente (para reiniciarlos al terminar la etapa)
+  ansible.builtin.set_fact:
+    security_agents_paused: "{{ _security_agents_to_pause }}"
+  when: _security_agents_to_pause | length > 0

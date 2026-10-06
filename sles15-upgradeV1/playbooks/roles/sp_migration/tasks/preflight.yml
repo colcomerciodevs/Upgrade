@@ -127,8 +127,8 @@
           # que puede aparecer aquí igual que en UPGRADE real. Confirmado
           # con evidencia real en laboratorio (2026-10-06).
           until: (_preflight_origin_addrepo.rc | default(1)) != 7
-          retries: "{{ repo_management_zypper_lock_retries }}"
-          delay: "{{ repo_management_zypper_lock_delay }}"
+          retries: "{{ zypper_lock_retries }}"
+          delay: "{{ zypper_lock_delay }}"
           changed_when: false
           failed_when: false
 
@@ -138,8 +138,8 @@
           become: true
           register: _preflight_origin_refresh
           until: (_preflight_origin_refresh.rc | default(1)) != 7
-          retries: "{{ repo_management_zypper_lock_retries }}"
-          delay: "{{ repo_management_zypper_lock_delay }}"
+          retries: "{{ zypper_lock_retries }}"
+          delay: "{{ zypper_lock_delay }}"
           changed_when: false
           failed_when: false
 
@@ -204,8 +204,8 @@
           become: true
           register: _preflight_addrepo
           until: (_preflight_addrepo.rc | default(1)) != 7
-          retries: "{{ repo_management_zypper_lock_retries }}"
-          delay: "{{ repo_management_zypper_lock_delay }}"
+          retries: "{{ zypper_lock_retries }}"
+          delay: "{{ zypper_lock_delay }}"
           changed_when: false
           failed_when: false
 
@@ -221,8 +221,8 @@
           become: true
           register: _preflight_refresh
           until: (_preflight_refresh.rc | default(1)) != 7
-          retries: "{{ repo_management_zypper_lock_retries }}"
-          delay: "{{ repo_management_zypper_lock_delay }}"
+          retries: "{{ zypper_lock_retries }}"
+          delay: "{{ zypper_lock_delay }}"
           changed_when: false
           failed_when: false
 
@@ -237,8 +237,8 @@
           become: true
           register: _preflight_dup
           until: (_preflight_dup.rc | default(1)) != 7
-          retries: "{{ repo_management_zypper_lock_retries }}"
-          delay: "{{ repo_management_zypper_lock_delay }}"
+          retries: "{{ zypper_lock_retries }}"
+          delay: "{{ zypper_lock_delay }}"
           changed_when: false
           failed_when: false
 

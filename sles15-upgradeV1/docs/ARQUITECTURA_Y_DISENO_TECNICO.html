@@ -744,7 +744,8 @@
     de agregarla ahí mismo) porque depende de una credencial distinta (la misma
     del inventario dinámico, con permiso de escritura) y de una red externa (SharePoint) que
     puede no estar disponible — un fallo de red hacia SharePoint nunca debe impedir que
-    el resumen local (<code>resumen.html</code>) se genere. Sincroniza desde
+    el reporte consolidado local (<code>consolidado_&lt;LOTE&gt;.html</code>) se
+    genere. Sincroniza desde
     <code>report_destination</code>, nunca desde <code>report_local_dir</code>: este
     último es el área de trabajo efímera de CADA Job por separado, y un nodo del
     Workflow no puede ver los archivos que escribió otro nodo ahí.

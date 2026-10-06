@@ -184,6 +184,27 @@ En una ejecución exitosa, retirar únicamente los repositorios temporales cread
 
 Ante un fallo, conservar por defecto la información/configuración necesaria para diagnóstico en lugar de ejecutar una limpieza ciega.
 
+### Agentes de seguridad corporativos que interfieren con Zypper
+
+Decisión explícita del usuario para este ambiente (2026-10-06): diagnosticado
+con evidencia real (SSH de solo lectura al host `sles15-sp5-sp7`) que
+**Trend Micro Deep Security Agent** (`ds_agent.service`) y **Nessus Agent**
+(`nessusagent.service`) toman intermitentemente el lock de libzypp vía
+PackageKit durante sus escaneos rutinarios de vulnerabilidades/parches,
+haciendo fallar operaciones reales de Zypper de esta automatización incluso
+con los reintentos agotados. No es un bug de este proyecto ni algo que un
+timer/cron propio esté causando (descartado con evidencia real en el host).
+
+`playbooks/group_vars/all.yml` define `zypper_lock_competing_services`
+(lista vacía válida). Esta automatización **detiene temporalmente**
+(nunca deshabilita ni desinstala) únicamente los agentes de esa lista que
+estén presentes y activos en el host, justo antes de modificar cualquier
+repositorio/paquete, y los **reinicia** al terminar la migración real de
+la etapa — excepto entre los 2 saltos encadenados de `upgrade_mode: full`
+(se reinician solo al llegar a SP7, o de inmediato si la etapa falló). Ver
+README sección 8.4 para el detalle completo y `playbooks/tasks/
+run_stage.yml` para la condición exacta de reinicio.
+
 ## Prechecks
 
 Antes de un upgrade modificador validar como mínimo:

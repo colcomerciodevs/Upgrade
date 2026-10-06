@@ -9,7 +9,7 @@
 # AWX #9224) que 3 intentos con 2s de espera NO fueron suficientes --
 # packagekitd (pid distinto cada vez) mantuvo el lock durante toda la
 # ventana de reintentos. 5 intentos / 5s (25s máx.) es el mismo presupuesto
-# ya usado y confirmado suficiente en repo_management_zypper_lock_retries/_delay.
+# ya usado y confirmado suficiente en zypper_lock_retries/_delay (playbooks/group_vars/all.yml).
 sp_migration_updatestack_retries: 5
 sp_migration_updatestack_delay: 5
 

@@ -43,8 +43,8 @@
   become: true
   register: _removerepo_result
   until: (_removerepo_result.rc | default(1)) != 7
-  retries: "{{ repo_management_zypper_lock_retries }}"
-  delay: "{{ repo_management_zypper_lock_delay }}"
+  retries: "{{ zypper_lock_retries }}"
+  delay: "{{ zypper_lock_delay }}"
   changed_when: true
   failed_when: false
 

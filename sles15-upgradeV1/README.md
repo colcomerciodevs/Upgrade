@@ -144,7 +144,7 @@ sles15-upgrade/
 │   └── linux_excel_inventory.yml  # Inventory Source dinámico (Excel/SharePoint, sección 13)
 ├── playbooks/
 │   ├── upgrade.yml                # entrypoint único (todos los modos)
-│   ├── report_summary.yml         # consolidación final (resumen.html); también usable como Etapa 4 de un Workflow (sección 13)
+│   ├── report_consolidado.yml     # reporte consolidado por Lote (consolidado_<LOTE>.html); también usable como Etapa 4 de un Workflow (sección 13)
 │   ├── tasks/run_stage.yml        # lógica común de UNA etapa de migración (soporta upgrade_phase, sección 10.1)
 │   ├── group_vars/all.yml         # variables comunes del proyecto (ver sección 6)
 │   ├── host_vars/*.yml.example    # excepciones puntuales por host
@@ -647,6 +647,51 @@ pasa (`OK` o `WARNING`, nunca `FAILED`) se activa `stage_validated: true`,
 el gate real que permite continuar a la
 siguiente etapa en modo `full` (ver sección 10).
 
+### 8.4 Agentes de seguridad corporativos que interfieren con Zypper
+
+Decisión explícita del usuario para este ambiente (2026-10-06), tras
+diagnosticar en vivo (SSH de solo lectura, `sles15-sp5-sp7` /
+`10.181.8.36`) la causa real de fallos intermitentes con `rc=7`
+(`ZYPPER_EXIT_ZYPP_LOCKED`) que **persistían incluso agotando los
+reintentos** de `zypper_lock_retries`/`_delay` (sección 15): dos agentes
+de seguridad corporativos activos en el host, **Trend Micro Deep Security
+Agent** (`ds_agent.service`) y **Nessus Agent** (`nessusagent.service`),
+hacen rutinariamente escaneos de vulnerabilidades/parches que consultan el
+estado de paquetes vía **PackageKit** (activado por D-Bus, de ahí un PID
+de `packagekitd` distinto cada vez) — esa consulta toma brevemente el
+mismo lock de libzypp que usa Zypper. Se descartaron explícitamente otras
+hipótesis con evidencia real en el host antes de llegar a esta conclusión:
+no hay `transactional-update` instalado, `suseconnect-keepalive.timer` no
+coincidía con la ventana de los fallos, y no hay cron/timer propio de
+parchado causando esto.
+
+Esto **no es un bug de este proyecto**: es la interacción esperada (aunque
+inconveniente) entre agentes de seguridad corporativos y cualquier
+operación real de Zypper en el host. La solución de raíz real —coordinar
+con el equipo de seguridad para excluir el host de esos escaneos durante
+la ventana de mantenimiento— está fuera del alcance de esta automatización.
+Como mitigación, `playbooks/group_vars/all.yml` define
+`zypper_lock_competing_services` (lista vacía válida) y esta etapa:
+
+1. **Pausa** (`roles/repo_management/tasks/pause_security_agents.yml`),
+   justo antes de tocar cualquier repositorio o paquete, ÚNICAMENTE los
+   agentes de esa lista que estén presentes **y activos** en este host
+   (nunca los deshabilita ni desinstala — solo `systemctl stop` temporal).
+2. **Reinicia** (`resume_security_agents.yml`) únicamente los que esta
+   misma ejecución pausó, al terminar la migración real de la etapa —
+   **excepto** dentro de `upgrade_mode: full` antes de llegar a SP7 (el
+   siguiente salto encadenado los necesitaría pausados otra vez de
+   inmediato): ahí se reinician solo al llegar a SP7, o de inmediato si
+   la etapa falló (no hay un "siguiente salto" que proteger). Ver
+   `playbooks/tasks/run_stage.yml` para la condición exacta.
+3. Si un agente no puede reiniciarse, la etapa escala a `WARNING` (nunca se
+   oculta) — dejar un agente de seguridad corporativo detenido
+   indefinidamente sin que el operador lo note sería peor que un
+   `WARNING` en el reporte.
+
+El reporte de cada etapa incluye qué agentes se pausaron, si se
+reiniciaron en esa misma etapa, y por qué (sección 11).
+
 ---
 
 ## 9. UPGRADE real (modos `sp4_to_sp5` / `sp5_to_sp6` / `sp6_to_sp7` / `full`)
@@ -778,10 +823,19 @@ supone que solo prepara.
   `repos_enabled_before`, `repos_disabled_before`, `repos_disabled_by_upgrade`,
   `repos_temporary_created`, `repos_temporary_removed`, `repos_enabled_after`.
 - Estados usados: `OK`, `WARNING`, `FAILED`, `NOT_CHECKED`.
-- Cada ejecución añade una línea a `reports/run_summary.jsonl`, y al final
-  de la ejecución se genera `reports/resumen.html`: un resumen consolidado
-  con el **último estado conocido de cada host y etapa**, para que el
-  operador pueda ver el resultado sin conectarse por SSH ni leer todo el
+- Cada ejecución añade una línea a `run_summary.jsonl` (en `report_local_dir`
+  **y** en `report_destination` si ya está configurado — ver advertencia de
+  persistencia más abajo), y al final de la ejecución se genera/actualiza el
+  **reporte consolidado** del Lote (`consolidado_<LOTE>.html`/`.json`, sección
+  11.1): una vista por host de **todas las fases que corrieron realmente**
+  (precheck/preparar/aplicar/validar) con su estado real, más el estado final
+  de ese host (`OK` únicamente si **todas** sus fases están `OK`; si alguna
+  falló, el final refleja eso, nunca un `OK` que no corresponda) y el estado
+  global del Lote (`OK` únicamente si **todos** los hosts del Lote están
+  `OK`). Incluye también los hosts que pertenecen a ese Lote según el
+  inventario aunque todavía no tengan ninguna ejecución registrada (quedan en
+  `NOT_CHECKED`, nunca se inventa un resultado). Todo esto para que el
+  operador pueda ver el resultado real sin conectarse por SSH ni leer todo el
   log del Job de AWX.
 
 ### Persistencia (`report_destination`) — advertencia importante
@@ -835,9 +889,22 @@ individuales (HTML + JSON) con el mismo árbol de 3 niveles:
   `apply` (ej. `sp5_to_sp6_prepare`, `sp5_to_sp6_apply`) — `both` no se agrega al
   nombre, para no generar una carpeta redundante.
 
-`run_summary.jsonl` y `resumen.html` (el resumen consolidado) se quedan en la raíz
-de `report_local_dir`/`report_destination`, fuera de este árbol — abarcan todos los
-CRQ/hosts/etapas, no uno en particular.
+`run_summary.jsonl` se queda en la raíz de `report_local_dir`/`report_destination`
+(abarca todos los CRQ/hosts/etapas). El reporte **consolidado** por Lote vive
+dentro de la carpeta de su CRQ: `<CRQ sanitizado>/consolidado_<LOTE sanitizado>.html`/`.json`
+(ej. `RFC_2026-PRUEBA/consolidado_LOTE1.html`) — un nivel, no por host/etapa,
+porque resume TODOS los hosts de ese Lote dentro de ese CRQ.
+
+**Por qué `run_summary.jsonl` se escribe en `report_destination` y no solo en
+`report_local_dir`**: en el Workflow de 5 etapas, Precheck/Preparar/Aplicar son
+Jobs de AWX **separados**, normalmente en Execution Environments distintos —
+`report_local_dir` de un nodo no sobrevive para que lo lea otro nodo
+posterior. El reporte consolidado SIEMPRE lee de `report_destination` cuando
+ya está configurado (cae a `report_local_dir` solo si `report_destination`
+sigue en `CHANGE_ME`) — de lo contrario, el consolidado generado en un nodo
+posterior mostraría estados incompletos o desactualizados (por ejemplo, una
+etapa "Aplicar" que falló realmente, pero el consolidado seguiría mostrando
+el último estado que sí pudo leer de un nodo anterior).
 
 ### 11.2 Sincronización a SharePoint (Etapa 5 opcional del Workflow)
 
@@ -1120,7 +1187,7 @@ infraestructura y orden recomendado de la primera ejecución real).
   el lock por su cuenta — no existe ningún flag de Zypper para forzar esto,
   reintentar es el único mecanismo real disponible. Por eso **todo** comando
   Zypper que modifica algo en este proyecto reintenta automáticamente ante
-  este código exacto (`repo_management_zypper_lock_retries`/`_delay`, por
+  este código exacto (`zypper_lock_retries`/`_delay`, por
   defecto 5 intentos / 5s de espera): `addrepo`, `refresh`, el `modifyrepo
   --disable` de repos preexistentes, `removerepo`, y el gate `dup -D` + el
   `dup` real de la migración — cualquier otro código de error se reporta de
