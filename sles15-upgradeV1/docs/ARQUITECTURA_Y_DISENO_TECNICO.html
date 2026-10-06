@@ -349,6 +349,22 @@
     <p style="margin-top:8px">La operación es idempotente (solo agrega confianza si falta; nunca
     elimina ninguna CA existente) y no reinicia ni afecta ningún servicio.</p>
   </div>
+
+  <div class="callout decision">
+    <span class="label">Por qué el precheck DENTRO de "preparar"/"aplicar" es más liviano que el de la Etapa 1</span>
+    Decisión explícita del usuario para este ambiente, tras una prueba real en
+    laboratorio: los 2 prechecks mostraban resultados casi idénticos cuando ambos
+    apuntaban al mismo salto, repitiendo locks/disco/inventario completo de
+    repos/alcanzabilidad/GeoPOS sin necesidad. <code>playbooks/tasks/run_stage.yml</code>
+    ahora solo repite el <strong>único</strong> chequeo que de verdad depende de la
+    etapa específica que se está preparando/aplicando — Service Pack actual vs.
+    esperado (<code>roles/precheck/tasks/sp_version.yml</code>) — porque el precheck
+    genérico de la Etapa 1 (<code>playbooks/precheck_only.yml</code>) usa una etapa
+    objetivo <strong>autodetectada</strong>, no necesariamente la misma que eligió el
+    operador en el Survey para <code>upgrade_mode</code>. El resto de la evidencia
+    (locks, disco, repos, GeoPOS) sigue disponible en el reporte de la Etapa 1,
+    inmediatamente anterior — no se perdió, solo no se duplica.
+  </div>
 </section>
 
 <!-- =========================== 2 =========================== -->

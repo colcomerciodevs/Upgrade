@@ -64,11 +64,47 @@
       critical_unhealthy: false
       categories: {}
 
-- name: "Ejecutar precheck de la etapa {{ stage_target_sp }}"
+- name: "Ejecutar precheck LIGERO (solo Service Pack actual vs. esperado) de la etapa {{ stage_target_sp }}"
+  # Decisión explícita del usuario para este ambiente: NO se repite el
+  # precheck completo (locks/disco/inventario de repos/los N chequeos de
+  # alcanzabilidad HTTP/GeoPOS) -- esa evidencia completa ya quedó en el
+  # reporte de la Etapa 1 del Workflow (playbooks/precheck_only.yml),
+  # ejecutada inmediatamente antes (enlace "On Success"). Lo único que de
+  # verdad depende de la etapa ESPECÍFICA que se está preparando/aplicando
+  # -- y que el precheck genérico de la Etapa 1 no puede garantizar, porque
+  # usa una etapa objetivo autodetectada, no la elegida en el Survey -- es
+  # confirmar que el Service Pack actual real coincide con el esperado para
+  # ESTE salto exacto (ej. sp5_to_sp6 espera encontrar sp5 ahora mismo).
+  # Si se ejecuta este playbook por fuera del Workflow (alternativa
+  # simplificada, upgrade_phase: both), esta sigue siendo la única
+  # verificación de Service Pack antes de modificar nada -- no hay Etapa 1
+  # previa en ese camino, pero el resto de chequeos (locks, disco, etc.) no
+  # son obligatorios para decidir si el SP actual es el correcto.
+  ansible.builtin.set_fact:
+    precheck_checks: []
+
+- name: "Determinar Service Pack actual y validar que coincide con el esperado para esta etapa {{ stage_target_sp }}"
   ansible.builtin.include_role:
     name: precheck
+    tasks_from: sp_version.yml
   vars:
     precheck_target_sp: "{{ stage_target_sp }}"
+
+- name: "Calcular estado del precheck ligero de esta etapa {{ stage_target_sp }}"
+  # Misma fórmula de precedencia (FAILED > WARNING > OK) que
+  # roles/precheck/tasks/main.yml, "Calcular estado global del precheck" --
+  # aplicada aquí solo sobre los checks de sp_version.yml.
+  ansible.builtin.set_fact:
+    precheck_result:
+      target_sp: "{{ precheck_effective_target_sp | default('desconocido') }}"
+      checks: "{{ precheck_checks }}"
+      repo_inventory: []
+      overall_status: >-
+        {{
+          'FAILED' if (precheck_checks | selectattr('status', 'equalto', 'FAILED') | list | length > 0)
+          else ('WARNING' if (precheck_checks | selectattr('status', 'equalto', 'WARNING') | list | length > 0)
+          else 'OK')
+        }}
 
 - name: "Aplicar resultado del precheck al estado de la etapa {{ stage_target_sp }}"
   ansible.builtin.set_fact:

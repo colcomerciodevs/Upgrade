@@ -646,7 +646,13 @@ Orden exacto por etapa (ver `playbooks/tasks/run_stage.yml` — es el mismo
 código genérico para las cuatro combinaciones de origen/destino, parametrizado
 por `stage_current_sp`/`stage_target_sp`/`stage_releasever`):
 
-1. **Precheck** de la etapa (sección 8.1). Si falla, no se continúa.
+1. **Precheck LIGERO** de la etapa (solo Service Pack actual vs. esperado
+   para este salto exacto — no repite locks/disco/inventario de repos/
+   alcanzabilidad/GeoPOS, ya cubiertos por el precheck completo de la
+   Etapa 1 del Workflow, sección 13). Si falla, no se continúa. En la
+   alternativa simplificada de un solo Job Template (sin Etapa 1 previa),
+   sigue siendo la única verificación de Service Pack antes de modificar
+   nada.
 2. **`confirm_production_upgrade: true` (assert obligatorio)**. Esta
    verificación ocurre **antes** de tocar cualquier repositorio, antes del
    backup, antes de `updatestack` y antes de cualquier paquete. Si es
