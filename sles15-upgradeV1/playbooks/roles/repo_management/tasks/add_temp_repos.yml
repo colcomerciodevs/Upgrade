@@ -128,3 +128,16 @@
   become: true
   register: repo_refresh_result
   changed_when: true
+  # Captura explícita en lugar de dejar que Ansible falle con el genérico
+  # "non-zero return code": ese mensaje, sin stdout/stderr real de Zypper,
+  # no permite diagnosticar sin leer el log crudo del Job (mismo principio
+  # ya aplicado a addrepo más arriba y a disable_preexisting.yml/cleanup.yml).
+  failed_when: false
+
+- name: "Fallar explícitamente, con el detalle real de Zypper, si falló el refresh de la fase {{ repo_management_alias_suffix }}"
+  ansible.builtin.fail:
+    msg: >-
+      No se pudo refrescar la metadata de los repositorios temporales
+      {{ _phase_created_aliases | join(', ') }} (rc={{ repo_refresh_result.rc }}):
+      {{ ((repo_refresh_result.stdout | default('')) ~ ' ' ~ (repo_refresh_result.stderr | default(''))) | trim | truncate(4000) }}
+  when: repo_refresh_result.rc | default(1) != 0

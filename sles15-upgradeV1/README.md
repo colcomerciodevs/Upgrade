@@ -1101,6 +1101,17 @@ infraestructura y orden recomendado de la primera ejecución real).
   inmediato, sin reintentos. Si sigue fallando tras los 5 intentos, hay
   algo más que mantiene el lock de forma persistente (revisar
   `ps aux | grep -i zypp`/`packagekitd` en el host).
+- **Etapa (prepare) falla en "migracion: No se pudo refrescar la metadata
+  de los repositorios temporales..." con detalle "Signature verification
+  failed for repomd.xml" / "Can't provide /repodata/repomd.xml"**:
+  confirmado con evidencia real en laboratorio (2026-10-06) — es un
+  problema real de **contenido en Foreman/Katello** (metadata/firma del
+  Content View de ese Service Pack no se publicó correctamente), no un
+  problema de red ni de este proyecto. `endpoint_alcanzable_*` en PRECHECK
+  puede dar `OK`/`WARNING` igual (solo prueba que el servidor responde
+  HTTP, no que el contenido del repo sea válido). Revisar en Foreman/Katello
+  la publicación/sincronización del Content View y Lifecycle Environment
+  correspondiente antes de reintentar.
 - **Precheck en `WARNING` en `endpoint_alcanzable_*`**: el host respondió
   (HTTP 401/403/404, por ejemplo), pero eso no confirma que el repositorio
   sea utilizable — ejecute `validate` para la comprobación real.
