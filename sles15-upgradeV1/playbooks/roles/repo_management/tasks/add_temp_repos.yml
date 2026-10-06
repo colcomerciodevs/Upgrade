@@ -29,6 +29,35 @@
       Complete este dato real (CHANGE_ME) antes de ejecutar una migración real.
     success_msg: "Repositorios Foreman/Katello definidos para {{ repo_management_phase_sp }} ({{ repo_management_alias_suffix }}): {{ repo_management_phase_repositories | length }}"
 
+- name: "Calcular el prefijo de alias de esta fase (para detectar huérfanos de una ejecución anterior fallida)"
+  ansible.builtin.set_fact:
+    _phase_alias_prefix: "{{ temporary_repo_prefix }}{{ repo_management_phase_sp }}-{{ repo_management_alias_suffix }}-"
+
+- name: "Retirar, si quedaron, repos huérfanos con este mismo prefijo de una ejecución anterior fallida"
+  # Confirmado con evidencia real en laboratorio (2026-10-06): si una
+  # ejecución previa falló DESPUÉS de agregar estos alias (por ejemplo, en
+  # el refresh posterior) pero ANTES de llegar a su propio cleanup.yml, los
+  # alias quedan existentes en el host. Al reintentar la etapa, "addrepo"
+  # fallaría de inmediato con "already exists" para los 10/10 alias. Esto
+  # es seguro de ejecutar siempre (incluso si no hay huérfanos, no hace
+  # nada): solo retira alias que coincidan EXACTAMENTE con el prefijo
+  # identificable de ESTA fase de esta automatización (nunca repositorios
+  # preexistentes del cliente ni de otra fase/etapa).
+  ansible.builtin.include_role:
+    name: repo_management
+    tasks_from: cleanup.yml
+  vars:
+    repo_management_cleanup_prefix: "{{ _phase_alias_prefix }}"
+
+- name: "Registrar los huérfanos retirados por separado del cleanup normal de la etapa"
+  # Evita que el mismo alias aparezca dos veces en "Temporales Foreman
+  # retirados" del reporte (una vez aquí, por huérfano, y otra vez al
+  # retirarse normalmente más adelante en esta misma etapa).
+  ansible.builtin.set_fact:
+    repos_leftover_removed_before_start: "{{ repos_leftover_removed_before_start + repos_temporary_removed }}"
+    repos_temporary_removed: []
+  when: repos_temporary_removed | length > 0
+
 - name: Calcular alias de los repositorios temporales de esta fase
   ansible.builtin.set_fact:
     _phase_temp_aliases: |-

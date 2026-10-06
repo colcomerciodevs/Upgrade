@@ -50,6 +50,7 @@
     repos_disabled_by_upgrade: []
     repos_temporary_created: []
     repos_temporary_removed: []
+    repos_leftover_removed_before_start: []
     repos_enabled_after: []
     stage_migration_info: {}
     stage_reboot_info: {}
@@ -503,6 +504,7 @@
         repos_enabled_before: "{{ repos_enabled_before }}"
         repos_disabled_before: "{{ repos_disabled_before }}"
         repos_disabled_by_upgrade: "{{ repos_disabled_by_upgrade }}"
+        repos_leftover_removed_before_start: "{{ repos_leftover_removed_before_start }}"
         repos_temporary_created: "{{ repos_temporary_created }}"
         repos_temporary_removed: "{{ repos_temporary_removed }}"
         repos_enabled_after: "{{ repos_enabled_after }}"

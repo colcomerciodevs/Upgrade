@@ -867,6 +867,17 @@ se pudo confirmar desde el desarrollo de este proyecto. Ver
 - Los repositorios temporales y el respaldo se **conservan** ante un fallo
   (no se limpia nada), salvo que se fuerce `cleanup_repositories_on_failure:
   true` explícitamente.
+- Si una etapa se **relanza** después de un fallo con los repositorios
+  temporales conservados (caso anterior), `add_temp_repos.yml` retira
+  automáticamente, antes de volver a agregarlos, cualquier alias huérfano
+  con el prefijo exacto de esa fase (`ansible-sles-upgrade-<sp>-<src|dst>-`)
+  que haya quedado de la ejecución fallida anterior — así el relanzamiento
+  no vuelve a fallar con "already exists". Confirmado con evidencia real en
+  laboratorio (2026-10-06). Estos huérfanos quedan registrados por separado
+  en el reporte ("Huérfanos retirados de una ejecución anterior fallida"),
+  nunca mezclados con la limpieza normal de la etapa. Nunca toca
+  repositorios preexistentes del cliente ni de otra fase/etapa (el filtro
+  es por prefijo exacto).
 
 ---
 

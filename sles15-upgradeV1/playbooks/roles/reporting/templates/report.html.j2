@@ -106,6 +106,9 @@
   <tr><th>Habilitados antes (preexistentes)</th><td>{{ (stage_report.repos.repos_enabled_before | default([])) | join(', ') or 'ninguno' }}</td>
       <th>Ya deshabilitados antes</th><td>{{ (stage_report.repos.repos_disabled_before | default([])) | join(', ') or 'ninguno' }}</td></tr>
   <tr><th>Deshabilitados por esta automatización</th><td colspan="3">{{ (stage_report.repos.repos_disabled_by_upgrade | default([])) | join(', ') or 'ninguno' }}</td></tr>
+  {% if (stage_report.repos.repos_leftover_removed_before_start | default([])) | length > 0 %}
+  <tr><th>Huérfanos retirados (de una ejecución anterior fallida)</th><td colspan="3">{{ stage_report.repos.repos_leftover_removed_before_start | join(', ') }}</td></tr>
+  {% endif %}
   <tr><th>Temporales Foreman creados</th><td colspan="3">{{ (stage_report.repos.repos_temporary_created | default([])) | join(', ') or 'ninguno' }}</td></tr>
   <tr><th>Temporales Foreman retirados</th><td colspan="3">{{ (stage_report.repos.repos_temporary_removed | default([])) | join(', ') or 'ninguno' }}</td></tr>
   <tr><th>Habilitados al final de la etapa</th><td colspan="3">{{ (stage_report.repos.repos_enabled_after | default([])) | join(', ') or 'ninguno' }}</td></tr>
