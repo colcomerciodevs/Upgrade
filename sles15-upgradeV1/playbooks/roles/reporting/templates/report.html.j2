@@ -145,11 +145,11 @@
    existe una opción para omitirlo.</p>
 {% endif %}
 
-{% if stage_report.security_agents and (stage_report.security_agents.paused | default([])) | length > 0 %}
-<h2>Agentes de seguridad detenidos temporalmente</h2>
+{% if stage_report.security_agents and (stage_report.security_agents.stopped | default([])) | length > 0 %}
+<h2>Agentes de seguridad (interferían con Zypper)</h2>
 <table>
-  <tr><th>Agentes pausados por esta automatización</th><td colspan="3">{{ stage_report.security_agents.paused | join(', ') }}</td></tr>
-  <tr><th>Reiniciados al finalizar esta etapa</th><td colspan="3">{{ stage_report.security_agents.resumed_this_stage | default(false) }}</td></tr>
+  <tr><th>Servicios detenidos en esta etapa</th><td colspan="3">{{ stage_report.security_agents.stopped | join(', ') or 'ninguno' }}</td></tr>
+  <tr><th>Servicios reiniciados en esta etapa</th><td colspan="3">{{ (stage_report.security_agents.started | default([])) | join(', ') or 'ninguno' }}</td></tr>
   <tr><th>Nota</th><td colspan="3">{{ stage_report.security_agents.note | default('N/A') }}</td></tr>
 </table>
 <p class="muted">Ver README sección 8.4 para la evidencia real que justifica

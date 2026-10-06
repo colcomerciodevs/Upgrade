@@ -581,8 +581,8 @@
       migration: "{{ stage_migration_info }}"
       reboot: "{{ stage_reboot_info }}"
       security_agents:
-        paused: "{{ security_agents_paused | default([]) }}"
-        resumed_this_stage: "{{ _resume_security_agents_now | default(false) }}"
+        stopped: "{{ security_agents_paused | default([]) }}"
+        started: "{{ (security_agents_paused | default([])) if (_resume_security_agents_now | default(false)) else [] }}"
         note: "{{ _security_agents_note | default('N/A') }}"
       critical_services_before: "{{ critical_services_before | default([]) }}"
       critical_services_after: "{{ critical_services_after | default([]) }}"
