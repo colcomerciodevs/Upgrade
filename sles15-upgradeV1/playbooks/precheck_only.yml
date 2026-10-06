@@ -1,0 +1,88 @@
+---
+# playbooks/precheck_only.yml
+#
+# Playbook DEDICADO para el Nodo 1 ("Precheck") del Workflow Job Template
+# (ver docs/AWX_SETUP.html, sección 7). Deliberadamente NUNCA lee
+# upgrade_mode ni upgrade_phase: siempre ejecuta precheck, sin excepción.
+#
+# Por qué existe este archivo separado (en vez de reutilizar
+# playbooks/upgrade.yml con upgrade_mode: precheck fijo en el Job Template,
+# como se intentó primero): se confirmó contra un AWX real que las
+# extra_vars del Survey del Workflow SIEMPRE le ganan al valor guardado en
+# el propio Job Template -- "Prompt on Launch" existe justamente para que
+# el lanzamiento pueda anular los valores por defecto, así que no hay forma
+# de hacer que el valor fijo del Job Template le gane a eso. Como el Survey
+# del Workflow sí tiene una pregunta "upgrade_mode" (para los Nodos 2/3,
+# sp4_to_sp5/sp5_to_sp6/sp6_to_sp7/full), un Nodo 1 que dependiera de
+# upgrade_mode == 'precheck' terminaría ejecutando el modo real elegido en
+# el Survey en vez de precheck. Este archivo evita el problema de raíz: no
+# depende en absoluto de esa variable.
+#
+# Mismo mecanismo de selección de hosts que playbooks/upgrade.yml (match
+# CRQ+Lote+Ambiente, nunca "Limit"): importa el mismo archivo para no
+# duplicar esa lógica en 2 lugares.
+
+- name: Seleccionar los hosts de esta ejecución (match CRQ + Lote + Ambiente)
+  ansible.builtin.import_playbook: select_target_hosts.yml
+
+- name: Precheck SLES 15 para GeoPOS (Nodo 1 del Workflow)
+  hosts: upgrade_target
+  gather_facts: true
+  serial: "{{ serial_batch_size | default(1) }}"
+  vars:
+    host_overall_status: "OK"
+    geopos_validation_before:
+      enabled: false
+      overall_status: NOT_CHECKED
+      critical_unhealthy: false
+      categories: {}
+  tasks:
+    - name: Ejecutar precheck (etapa objetivo autodetectada)
+      ansible.builtin.include_role:
+        name: precheck
+
+    - name: Ensamblar reporte de precheck
+      ansible.builtin.set_fact:
+        stage_report:
+          hostname: "{{ inventory_hostname }}"
+          fqdn: "{{ ansible_facts['fqdn'] | default(inventory_hostname) }}"
+          crq: "{{ upgrade_crq | default('') }}"
+          lote: "{{ upgrade_lote | default('') }}"
+          ambiente: "{{ upgrade_ambiente | default('') }}"
+          action: "precheck"
+          stage: "precheck"
+          started_at: "{{ system_state_snapshot_before.captured_at }}"
+          finished_at: "{{ lookup('pipe', 'date -u +%Y-%m-%dT%H:%M:%SZ') }}"
+          sp_inicial: "{{ system_state_snapshot_before.current_sp_id }}"
+          sp_objetivo: "{{ precheck_result.target_sp }}"
+          sp_final: "{{ system_state_snapshot_before.current_sp_id }}"
+          kernel_antes: "{{ system_state_snapshot_before.kernel }}"
+          kernel_despues: "N/A (precheck no modifica el sistema)"
+          precheck: "{{ precheck_result }}"
+          preflight: {}
+          repos: {}
+          migration: {}
+          reboot: {}
+          critical_services_before: "{{ critical_services_before | default([]) }}"
+          critical_services_after: []
+          geopos_before: "{{ geopos_validation_before }}"
+          geopos_after: {}
+          status: "{{ precheck_result.overall_status }}"
+          failure_stage: "{{ 'precheck' if precheck_result.overall_status == 'FAILED' else '' }}"
+
+    - name: Generar reporte de precheck
+      ansible.builtin.include_role:
+        name: reporting
+
+    - name: Propagar estado global del host (precheck)
+      ansible.builtin.set_fact:
+        host_overall_status: "{{ precheck_result.overall_status }}"
+
+    - name: Marcar el host como fallido si el precheck no fue satisfactorio
+      ansible.builtin.fail:
+        msg: >-
+          El host {{ inventory_hostname }} terminó el precheck con estado
+          {{ host_overall_status }}. Revise el reporte HTML/JSON en
+          {{ _report_stage_dir | default(report_local_dir ~ '/' ~ inventory_hostname) }}/
+          para el detalle exacto.
+      when: host_overall_status in ['FAILED', 'NOT_CHECKED']

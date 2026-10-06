@@ -4,8 +4,8 @@
     "critical_services_after": [],
     "critical_services_before": [],
     "crq": "RFC 2026-PRUEBA",
-    "failure_stage": "precheck",
-    "finished_at": "2026-10-06T14:33:51Z",
+    "failure_stage": "confirmacion_produccion: confirm_production_upgrade no est\u00e1 en true",
+    "finished_at": "2026-10-06T16:41:23Z",
     "fqdn": "suse15-sp5-sp7",
     "geopos_after": {
         "categories": {},
@@ -55,7 +55,7 @@
                 "status": "OK"
             },
             {
-                "detail": "host=suse15-sp5-sp7 arch=x86_64 kernel=5.14.21-150500.55.52-default uptime_s=73625",
+                "detail": "host=suse15-sp5-sp7 arch=x86_64 kernel=5.14.21-150500.55.52-default uptime_s=81259",
                 "name": "informacion_sistema",
                 "status": "OK"
             },
@@ -125,104 +125,104 @@
                 "status": "OK"
             },
             {
-                "detail": "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/SUSE_Linux_Enterprise_Server_15_SP5_x86_64_id_2465_/2465_SLE-Product-SLES15-SP5-Pool_for_sle-15-x86_64/ -> sin respuesta HTTP: Status code was -1 and not [200, 201, 204, 301, 302, 400, 401, 403, 404, 500, 502, 503]: Request failed: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed (_ssl.c:852)>",
+                "detail": "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/SUSE_Linux_Enterprise_Server_15_SP5_x86_64_id_2465_/2465_SLE-Product-SLES15-SP5-Pool_for_sle-15-x86_64/ -> HTTP 200",
                 "name": "endpoint_alcanzable_origen_SLE-Product-SLES15-SP5-Pool",
-                "status": "FAILED"
+                "status": "OK"
             },
             {
-                "detail": "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/SUSE_Linux_Enterprise_Server_15_SP5_x86_64_id_2465_/2465_SLE-Product-SLES15-SP5-Updates_for_sle-15-x86_64/ -> sin respuesta HTTP: Status code was -1 and not [200, 201, 204, 301, 302, 400, 401, 403, 404, 500, 502, 503]: Request failed: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed (_ssl.c:852)>",
+                "detail": "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/SUSE_Linux_Enterprise_Server_15_SP5_x86_64_id_2465_/2465_SLE-Product-SLES15-SP5-Updates_for_sle-15-x86_64/ -> HTTP 200",
                 "name": "endpoint_alcanzable_origen_SLE-Product-SLES15-SP5-Updates",
-                "status": "FAILED"
+                "status": "OK"
             },
             {
-                "detail": "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Basesystem_Module_15_SP5_x86_64_id_2474_/2474_SLE-Module-Basesystem15-SP5-Pool_for_sle-15-x86_64/ -> sin respuesta HTTP: Status code was -1 and not [200, 201, 204, 301, 302, 400, 401, 403, 404, 500, 502, 503]: Request failed: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed (_ssl.c:852)>",
+                "detail": "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Basesystem_Module_15_SP5_x86_64_id_2474_/2474_SLE-Module-Basesystem15-SP5-Pool_for_sle-15-x86_64/ -> HTTP 200",
                 "name": "endpoint_alcanzable_origen_SLE-Module-Basesystem15-SP5-Pool",
-                "status": "FAILED"
+                "status": "OK"
             },
             {
-                "detail": "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Basesystem_Module_15_SP5_x86_64_id_2474_/2474_SLE-Module-Basesystem15-SP5-Updates_for_sle-15-x86_64/ -> sin respuesta HTTP: Status code was -1 and not [200, 201, 204, 301, 302, 400, 401, 403, 404, 500, 502, 503]: Request failed: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed (_ssl.c:852)>",
+                "detail": "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Basesystem_Module_15_SP5_x86_64_id_2474_/2474_SLE-Module-Basesystem15-SP5-Updates_for_sle-15-x86_64/ -> HTTP 200",
                 "name": "endpoint_alcanzable_origen_SLE-Module-Basesystem15-SP5-Updates",
-                "status": "FAILED"
+                "status": "OK"
             },
             {
-                "detail": "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Server_Applications_Module_15_SP5_x86_64_id_2482_/2482_SLE-Module-Server-Applications15-SP5-Pool_for_sle-15-x86_64/ -> sin respuesta HTTP: Status code was -1 and not [200, 201, 204, 301, 302, 400, 401, 403, 404, 500, 502, 503]: Request failed: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed (_ssl.c:852)>",
+                "detail": "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Server_Applications_Module_15_SP5_x86_64_id_2482_/2482_SLE-Module-Server-Applications15-SP5-Pool_for_sle-15-x86_64/ -> HTTP 200",
                 "name": "endpoint_alcanzable_origen_SLE-Module-Server-Applications15-SP5-Pool",
-                "status": "FAILED"
+                "status": "OK"
             },
             {
-                "detail": "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Server_Applications_Module_15_SP5_x86_64_id_2482_/2482_SLE-Module-Server-Applications15-SP5-Updates_for_sle-15-x86_64/ -> sin respuesta HTTP: Status code was -1 and not [200, 201, 204, 301, 302, 400, 401, 403, 404, 500, 502, 503]: Request failed: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed (_ssl.c:852)>",
+                "detail": "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Server_Applications_Module_15_SP5_x86_64_id_2482_/2482_SLE-Module-Server-Applications15-SP5-Updates_for_sle-15-x86_64/ -> HTTP 200",
                 "name": "endpoint_alcanzable_origen_SLE-Module-Server-Applications15-SP5-Updates",
-                "status": "FAILED"
+                "status": "OK"
             },
             {
-                "detail": "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Desktop_Applications_Module_15_SP5_x86_64_id_2478_/2478_SLE-Module-Desktop-Applications15-SP5-Pool_for_sle-15-x86_64/ -> sin respuesta HTTP: Status code was -1 and not [200, 201, 204, 301, 302, 400, 401, 403, 404, 500, 502, 503]: Request failed: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed (_ssl.c:852)>",
+                "detail": "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Desktop_Applications_Module_15_SP5_x86_64_id_2478_/2478_SLE-Module-Desktop-Applications15-SP5-Pool_for_sle-15-x86_64/ -> HTTP 200",
                 "name": "endpoint_alcanzable_origen_SLE-Module-Desktop-Applications15-SP5-Pool",
-                "status": "FAILED"
+                "status": "OK"
             },
             {
-                "detail": "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Desktop_Applications_Module_15_SP5_x86_64_id_2478_/2478_SLE-Module-Desktop-Applications15-SP5-Updates_for_sle-15-x86_64/ -> sin respuesta HTTP: Status code was -1 and not [200, 201, 204, 301, 302, 400, 401, 403, 404, 500, 502, 503]: Request failed: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed (_ssl.c:852)>",
+                "detail": "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Desktop_Applications_Module_15_SP5_x86_64_id_2478_/2478_SLE-Module-Desktop-Applications15-SP5-Updates_for_sle-15-x86_64/ -> HTTP 200",
                 "name": "endpoint_alcanzable_origen_SLE-Module-Desktop-Applications15-SP5-Updates",
-                "status": "FAILED"
+                "status": "OK"
             },
             {
-                "detail": "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Python_3_Module_15_SP5_x86_64_id_2536_/2536_SLE-Module-Python3-15-SP5-Pool_for_sle-15-x86_64/ -> sin respuesta HTTP: Status code was -1 and not [200, 201, 204, 301, 302, 400, 401, 403, 404, 500, 502, 503]: Request failed: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed (_ssl.c:852)>",
+                "detail": "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Python_3_Module_15_SP5_x86_64_id_2536_/2536_SLE-Module-Python3-15-SP5-Pool_for_sle-15-x86_64/ -> HTTP 200",
                 "name": "endpoint_alcanzable_origen_SLE-Module-Python3-15-SP5-Pool",
-                "status": "FAILED"
+                "status": "OK"
             },
             {
-                "detail": "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Python_3_Module_15_SP5_x86_64_id_2536_/2536_SLE-Module-Python3-15-SP5-Updates_for_sle-15-x86_64/ -> sin respuesta HTTP: Status code was -1 and not [200, 201, 204, 301, 302, 400, 401, 403, 404, 500, 502, 503]: Request failed: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed (_ssl.c:852)>",
+                "detail": "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Python_3_Module_15_SP5_x86_64_id_2536_/2536_SLE-Module-Python3-15-SP5-Updates_for_sle-15-x86_64/ -> HTTP 200",
                 "name": "endpoint_alcanzable_origen_SLE-Module-Python3-15-SP5-Updates",
-                "status": "FAILED"
+                "status": "OK"
             },
             {
-                "detail": "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/SUSE_Linux_Enterprise_Server_15_SP6_x86_64_id_2609_/2609_SLE-Product-SLES15-SP6-Pool_for_sle-15-x86_64/ -> sin respuesta HTTP: Status code was -1 and not [200, 201, 204, 301, 302, 400, 401, 403, 404, 500, 502, 503]: Request failed: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed (_ssl.c:852)>",
+                "detail": "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/SUSE_Linux_Enterprise_Server_15_SP6_x86_64_id_2609_/2609_SLE-Product-SLES15-SP6-Pool_for_sle-15-x86_64/ -> HTTP 200",
                 "name": "endpoint_alcanzable_destino_SLE-Product-SLES15-SP6-Pool",
-                "status": "FAILED"
+                "status": "OK"
             },
             {
-                "detail": "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/SUSE_Linux_Enterprise_Server_15_SP6_x86_64_id_2609_/2609_SLE-Product-SLES15-SP6-Updates_for_sle-15-x86_64/ -> sin respuesta HTTP: Status code was -1 and not [200, 201, 204, 301, 302, 400, 401, 403, 404, 500, 502, 503]: Request failed: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed (_ssl.c:852)>",
+                "detail": "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/SUSE_Linux_Enterprise_Server_15_SP6_x86_64_id_2609_/2609_SLE-Product-SLES15-SP6-Updates_for_sle-15-x86_64/ -> HTTP 200",
                 "name": "endpoint_alcanzable_destino_SLE-Product-SLES15-SP6-Updates",
-                "status": "FAILED"
+                "status": "OK"
             },
             {
-                "detail": "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Basesystem_Module_15_SP6_x86_64_id_2618_/2618_SLE-Module-Basesystem15-SP6-Pool_for_sle-15-x86_64/ -> sin respuesta HTTP: Status code was -1 and not [200, 201, 204, 301, 302, 400, 401, 403, 404, 500, 502, 503]: Request failed: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed (_ssl.c:852)>",
+                "detail": "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Basesystem_Module_15_SP6_x86_64_id_2618_/2618_SLE-Module-Basesystem15-SP6-Pool_for_sle-15-x86_64/ -> HTTP 200",
                 "name": "endpoint_alcanzable_destino_SLE-Module-Basesystem15-SP6-Pool",
-                "status": "FAILED"
+                "status": "OK"
             },
             {
-                "detail": "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Basesystem_Module_15_SP6_x86_64_id_2618_/2618_SLE-Module-Basesystem15-SP6-Updates_for_sle-15-x86_64/ -> sin respuesta HTTP: Status code was -1 and not [200, 201, 204, 301, 302, 400, 401, 403, 404, 500, 502, 503]: Request failed: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed (_ssl.c:852)>",
+                "detail": "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Basesystem_Module_15_SP6_x86_64_id_2618_/2618_SLE-Module-Basesystem15-SP6-Updates_for_sle-15-x86_64/ -> HTTP 200",
                 "name": "endpoint_alcanzable_destino_SLE-Module-Basesystem15-SP6-Updates",
-                "status": "FAILED"
+                "status": "OK"
             },
             {
-                "detail": "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Server_Applications_Module_15_SP6_x86_64_id_2626_/2626_SLE-Module-Server-Applications15-SP6-Pool_for_sle-15-x86_64/ -> sin respuesta HTTP: Status code was -1 and not [200, 201, 204, 301, 302, 400, 401, 403, 404, 500, 502, 503]: Request failed: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed (_ssl.c:852)>",
+                "detail": "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Server_Applications_Module_15_SP6_x86_64_id_2626_/2626_SLE-Module-Server-Applications15-SP6-Pool_for_sle-15-x86_64/ -> HTTP 200",
                 "name": "endpoint_alcanzable_destino_SLE-Module-Server-Applications15-SP6-Pool",
-                "status": "FAILED"
+                "status": "OK"
             },
             {
-                "detail": "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Server_Applications_Module_15_SP6_x86_64_id_2626_/2626_SLE-Module-Server-Applications15-SP6-Updates_for_sle-15-x86_64/ -> sin respuesta HTTP: Status code was -1 and not [200, 201, 204, 301, 302, 400, 401, 403, 404, 500, 502, 503]: Request failed: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed (_ssl.c:852)>",
+                "detail": "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Server_Applications_Module_15_SP6_x86_64_id_2626_/2626_SLE-Module-Server-Applications15-SP6-Updates_for_sle-15-x86_64/ -> HTTP 200",
                 "name": "endpoint_alcanzable_destino_SLE-Module-Server-Applications15-SP6-Updates",
-                "status": "FAILED"
+                "status": "OK"
             },
             {
-                "detail": "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Desktop_Applications_Module_15_SP6_x86_64_id_2622_/2622_SLE-Module-Desktop-Applications15-SP6-Pool_for_sle-15-x86_64/ -> sin respuesta HTTP: Status code was -1 and not [200, 201, 204, 301, 302, 400, 401, 403, 404, 500, 502, 503]: Request failed: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed (_ssl.c:852)>",
+                "detail": "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Desktop_Applications_Module_15_SP6_x86_64_id_2622_/2622_SLE-Module-Desktop-Applications15-SP6-Pool_for_sle-15-x86_64/ -> HTTP 200",
                 "name": "endpoint_alcanzable_destino_SLE-Module-Desktop-Applications15-SP6-Pool",
-                "status": "FAILED"
+                "status": "OK"
             },
             {
-                "detail": "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Desktop_Applications_Module_15_SP6_x86_64_id_2622_/2622_SLE-Module-Desktop-Applications15-SP6-Updates_for_sle-15-x86_64/ -> sin respuesta HTTP: Status code was -1 and not [200, 201, 204, 301, 302, 400, 401, 403, 404, 500, 502, 503]: Request failed: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed (_ssl.c:852)>",
+                "detail": "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Desktop_Applications_Module_15_SP6_x86_64_id_2622_/2622_SLE-Module-Desktop-Applications15-SP6-Updates_for_sle-15-x86_64/ -> HTTP 200",
                 "name": "endpoint_alcanzable_destino_SLE-Module-Desktop-Applications15-SP6-Updates",
-                "status": "FAILED"
+                "status": "OK"
             },
             {
-                "detail": "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Python_3_Module_15_SP6_x86_64_id_2683_/2683_SLE-Module-Python3-15-SP6-Pool_for_sle-15-x86_64/ -> sin respuesta HTTP: Status code was -1 and not [200, 201, 204, 301, 302, 400, 401, 403, 404, 500, 502, 503]: Request failed: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed (_ssl.c:852)>",
+                "detail": "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Python_3_Module_15_SP6_x86_64_id_2683_/2683_SLE-Module-Python3-15-SP6-Pool_for_sle-15-x86_64/ -> HTTP 200",
                 "name": "endpoint_alcanzable_destino_SLE-Module-Python3-15-SP6-Pool",
-                "status": "FAILED"
+                "status": "OK"
             },
             {
-                "detail": "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Python_3_Module_15_SP6_x86_64_id_2683_/2683_SLE-Module-Python3-15-SP6-Updates_for_sle-15-x86_64/ -> sin respuesta HTTP: Status code was -1 and not [200, 201, 204, 301, 302, 400, 401, 403, 404, 500, 502, 503]: Request failed: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed (_ssl.c:852)>",
+                "detail": "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Python_3_Module_15_SP6_x86_64_id_2683_/2683_SLE-Module-Python3-15-SP6-Updates_for_sle-15-x86_64/ -> HTTP 200",
                 "name": "endpoint_alcanzable_destino_SLE-Module-Python3-15-SP6-Updates",
-                "status": "FAILED"
+                "status": "OK"
             },
             {
                 "detail": "critical_services vac\u00edo",
@@ -235,7 +235,7 @@
                 "status": "OK"
             }
         ],
-        "overall_status": "FAILED",
+        "overall_status": "OK",
         "repo_inventory": [
             {
                 "alias": "Basesystem-Module_15.5-0",
@@ -388,6 +388,6 @@
     "sp_inicial": "sp5",
     "sp_objetivo": "sp6",
     "stage": "sp6",
-    "started_at": "2026-10-06T14:33:07Z",
+    "started_at": "2026-10-06T16:40:22Z",
     "status": "FAILED"
 }

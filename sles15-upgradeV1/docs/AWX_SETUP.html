@@ -516,48 +516,27 @@ ANSIBLE_INVENTORY_PLUGINS: "/runner/project/&lt;CARPETA_DEL_PROJECT&gt;/inventor
   <strong>Resources → Templates → Add → Job Template</strong>, uno por fila:</p>
   <table class="clean">
     <tr><th>#</th><th>Name</th><th>Playbook</th><th>Valor fijo de ESTE nodo</th></tr>
-    <tr><td>1</td><td><code>SLES Upgrade - 1 Precheck</code></td><td><code>playbooks/upgrade.yml</code></td><td><code>upgrade_mode: precheck</code></td></tr>
+    <tr><td>1</td><td><code>SLES Upgrade - 1 Precheck</code></td><td><code>playbooks/precheck_only.yml</code></td><td>(ninguno — este playbook nunca lee <code>upgrade_mode</code>)</td></tr>
     <tr><td>2</td><td><code>SLES Upgrade - 2 Preparar repos</code></td><td><code>playbooks/upgrade.yml</code></td><td><code>upgrade_phase: prepare</code></td></tr>
     <tr><td>3</td><td><code>SLES Upgrade - 3 Aplicar</code></td><td><code>playbooks/upgrade.yml</code></td><td><code>upgrade_phase: apply</code></td></tr>
     <tr><td>4</td><td><code>SLES Upgrade - 4 Reporting</code></td><td><code>playbooks/report_summary.yml</code></td><td>(ninguno)</td></tr>
     <tr><td>5</td><td><code>SLES Upgrade - 5 Sincronizar SharePoint</code></td><td><code>playbooks/sync_sharepoint.yml</code></td><td>(ninguno)</td></tr>
   </table>
 
-  <div class="callout decision">
-    <span class="label">Cómo funciona realmente el "Prompt on Launch" en AWX (importante)</span>
-    No existe un "Prompt on Launch" por cada variable individual. Es <strong>un solo
-    checkbox</strong>, en la pantalla de edición de cada Job Template, junto al campo
-    <strong>Variables</strong> completo. Así se usa para este proyecto:
-    <ol>
-      <li>En los Job Templates 1, 2 y 3: deja el campo <strong>Variables</strong> vacío
-        y activa su checkbox <strong>Prompt on Launch</strong>. Esto es lo que permite
-        que el Job Template acepte variables que le llegan desde afuera (del Survey del
-        Workflow, o de un ajuste del nodo) — sin este checkbox activado, el Job Template
-        ignora cualquier variable externa.</li>
-      <li>El valor fijo de cada nodo (columna de la tabla de arriba) <strong>no se pone
-        en el Job Template</strong>: se pone al agregar ese Job Template como nodo en el
-        Workflow Visualizer (paso 7.3). Como el Job Template tiene Prompt on Launch
-        activado, al configurar el nodo aparece un botón <strong>PROMPT</strong> → pestaña
-        Variables → ahí escribes el YAML fijo (ej. <code>upgrade_mode: precheck</code>).
-        Esto se configura una sola vez, mientras armas el Workflow — el operador que lo
-        lanza después no lo ve ni lo toca.</li>
-      <li>Las otras variables (<code>upgrade_crq</code>, <code>upgrade_lote</code>,
-        <code>upgrade_ambiente</code>, <code>confirm_production_upgrade</code>, y
-        <code>upgrade_mode</code> para los nodos 2 y 3) <strong>no necesitan ningún ajuste
-        adicional por nodo</strong>: llegan automáticamente desde el Survey del Workflow
-        (7.4) al lanzar, siempre que el checkbox del punto 1 esté activado.</li>
-    </ol>
-  </div>
   <div class="callout risk">
-    <span class="label">Punto a verificar con tu AWX real</span>
-    El valor fijo del Nodo 1 (<code>upgrade_mode: precheck</code>) y el valor que
-    responda el Survey del Workflow para los nodos 2/3 (<code>sp5_to_sp6</code>, etc.)
-    usan el mismo nombre de variable. Según el diseño de AWX, el valor fijado en el
-    nodo debería ganarle al del Survey para ese nodo específico — pero conviene
-    confirmarlo una vez: lanza el Workflow, abre el Job del <strong>Nodo 1</strong> →
-    pestaña <strong>Details</strong> → "Extra Variables" debe mostrar
-    <code>upgrade_mode: precheck</code>. Si mostrara el valor del Survey en su lugar,
-    avisar para ajustar el diseño (por ejemplo, separando el nombre de la variable).
+    <span class="label">Confirmado contra un AWX real: el Survey del Workflow SIEMPRE le gana al valor guardado en el Job Template</span>
+    El diseño original (sección 7.2, versión anterior) intentaba fijar
+    <code>upgrade_mode: precheck</code> en el Nodo 1 vía "Prompt on Launch" + un
+    override de nodo. Se probó en un AWX real y <strong>no funcionó</strong>: el Job
+    del Nodo 1 corrió con <code>upgrade_mode: sp5_to_sp6</code> (el valor del Survey,
+    pensado para los Nodos 2/3), no con <code>precheck</code>. En AWX, cuando
+    "Prompt on Launch" está activado, cualquier valor que llegue desde afuera
+    (Survey, API) <strong>siempre reemplaza</strong> lo guardado en el Job Template
+    — ese es justamente el propósito de esa casilla. Por eso el Nodo 1 ahora usa un
+    playbook dedicado (<code>playbooks/precheck_only.yml</code>) que ni siquiera lee
+    <code>upgrade_mode</code>: no hay variable que pueda colisionar. Los Nodos 2 y 3
+    no tuvieron este problema porque su valor fijo (<code>upgrade_phase</code>) no
+    coincide con el nombre de ninguna pregunta del Survey.
   </div>
   <p>Detalle campo por campo de cada uno, a continuación.</p>
 
@@ -568,16 +547,17 @@ ANSIBLE_INVENTORY_PLUGINS: "/runner/project/&lt;CARPETA_DEL_PROJECT&gt;/inventor
     <tr><td>Job Type</td><td>Run</td></tr>
     <tr><td>Inventory</td><td>el del paso 5</td></tr>
     <tr><td>Project</td><td>el del paso 4</td></tr>
-    <tr><td>Playbook</td><td><code>playbooks/upgrade.yml</code></td></tr>
+    <tr><td>Playbook</td><td><code>playbooks/precheck_only.yml</code></td></tr>
     <tr><td>Credentials</td><td>el del paso 3 (Machine)</td></tr>
     <tr><td>Limit</td><td>vacío, <strong>sin</strong> "Prompt on Launch" (ver sección 6)</td></tr>
     <tr><td>Variables</td><td>vacío</td></tr>
-    <tr><td>Prompt on Launch (checkbox junto a Variables)</td><td><strong>Activar</strong></td></tr>
+    <tr><td>Prompt on Launch (checkbox junto a Variables)</td><td><strong>Activar</strong> (necesita <code>upgrade_crq</code>/<code>upgrade_lote</code>/<code>upgrade_ambiente</code> del Survey del Workflow para saber qué host(s) tocar)</td></tr>
     <tr><td>Survey propio</td><td>No crear uno aquí — lo trae el Workflow (7.4)</td></tr>
-    <tr><td>Al agregarlo como nodo en el Workflow</td><td>Clic en <strong>PROMPT</strong> → Variables → escribir <code>upgrade_mode: precheck</code> → Guardar</td></tr>
+    <tr><td>Al agregarlo como nodo en el Workflow</td><td>No hace falta ningún PROMPT — este playbook no tiene ningún valor que fijar por nodo</td></tr>
   </table>
-  <p class="muted">Siempre de solo lectura, sin importar qué <code>upgrade_mode</code> llegue del Survey del
-  Workflow para los nodos 2/3 — este nodo fija <code>precheck</code> por su cuenta.</p>
+  <p class="muted">Siempre de solo lectura (salvo instalar la CA interna si falta, sección 1 de
+  <code>ARQUITECTURA_Y_DISENO_TECNICO.html</code>), sin importar qué <code>upgrade_mode</code>
+  llegue del Survey del Workflow para los nodos 2/3 — este playbook ni siquiera lee esa variable.</p>
 
   <div class="step-title"><span class="stepnum">2</span><h3>Etapa 2 — Preparar repos (modifica el sistema)</h3></div>
   <table class="clean">
@@ -657,7 +637,7 @@ ANSIBLE_INVENTORY_PLUGINS: "/runner/project/&lt;CARPETA_DEL_PROJECT&gt;/inventor
     <tr><td>Inventory</td><td>el del paso 5 (el playbook solo usa <code>localhost</code>, pero AWX exige seleccionar un Inventory)</td></tr>
     <tr><td>Project</td><td>el del paso 4</td></tr>
     <tr><td>Playbook</td><td><code>playbooks/sync_sharepoint.yml</code></td></tr>
-    <tr><td>Credentials</td><td><strong>el del paso 2</strong> (<code>SharePoint Excel Inventory</code> — el mismo que usa el Inventory Source) <strong>además</strong> del del paso 3 (Machine); sin este primero, el Job no tiene <code>TENANT_ID</code>/<code>CLIENT_ID</code>/<code>CLIENT_SECRET</code> y falla</td></tr>
+    <tr><td>Credentials</td><td><strong>el del paso 2</strong> (<code>SharePoint Excel Inventory</code> — el mismo que usa el Inventory Source). No hace falta el del paso 3 (Machine): este playbook corre en <code>localhost</code>, nunca se conecta al servidor SLES. Sin la credencial de SharePoint, el Job no tiene <code>TENANT_ID</code>/<code>CLIENT_ID</code>/<code>CLIENT_SECRET</code> y falla.</td></tr>
     <tr><td>Limit</td><td>vacío, <strong>sin</strong> "Prompt on Launch"</td></tr>
     <tr><td>Variables</td><td>vacío</td></tr>
     <tr><td>Prompt on Launch (checkbox junto a Variables)</td><td><strong>Activar</strong> (necesita <code>upgrade_crq</code> del Survey del Workflow para saber qué carpeta sincronizar)</td></tr>

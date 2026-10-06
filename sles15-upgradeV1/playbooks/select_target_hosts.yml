@@ -1,0 +1,71 @@
+---
+# playbooks/select_target_hosts.yml
+#
+# Selecciona los hosts de esta ejecución por match EXACTO de
+# CRQ+Lote+Ambiente contra el inventario dinámico (nunca con "Limit" de
+# AWX). Extraído de playbooks/upgrade.yml para que playbooks/precheck_only.yml
+# (Nodo 1 del Workflow) también lo use, sin duplicar esta lógica en 2
+# archivos -- ver docs/ARQUITECTURA_Y_DISENO_TECNICO.html, sección 1 (match
+# CRQ/Lote/Ambiente) para el detalle completo de por qué funciona así.
+#
+# Deja creado el grupo dinámico "upgrade_target" con los hosts que
+# coincidieron, y falla explícito antes de tocar cualquier host si ninguno
+# coincidió.
+
+- name: Validar que se declaró CRQ + Lote + Ambiente (requeridos para seleccionar hosts)
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Verificar que upgrade_crq, upgrade_lote y upgrade_ambiente no estén vacíos
+      ansible.builtin.assert:
+        that:
+          - (upgrade_crq | default('') | trim | length) > 0
+          - (upgrade_lote | default('') | trim | length) > 0
+          - (upgrade_ambiente | default('') | trim | length) > 0
+        fail_msg: >-
+          Faltan datos para seleccionar los hosts de esta ejecución:
+          upgrade_crq ("{{ upgrade_crq | default('') }}"), upgrade_lote
+          ("{{ upgrade_lote | default('') }}") y upgrade_ambiente
+          ("{{ upgrade_ambiente | default('') }}") deben venir completos
+          desde el Survey de AWX -- los 3 son obligatorios porque son el
+          único mecanismo con el que esta ejecución decide qué host(s)
+          tocar. No se seleccionó ningún host; no se modificó nada.
+
+- name: Seleccionar los hosts cuyo CRQ/Lote/Ambiente del inventario coincide con el Survey
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Marcar este host como objetivo si CRQ + Lote + Ambiente coinciden exactamente
+      # Comparación con "trim" (tolera espacios accidentales al inicio/fin
+      # en el Excel o en el Survey) pero SIN normalizar mayúsculas/minúsculas
+      # a propósito: una diferencia de mayúsculas es, la mayoría de las
+      # veces, un error real de captura en el Excel o en el Survey, y debe
+      # verse como "no coincide" en vez de ocultarse.
+      ansible.builtin.group_by:
+        key: upgrade_target
+      when:
+        - (crq | default('') | trim) == (upgrade_crq | trim)
+        - (lote | default('') | trim) == (upgrade_lote | trim)
+        - (ambiente | default('') | trim) == (upgrade_ambiente | trim)
+
+- name: Verificar que hubo al menos un host coincidente
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Fallar si ningún host del inventario coincide con el CRQ/Lote/Ambiente declarados
+      ansible.builtin.assert:
+        that:
+          - (groups['upgrade_target'] | default([]) | length) > 0
+        fail_msg: >-
+          Ningún host del inventario coincide con CRQ="{{ upgrade_crq }}",
+          Lote="{{ upgrade_lote }}", Ambiente="{{ upgrade_ambiente }}".
+          Verifique que esos 3 valores están escritos exactamente igual que
+          en la hoja de Excel (columnas CRQ/Lote/Ambiente) y que el
+          Inventory Source de AWX ya se sincronizó con los datos más
+          recientes. No se modificó nada.
+        success_msg: >-
+          {{ groups['upgrade_target'] | default([]) | length }} host(s) coinciden
+          con CRQ="{{ upgrade_crq }}", Lote="{{ upgrade_lote }}",
+          Ambiente="{{ upgrade_ambiente }}": {{ groups['upgrade_target'] | default([]) | join(', ') }}
