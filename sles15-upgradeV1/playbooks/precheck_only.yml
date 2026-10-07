@@ -63,6 +63,7 @@
           repos: {}
           migration: {}
           reboot: {}
+          security_agents: {}
           critical_services_before: "{{ critical_services_before | default([]) }}"
           critical_services_after: []
           geopos_before: "{{ geopos_validation_before }}"
