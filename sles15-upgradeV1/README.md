@@ -510,6 +510,16 @@ Valida (ver `playbooks/roles/precheck/tasks/`):
   discrepancia se reporta `WARNING`, no `FAILED`, porque el formato exacto
   del atributo de versión de Zypper en un Service Pack no está confirmado
   en la documentación oficial — ver riesgos, sección 16).
+- **`upgrade_mode` seleccionado en el Survey = coincide con el SP real
+  detectado** (check `upgrade_mode_coincide_con_sp_real`, decisión
+  explícita del usuario, 2026-10-07): bloquea (`FAILED`) de inmediato si,
+  por ejemplo, se eligió `sp4_to_sp5` en un host que ya está en SP5, o
+  `sp6_to_sp7` en un host que todavía está en SP5 (salto directo, nunca
+  permitido). `full` es la única excepción real — válido para un host en
+  SP5, SP6 **o** SP7 (autodetecta el salto correcto), pero igual `FAILED`
+  si el host está en SP4 (`full` nunca encadena SP4→SP5). `precheck`,
+  `validate` o sin dato: `NOT_CHECKED` (no tienen un único origen fijo que
+  validar aquí).
 - Arquitectura, hostname, kernel, uptime (informativo, para el reporte).
 - Espacio en disco: filesystems configurados en `precheck_disk_checks`
   (0..N, sin umbrales inventados — permanece `NOT_CHECKED` hasta que se
@@ -807,10 +817,14 @@ limitación técnica — `run_stage.yml` es genérico y soportaría encadenarlo
 igual que SP6→SP7. Se mantuvo fuera para no ampliar el alcance de lo que
 ya estaba validado/congelado; un host en SP4 ejecuta primero `sp4_to_sp5`
 de forma independiente y, en una corrida posterior, `sp5_to_sp6` o `full`.
-Si se ejecuta `full` directamente sobre un host en SP4, el precheck de la
-etapa `sp5_to_sp6` falla explícitamente en `service_pack_actual` (espera
-SP5, encuentra SP4) — no hay riesgo de que se salte la etapa SP4→SP5
-silenciosamente.
+Si se ejecuta `full` directamente sobre un host en SP4, falla
+explícitamente — no hay riesgo de que se salte la etapa SP4→SP5
+silenciosamente. Esto se detecta en **dos capas**: ya en Precheck (Nodo 1,
+check `upgrade_mode_coincide_con_sp_real`, sección 8.1 — decisión
+explícita del usuario, 2026-10-07, para fallar lo antes posible en vez de
+esperar hasta que arranque la etapa real) y, si por algún motivo se
+llegara ahí igual, también en el precheck ligero de la propia etapa
+`sp5_to_sp6` (check `service_pack_actual`, espera SP5, encuentra SP4).
 
 Cada modo produce su propio reporte por host (sección 11).
 

@@ -48,6 +48,50 @@
   ansible.builtin.include_tasks: sp_version.yml
   when: ansible_facts['distribution'] == 'SLES'
 
+- name: "Validar que el upgrade_mode seleccionado coincide con el Service Pack real del host (solo en hosts SLES)"
+  # Decisión explícita del usuario para este ambiente (2026-10-07): fallar
+  # lo antes posible (aquí, en Precheck -- Nodo 1 del Workflow) si el modo
+  # elegido en el Survey no corresponde al SP real detectado -- ej.
+  # "sp4_to_sp5" en un host que ya está en SP5, o "sp6_to_sp7" en un host
+  # que todavía está en SP5 (salto directo, nunca permitido por CLAUDE.md).
+  # "full" es la única excepción real: autodetecta el salto correcto
+  # (playbooks/upgrade.yml) y es válido para cualquier SP real en
+  # sp5/sp6/sp7 -- pero FAILED igual si el host está en sp4, porque "full"
+  # nunca encadena sp4_to_sp5. "precheck"/"validate"/vacío quedan
+  # NOT_CHECKED: no tienen un único origen fijo que validar aquí.
+  #
+  # Lee upgrade_mode directamente -- único lugar de este rol que lo hace.
+  # Es seguro: solo alimenta esta validación informativa, nunca decide el
+  # comportamiento de este playbook (precheck_only.yml siempre ejecuta
+  # precheck sin excepción, sin importar upgrade_mode -- ver su propia
+  # cabecera). Ya se confirmó por evidencia real que el valor del Survey
+  # del Workflow llega de forma confiable a este Nodo (ver
+  # docs/AWX_SETUP.html, sección 7).
+  ansible.builtin.set_fact:
+    _upgrade_mode_expected_origin: "{{ {'sp4_to_sp5': 'sp4', 'sp5_to_sp6': 'sp5', 'sp6_to_sp7': 'sp6'}.get(upgrade_mode | default(''), '') }}"
+    _upgrade_mode_tiene_origen_fijo: "{{ (upgrade_mode | default('')) in ['sp4_to_sp5', 'sp5_to_sp6', 'sp6_to_sp7', 'full'] }}"
+  when: ansible_facts['distribution'] == 'SLES'
+
+- name: "Registrar validación de upgrade_mode contra el Service Pack real (solo en hosts SLES)"
+  ansible.builtin.set_fact:
+    precheck_checks: "{{ precheck_checks + [{
+        'name': 'upgrade_mode_coincide_con_sp_real',
+        'status': (
+          'NOT_CHECKED' if not _upgrade_mode_tiene_origen_fijo
+          else ('OK' if (upgrade_mode == 'full' and system_state_snapshot_before.current_sp_id in ['sp5', 'sp6', 'sp7'])
+          else ('FAILED' if upgrade_mode == 'full'
+          else ('OK' if system_state_snapshot_before.current_sp_id == _upgrade_mode_expected_origin
+          else 'FAILED')))
+        ),
+        'detail': (
+          ('upgrade_mode=' ~ (upgrade_mode | default('N/D')) ~ ': sin origen fijo que validar aquí (precheck/validate/vacío)') if not _upgrade_mode_tiene_origen_fijo
+          else ('upgrade_mode=full, SP real detectado=' ~ system_state_snapshot_before.current_sp_id ~ ' (full es válido en sp5/sp6/sp7; FAILED si el host está en sp4)')
+          if upgrade_mode == 'full'
+          else ('upgrade_mode=' ~ upgrade_mode ~ ' espera SP real=' ~ _upgrade_mode_expected_origin ~ ', SP real detectado=' ~ system_state_snapshot_before.current_sp_id)
+        )
+      }] }}"
+  when: ansible_facts['distribution'] == 'SLES'
+
 - name: "Verificar locks de Zypper/RPM/libzypp (solo en hosts SLES)"
   ansible.builtin.include_tasks: locks.yml
   when: ansible_facts['distribution'] == 'SLES'
