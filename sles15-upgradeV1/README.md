@@ -455,11 +455,14 @@ propósito propio. No son sinónimos ni pasos intercambiables:
 | ¿Puede dejar el sistema modificado? | Solo la CA interna, si faltaba (ver 8.1) | Igual que PRECHECK (misma CA, si faltaba) | Sí, además, únicamente si `confirm_production_upgrade: true` |
 | ¿Puede terminar "OK" sin haber comprobado nada realmente? | N/A | **No** — si el preflight no se pudo ejecutar, el resultado es `FAILED` o `NOT_CHECKED`, nunca `OK` | N/A |
 
-### 8.1 PRECHECK (rol `precheck`) — no destructivo, con una única excepción documentada
+### 8.1 PRECHECK (rol `precheck`) — no destructivo, con dos excepciones documentadas
 
 No modifica repositorios ni paquetes (verificado en la sección 16: cero
 llamadas a `addrepo`/`removerepo`/`modifyrepo`, estado de repos
-byte-idéntico antes/después).
+byte-idéntico antes/después). Las 2 excepciones (instalar la CA interna si
+falta, y detener temporalmente agentes de seguridad que interfieran con
+Zypper — ambas idempotentes/reversibles) se describen más abajo y en la
+sección 8.4.
 
 **Única excepción, decisión explícita del usuario para este ambiente**:
 `repos_reachability.yml` instala la CA interna real ("CAColdecom",
@@ -671,26 +674,54 @@ operación real de Zypper en el host. La solución de raíz real —coordinar
 con el equipo de seguridad para excluir el host de esos escaneos durante
 la ventana de mantenimiento— está fuera del alcance de esta automatización.
 Como mitigación, `playbooks/group_vars/all.yml` define
-`zypper_lock_competing_services` (lista vacía válida) y esta etapa:
+`zypper_lock_competing_services` (lista vacía válida), y el mecanismo se
+reparte en 3 momentos (decisión explícita del usuario para este ambiente,
+2026-10-07, mismo patrón ya usado para la CA interna):
 
-1. **Pausa** (`roles/repo_management/tasks/pause_security_agents.yml`),
-   justo antes de tocar cualquier repositorio o paquete, ÚNICAMENTE los
-   agentes de esa lista que estén presentes **y activos** en este host
-   (nunca los deshabilita ni desinstala — solo `systemctl stop` temporal).
-2. **Reinicia** (`resume_security_agents.yml`) únicamente los que esta
-   misma ejecución pausó, al terminar la migración real de la etapa —
-   **excepto** dentro de `upgrade_mode: full` antes de llegar a SP7 (el
-   siguiente salto encadenado los necesitaría pausados otra vez de
-   inmediato): ahí se reinician solo al llegar a SP7, o de inmediato si
-   la etapa falló (no hay un "siguiente salto" que proteger). Ver
-   `playbooks/tasks/run_stage.yml` para la condición exacta.
-3. Si un agente no puede reiniciarse, la etapa escala a `WARNING` (nunca se
-   oculta) — dejar un agente de seguridad corporativo detenido
-   indefinidamente sin que el operador lo note sería peor que un
-   `WARNING` en el reporte.
+1. **PRECHECK detiene los agentes una sola vez** (Nodo 1 del Workflow —
+   `roles/precheck/tasks/pause_competing_services.yml`, SEGUNDA excepción
+   documentada a "precheck es de solo lectura"; la primera es la CA en
+   `repos_reachability.yml`, sección 8.1): detiene ÚNICAMENTE los agentes
+   de esa lista que estén presentes **y activos** (nunca los deshabilita
+   ni desinstala — solo `systemctl stop` temporal, reutilizando
+   `roles/repo_management/tasks/pause_security_agents.yml`), y espera ahí
+   mismo a que no quede ningún `packagekitd` corriendo antes de que
+   termine el precheck. Así, para cuando arranque "Preparar repos" (Nodo
+   2, un Job de AWX separado), ya debería estar resuelto en vez de competir
+   directamente contra la primera operación real de Zypper.
+2. **Preparar/Aplicar solo verifican, nunca vuelven a detener nada**
+   (`roles/repo_management/tasks/wait_packagekitd_clear.yml`, de solo
+   lectura vía `pgrep -x packagekitd`): si por algún motivo todavía
+   estuviera activo (por ejemplo, si se relanza "Preparar repos" sin haber
+   corrido Precheck justo antes), espera con el mismo presupuesto de
+   `zypper_lock_retries`/`_delay` y **continúa igual** aunque no se libere
+   — los reintentos de cada comando real de Zypper (`until`/`retries` en
+   `addrepo`/`refresh`/`dup -D`/`dup`) siguen como respaldo final. Esto
+   reemplazó un diseño anterior (detener los agentes aquí mismo, en vez de
+   en precheck) que resultó insuficiente: confirmado con evidencia real en
+   laboratorio (2026-10-07, job AWX #9257) que detener el agente **no
+   mata** una transacción de PackageKit ya en curso en ese instante (es
+   activado por D-Bus, no es un proceso hijo del agente) — siguió
+   reteniendo el lock ~25-30s después de detenerlo, agotando los
+   reintentos de la primera operación de Zypper que se topó con él.
+3. **Al terminar la migración real de la etapa, se asegura que los
+   agentes configurados vuelvan a estar activos** (`resume_security_agents.yml`,
+   idempotente: no hace nada si ya estaban activos) — ya NO depende de
+   "qué detuvo esta misma ejecución" (un hecho de Ansible de PRECHECK, un
+   Job de AWX separado, no sobrevive a este Job), sino directamente de
+   `zypper_lock_competing_services`. **Excepto** dentro de `upgrade_mode:
+   full` antes de llegar a SP7 (el siguiente salto encadenado los
+   necesitaría detenidos otra vez de inmediato): ahí se reinician solo al
+   llegar a SP7, o de inmediato si la etapa falló (no hay un "siguiente
+   salto" que proteger). Ver `playbooks/tasks/run_stage.yml` para la
+   condición exacta. Si un agente no puede reiniciarse, la etapa escala a
+   `WARNING` (nunca se oculta) — dejarlo detenido indefinidamente sin que
+   el operador lo note sería peor que un `WARNING` en el reporte.
 
-El reporte de cada etapa incluye qué agentes se pausaron, si se
-reiniciaron en esa misma etapa, y por qué (sección 11).
+El reporte de PRECHECK incluye qué agentes se detuvieron (como un check
+más, junto a los demás). El reporte de la etapa que finalmente los
+reinicia incluye la verificación de `packagekitd` al empezar y qué
+agentes se reiniciaron al terminar (sección 11).
 
 ---
 
@@ -1286,8 +1317,9 @@ proyecto (solo se neutralizó el paso de reinicio real, reemplazado por un
 no-op simulable como éxito o fallo, por seguridad), probando:
 
 - **PRECHECK no modifica repositorios ni paquetes**: estado de repos byte-idéntico antes/después,
-  cero llamadas de escritura a Zypper (la única excepción real, agregada después de esta
-  prueba simulada, es la instalación idempotente de la CA interna si faltaba — sección 8.1).
+  cero llamadas de escritura a Zypper (las 2 excepciones reales, ambas agregadas después de esta
+  prueba simulada, son la instalación idempotente de la CA interna si faltaba, y detener
+  temporalmente agentes de seguridad que interfieran con Zypper si hay alguno activo — sección 8.1).
 - **`confirm_production_upgrade: false` no modifica absolutamente nada**:
   mismo resultado — cero cambios, cero llamadas a `updatestack`/`dup`.
 - **Un repo de origen ausente bloquea en PRECHECK**, antes de deshabilitar

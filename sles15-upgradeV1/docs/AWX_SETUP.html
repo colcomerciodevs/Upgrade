@@ -399,16 +399,18 @@ ANSIBLE_INVENTORY_PLUGINS: "/runner/project/&lt;CARPETA_DEL_PROJECT&gt;/inventor
         ejecuta aparte con sp4_to_sp5. (Si esta pregunta incluye precheck/validate
         -- alternativa simplificada --: precheck solo diagnostica, validate además
         contacta de verdad los repos Foreman del destino; ninguno de los dos
-        modifica repositorios ni paquetes -- la única excepción es que ambos
-        pueden instalar la CA interna si todavía no está presente, operación
-        idempotente, ver docs/ARQUITECTURA_Y_DISENO_TECNICO.html sección 1.)
+        modifica repositorios ni paquetes -- las únicas excepciones son que
+        ambos pueden instalar la CA interna si todavía no está presente, y
+        que precheck también puede detener temporalmente agentes de
+        seguridad que interfieran con Zypper (ambas operaciones idempotentes
+        y reversibles), ver docs/ARQUITECTURA_Y_DISENO_TECNICO.html sección 1.)
       </td>
     </tr>
     <tr>
       <td>¿Confirma ejecución real en producción?</td>
       <td><code>confirm_production_upgrade</code></td>
       <td>Selección múltiple, con <strong>exactamente dos opciones: <code>true</code> y <code>false</code></strong> (ver nota abajo)</td>
-      <td>Obligatorio para los modos reales (sp4_to_sp5, sp5_to_sp6, sp6_to_sp7, full). Si el Modo de ejecución es precheck o validate, este valor se ignora por completo, sea true o false — esos dos modos nunca modifican repositorios ni paquetes bajo ninguna combinación (la única excepción es instalar la CA interna si faltaba, operación idempotente). Déjalo en false para solo diagnosticar/ensayar un modo real. Ponlo en true únicamente cuando quieras aplicar la migración real, con reinicio incluido. Es independiente del Ambiente seleccionado abajo: todos los servidores de este proyecto se tratan como productivos, sin excepción.</td>
+      <td>Obligatorio para los modos reales (sp4_to_sp5, sp5_to_sp6, sp6_to_sp7, full). Si el Modo de ejecución es precheck o validate, este valor se ignora por completo, sea true o false — esos dos modos nunca modifican repositorios ni paquetes bajo ninguna combinación (las únicas excepciones son instalar la CA interna si faltaba, y que precheck puede detener temporalmente agentes de seguridad que interfieran con Zypper — ambas operaciones idempotentes). Déjalo en false para solo diagnosticar/ensayar un modo real. Ponlo en true únicamente cuando quieras aplicar la migración real, con reinicio incluido. Es independiente del Ambiente seleccionado abajo: todos los servidores de este proyecto se tratan como productivos, sin excepción.</td>
     </tr>
     <tr>
       <td>Ingrese el CRQ/RFC</td>
@@ -555,7 +557,9 @@ ANSIBLE_INVENTORY_PLUGINS: "/runner/project/&lt;CARPETA_DEL_PROJECT&gt;/inventor
     <tr><td>Survey propio</td><td>No crear uno aquí — lo trae el Workflow (7.4)</td></tr>
     <tr><td>Al agregarlo como nodo en el Workflow</td><td>No hace falta ningún PROMPT — este playbook no tiene ningún valor que fijar por nodo</td></tr>
   </table>
-  <p class="muted">Siempre de solo lectura (salvo instalar la CA interna si falta, sección 1 de
+  <p class="muted">Siempre de solo lectura (salvo instalar la CA interna si falta, y
+  detener temporalmente agentes de seguridad que interfieran con Zypper si hay alguno
+  activo — las 2 excepciones documentadas en sección 1 de
   <code>ARQUITECTURA_Y_DISENO_TECNICO.html</code>), sin importar qué <code>upgrade_mode</code>
   llegue del Survey del Workflow para los nodos 2/3 — este playbook ni siquiera lee esa variable.</p>
 

@@ -52,7 +52,7 @@
     repos_temporary_removed: []
     repos_leftover_removed_before_start: []
     repos_enabled_after: []
-    security_agents_paused: []
+    security_agents_started: []
     stage_migration_info: {}
     stage_reboot_info: {}
     sp_migration_dup_applied: false
@@ -157,20 +157,18 @@
     - name: "Respaldar, deshabilitar preexistentes y migrar con repos Foreman aislados"
       when: stage_status != 'FAILED'
       block:
-        - name: "Pausar temporalmente agentes de seguridad que interfieren con Zypper (si hay alguno activo)"
-          # Decisión explícita del usuario para este ambiente (2026-10-06,
-          # ver playbooks/group_vars/all.yml, zypper_lock_competing_services):
-          # confirmado con evidencia real en laboratorio que ds_agent (Trend
-          # Micro Deep Security) y nessusagent (Nessus) toman
-          # intermitentemente el lock de libzypp vía PackageKit durante sus
-          # escaneos, haciendo fallar operaciones de Zypper de esta etapa
-          # incluso con zypper_lock_retries/_delay agotados. Se detienen
-          # ANTES de tocar cualquier repositorio/paquete, para TODAS las
-          # fases (prepare/apply/both) -- incluso en "apply" en solitario el
+        - name: "Verificar/esperar a que no quede ningún packagekitd en ejecución (si hiciera falta)"
+          # Decisión explícita del usuario para este ambiente (2026-10-07):
+          # PRECHECK (roles/precheck/tasks/pause_competing_services.yml) ya
+          # detuvo los agentes de seguridad configurados una sola vez, antes
+          # de llegar aquí -- esta etapa NUNCA vuelve a detenerlos, solo
+          # verifica (de solo lectura) que packagekitd ya esté libre y, si
+          # no, espera un poco antes de continuar. Esto es TODAS las fases
+          # (prepare/apply/both) -- incluso en "apply" en solitario el
           # dup -D/dup real corre el mismo riesgo.
           ansible.builtin.include_role:
             name: repo_management
-            tasks_from: pause_security_agents.yml
+            tasks_from: wait_packagekitd_clear.yml
 
         - name: Seleccionar repos Foreman de origen y destino de esta etapa
           # Se calcula SIEMPRE (incluso en fase "apply" en solitario): el
@@ -485,17 +483,22 @@
       ansible.builtin.set_fact:
         _stage_note_cleanup: "FALLÓ el intento de limpieza forzada tras el fallo, revisar manualmente"
 
-- name: "Calcular si corresponde reiniciar ahora los agentes de seguridad pausados"
-  # NUNCA entre los 2 saltos encadenados de upgrade_mode: full (dejarlos
-  # pausados evita detenerlos/reiniciarlos dos veces en la misma ejecución
-  # para nada): solo se reinician al llegar al Service Pack final (SP7),
-  # en una etapa independiente (no "full"), o si esta etapa falló (no hay
-  # "siguiente salto" que proteger en ese caso). Decisión explícita del
-  # usuario para este ambiente, 2026-10-06.
+- name: "Calcular si corresponde reiniciar ahora los agentes de seguridad (zypper_lock_competing_services)"
+  # NUNCA entre los 2 saltos encadenados de upgrade_mode: full (reiniciarlos
+  # ahí los dejaría activos para nada, ya que el siguiente salto los
+  # necesitaría detenidos de nuevo de inmediato): solo se reinician al
+  # llegar al Service Pack final (SP7), en una etapa independiente (no
+  # "full"), o si esta etapa falló (no hay "siguiente salto" que proteger
+  # en ese caso). Ya NO depende de "qué detuvo esta misma ejecución"
+  # (PRECHECK, un Job de AWX separado, es quien realmente los detiene --
+  # ver roles/precheck/tasks/pause_competing_services.yml): depende
+  # directamente de si hay algo configurado para asegurar que vuelva a
+  # estar activo. Decisión explícita del usuario para este ambiente,
+  # 2026-10-07.
   ansible.builtin.set_fact:
     _resume_security_agents_now: >-
       {{
-        ((security_agents_paused | default([])) | length > 0)
+        ((zypper_lock_competing_services | default([])) | length > 0)
         and (_effective_upgrade_phase in ['apply', 'both'])
         and (
           upgrade_mode != 'full'
@@ -504,7 +507,7 @@
         )
       }}
 
-- name: "Reiniciar agentes de seguridad pausados (si corresponde en esta etapa)"
+- name: "Reiniciar agentes de seguridad configurados (si corresponde en esta etapa)"
   when: _resume_security_agents_now
   block:
     - name: Incluir resume de repo_management (agentes de seguridad)
@@ -521,11 +524,11 @@
   ansible.builtin.set_fact:
     _security_agents_note: >-
       {{
-        'reiniciados al finalizar esta etapa' if _resume_security_agents_now
+        'asegurados activos al finalizar esta etapa' if _resume_security_agents_now
         else (
-          'ninguno de los configurados estaba activo, o esta etapa no llegó a modificar paquetes'
-          if (security_agents_paused | default([])) | length == 0
-          else 'detenidos deliberadamente -- se reiniciarán en la etapa/fase que llegue a SP7 (o si esa etapa falla)'
+          'ninguno configurado (zypper_lock_competing_services vacío)'
+          if (zypper_lock_competing_services | default([])) | length == 0
+          else 'se dejan detenidos a propósito -- se reiniciarán en la etapa/fase que llegue a SP7 (o si esa etapa falla)'
         )
       }}
 
@@ -581,8 +584,8 @@
       migration: "{{ stage_migration_info }}"
       reboot: "{{ stage_reboot_info }}"
       security_agents:
-        stopped: "{{ security_agents_paused | default([]) }}"
-        started: "{{ (security_agents_paused | default([])) if (_resume_security_agents_now | default(false)) else [] }}"
+        started: "{{ security_agents_started | default([]) }}"
+        packagekitd_wait_note: "{{ wait_packagekitd_note | default('N/A') }}"
         note: "{{ _security_agents_note | default('N/A') }}"
       critical_services_before: "{{ critical_services_before | default([]) }}"
       critical_services_after: "{{ critical_services_after | default([]) }}"

@@ -1,9 +1,15 @@
 ---
 # roles/repo_management/tasks/resume_security_agents.yml
 #
-# Reinicia ÚNICAMENTE los agentes de seguridad que ESTA MISMA ejecución
-# detuvo en pause_security_agents.yml (security_agents_paused). Nunca
-# inicia un servicio que no fue detenido por esta automatización.
+# Reinicia los agentes de seguridad configurados en
+# zypper_lock_competing_services que estén presentes en este host --
+# idempotente (ansible.builtin.systemd: state: started no hace nada si ya
+# estaba corriendo), así que es seguro llamarlo aunque PRECHECK (otro Job
+# de AWX separado, ver pause_security_agents.yml) haya sido quien
+# realmente los detuvo: un hecho de Ansible de ese Job anterior
+# (security_agents_paused) NO sobrevive a este Job nuevo, por eso aquí se
+# basa directamente en la lista configurada, no en "qué detuve yo en esta
+# misma ejecución".
 #
 # Quien incluye este archivo (playbooks/tasks/run_stage.yml) decide CUÁNDO
 # corresponde llamarlo -- nunca entre los 2 saltos encadenados de
@@ -16,14 +22,35 @@
 # de seguridad corporativo detenido indefinidamente sin que el operador lo
 # note sería peor que un WARNING en el reporte.
 
-- name: "Reiniciar los agentes de seguridad detenidos temporalmente por esta automatización"
+- name: Detectar servicios presentes en este host (para no intentar iniciar uno que no existe)
+  ansible.builtin.service_facts: {}
+
+- name: "Calcular qué agentes de seguridad configurados están presentes en este host"
+  ansible.builtin.set_fact:
+    _security_agents_to_resume: |-
+      {% set result = [] %}
+      {% for svc in zypper_lock_competing_services %}
+      {% set unit = svc ~ '.service' %}
+      {% if unit in ansible_facts.services %}
+      {% set _ = result.append(svc) %}
+      {% endif %}
+      {% endfor %}
+      {{ result }}
+
+- name: "Asegurar que los agentes de seguridad configurados estén activos (reiniciar si hace falta)"
   ansible.builtin.systemd:
     name: "{{ item }}"
     state: started
-  loop: "{{ security_agents_paused | default([]) }}"
+  loop: "{{ _security_agents_to_resume }}"
   become: true
   register: _security_agents_resume_result
   failed_when: false
+  when: _security_agents_to_resume | length > 0
+
+- name: Registrar los agentes efectivamente asegurados como activos (para el reporte)
+  ansible.builtin.set_fact:
+    security_agents_started: "{{ _security_agents_to_resume }}"
+  when: _security_agents_to_resume | length > 0
 
 - name: "Calcular detalle real de los agentes que no se pudieron reiniciar (si alguno falló)"
   ansible.builtin.set_fact:
@@ -35,13 +62,13 @@
       {% endif %}
       {% endfor %}
       {{ result }}
-  when: (security_agents_paused | default([])) | length > 0
+  when: _security_agents_to_resume | length > 0
 
 - name: "Advertir si algún agente de seguridad no pudo reiniciarse (revisar manualmente)"
   ansible.builtin.fail:
     msg: >-
-      No se pudieron reiniciar los siguientes agentes de seguridad detenidos
-      temporalmente: {{ security_agents_resume_failed_details | join(' | ') }}.
+      No se pudieron reiniciar los siguientes agentes de seguridad:
+      {{ security_agents_resume_failed_details | join(' | ') }}.
       No deben quedar detenidos indefinidamente -- revisar y reiniciar
       manualmente en el host.
   when: (security_agents_resume_failed_details | default([])) | length > 0

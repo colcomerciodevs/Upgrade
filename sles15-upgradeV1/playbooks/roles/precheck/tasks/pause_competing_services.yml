@@ -1,0 +1,51 @@
+---
+# roles/precheck/tasks/pause_competing_services.yml
+#
+# SEGUNDA excepción documentada a "precheck es de solo lectura" (la
+# primera es la instalación de la CA interna en repos_reachability.yml).
+# Decisión explícita del usuario para este ambiente (2026-10-07): detiene
+# aquí, UNA SOLA VEZ en PRECHECK, los agentes de seguridad corporativos
+# configurados en zypper_lock_competing_services (ver
+# playbooks/group_vars/all.yml para la evidencia real que justifica
+# esto), para que ya estén detenidos -- y cualquier transacción de
+# PackageKit que ya estuviera en curso ya haya terminado -- para cuando
+# arranque la siguiente etapa ("preparar repos"), en vez de competir
+# directamente contra la primera operación real de Zypper de esa etapa.
+#
+# Nunca deshabilita ni desinstala estos agentes: solo los detiene
+# temporalmente (ver roles/repo_management/tasks/pause_security_agents.yml,
+# reutilizado aquí para no duplicar la lógica). Se reinician al terminar
+# la migración real (roles/repo_management/tasks/resume_security_agents.yml,
+# ver playbooks/tasks/run_stage.yml para la condición exacta).
+#
+# Si no se pudo detener alguno, se registra como FAILED explícito en el
+# precheck (en vez de dejar que la excepción aborte todo el rol sin dejar
+# evidencia de los demás checks) -- detener estos agentes es una condición
+# real para que la etapa siguiente no falle de forma intermitente.
+
+- name: "Pausar agentes de seguridad que interfieren con Zypper (si hay alguno activo)"
+  block:
+    - name: Pausar temporalmente agentes de seguridad y esperar a que se libere packagekitd
+      ansible.builtin.include_role:
+        name: repo_management
+        tasks_from: pause_security_agents.yml
+
+    - name: Registrar en el precheck qué agentes de seguridad se detuvieron (si alguno)
+      ansible.builtin.set_fact:
+        precheck_checks: "{{ precheck_checks + [{
+            'name': 'agentes_seguridad_pausados',
+            'status': 'OK',
+            'detail': (
+              ('Detenidos temporalmente y packagekitd verificado libre: ' ~ (security_agents_paused | join(', ')))
+              if (security_agents_paused | default([])) | length > 0
+              else 'Ninguno de los agentes configurados (zypper_lock_competing_services) estaba activo'
+            )
+          }] }}"
+  rescue:
+    - name: Registrar como FAILED si no se pudieron pausar los agentes de seguridad
+      ansible.builtin.set_fact:
+        precheck_checks: "{{ precheck_checks + [{
+            'name': 'agentes_seguridad_pausados',
+            'status': 'FAILED',
+            'detail': 'No se pudieron detener uno o más agentes de seguridad configurados: ' ~ (ansible_failed_result.msg | default('error desconocido'))
+          }] }}"

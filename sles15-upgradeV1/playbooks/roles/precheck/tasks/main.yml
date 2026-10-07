@@ -2,12 +2,19 @@
 # roles/precheck/tasks/main.yml
 #
 # Ejecuta los prechecks obligatorios descritos en CLAUDE.md antes de
-# permitir cualquier upgrade. De solo lectura, salvo una única excepción
-# documentada: repos_reachability.yml instala la CA interna ("CAColdecom")
-# si todavía no está presente, para que la prueba de alcanzabilidad sea
-# representativa del TLS real (idempotente, no destructiva — ver
-# roles/repo_management/tasks/ensure_ca_trusted.yml). Aparte de eso,
-# construye `precheck_result` con el veredicto, sin modificar nada más.
+# permitir cualquier upgrade. De solo lectura, salvo DOS excepciones
+# documentadas:
+#   1. repos_reachability.yml instala la CA interna ("CAColdecom") si
+#      todavía no está presente, para que la prueba de alcanzabilidad sea
+#      representativa del TLS real (idempotente, no destructiva — ver
+#      roles/repo_management/tasks/ensure_ca_trusted.yml).
+#   2. pause_competing_services.yml detiene temporalmente (nunca
+#      deshabilita/desinstala) los agentes de seguridad corporativos
+#      configurados en zypper_lock_competing_services, si interfieren con
+#      Zypper (decisión explícita del usuario, 2026-10-07 — ver README
+#      sección 8.4). Se reinician al terminar la migración real.
+# Aparte de eso, construye `precheck_result` con el veredicto, sin
+# modificar nada más.
 #
 # Este rol NO falla la ejecución por sí mismo: el playbook que lo invoca
 # decide qué hacer según `precheck_result.overall_status`, para poder
@@ -43,6 +50,10 @@
 
 - name: "Verificar locks de Zypper/RPM/libzypp (solo en hosts SLES)"
   ansible.builtin.include_tasks: locks.yml
+  when: ansible_facts['distribution'] == 'SLES'
+
+- name: "Pausar agentes de seguridad que interfieren con Zypper, si hay alguno activo (solo en hosts SLES)"
+  ansible.builtin.include_tasks: pause_competing_services.yml
   when: ansible_facts['distribution'] == 'SLES'
 
 - name: "Verificar espacio en disco (solo en hosts SLES)"

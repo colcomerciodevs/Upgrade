@@ -3,25 +3,29 @@
 #
 # Detiene TEMPORALMENTE los agentes de seguridad corporativos listados en
 # zypper_lock_competing_services (ver playbooks/group_vars/all.yml para la
-# evidencia real que justifica esto) ANTES de modificar cualquier
-# repositorio o paquete. Confirmado con evidencia real en laboratorio
-# (sles15-sp5-sp7 / 10.181.8.36, 2026-10-06): estos agentes toman
+# evidencia real que justifica esto) y espera a que no quede ningún
+# packagekitd corriendo. Confirmado con evidencia real en laboratorio
+# (sles15-sp5-sp7 / 10.181.8.36, 2026-10-06/07): estos agentes toman
 # intermitentemente el lock de libzypp vía PackageKit (D-Bus) durante sus
-# escaneos, haciendo fallar operaciones reales de Zypper incluso con los
-# reintentos de zypper_lock_retries/_delay agotados.
+# escaneos.
+#
+# Decisión explícita del usuario para este ambiente (2026-10-07): esto se
+# ejecuta UNA SOLA VEZ, en PRECHECK (roles/precheck/tasks/
+# pause_competing_services.yml -- SEGUNDA excepción documentada a
+# "precheck es de solo lectura", la primera es la CA en
+# repos_reachability.yml), para que ya esté resuelto cuando arranque la
+# siguiente etapa, en vez de competir directamente contra la primera
+# operación real de Zypper de "preparar repos". Las etapas de
+# preparar/aplicar solo verifican con wait_packagekitd_clear.yml (más
+# liviano: nunca vuelve a detener nada, solo espera si todavía hiciera falta).
 #
 # Solo detiene los que:
 #   - están presentes en este host (unit systemd existente);
 #   - están activos ("running") en este momento.
 # Nunca "inicia" nada aquí, y nunca los deshabilita (disable) ni
 # desinstala: únicamente los detiene (stop) de forma temporal. Se
-# reinician en resume_security_agents.yml.
-#
-# Registra EXACTAMENTE cuáles se detuvieron en security_agents_paused
-# (debe inicializarse en [] al comenzar la etapa, ver
-# playbooks/tasks/run_stage.yml), para reiniciar únicamente esos -- nunca
-# un servicio que ya estaba detenido por otra razón ajena a esta
-# automatización.
+# reinician al terminar la migración real (resume_security_agents.yml,
+# ver playbooks/tasks/run_stage.yml).
 
 - name: Detectar servicios presentes y su estado actual en este host
   ansible.builtin.service_facts: {}
@@ -46,7 +50,11 @@
   become: true
   when: _security_agents_to_pause | length > 0
 
-- name: Registrar qué agentes se detuvieron realmente (para reiniciarlos al terminar la etapa)
+- name: Registrar qué agentes se detuvieron realmente (informativo, para el precheck)
   ansible.builtin.set_fact:
     security_agents_paused: "{{ _security_agents_to_pause }}"
+  when: _security_agents_to_pause | length > 0
+
+- name: Esperar a que no quede ningún packagekitd en ejecución (reutiliza la misma espera que preparar/aplicar)
+  ansible.builtin.include_tasks: wait_packagekitd_clear.yml
   when: _security_agents_to_pause | length > 0

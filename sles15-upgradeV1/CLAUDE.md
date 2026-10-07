@@ -196,14 +196,21 @@ con los reintentos agotados. No es un bug de este proyecto ni algo que un
 timer/cron propio esté causando (descartado con evidencia real en el host).
 
 `playbooks/group_vars/all.yml` define `zypper_lock_competing_services`
-(lista vacía válida). Esta automatización **detiene temporalmente**
-(nunca deshabilita ni desinstala) únicamente los agentes de esa lista que
-estén presentes y activos en el host, justo antes de modificar cualquier
-repositorio/paquete, y los **reinicia** al terminar la migración real de
-la etapa — excepto entre los 2 saltos encadenados de `upgrade_mode: full`
-(se reinician solo al llegar a SP7, o de inmediato si la etapa falló). Ver
-README sección 8.4 para el detalle completo y `playbooks/tasks/
-run_stage.yml` para la condición exacta de reinicio.
+(lista vacía válida). Decisión explícita del usuario para este ambiente
+(2026-10-07): esta automatización **detiene temporalmente** (nunca
+deshabilita ni desinstala) los agentes de esa lista que estén presentes y
+activos en el host **una sola vez, en PRECHECK** (Nodo 1 del Workflow —
+`roles/precheck/tasks/pause_competing_services.yml`, SEGUNDA excepción
+documentada a "precheck es de solo lectura", la primera es la CA en
+`repos_reachability.yml`), y espera ahí mismo a que no quede ningún
+`packagekitd` corriendo. Las etapas de preparar/aplicar NUNCA vuelven a
+detener nada: solo verifican/esperan (de solo lectura,
+`wait_packagekitd_clear.yml`) que ya esté libre. Se **reinician**
+(asegurando que estén activos, idempotente) al terminar la migración real
+de la etapa — excepto entre los 2 saltos encadenados de `upgrade_mode:
+full` (se reinician solo al llegar a SP7, o de inmediato si la etapa
+falló). Ver README sección 8.4 para el detalle completo y
+`playbooks/tasks/run_stage.yml` para la condición exacta de reinicio.
 
 ## Prechecks
 

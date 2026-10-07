@@ -309,7 +309,7 @@
 
   <table class="clean">
     <tr><th>Nivel</th><th>Responde</th><th>¿Modifica el sistema?</th></tr>
-    <tr><td><strong>PRECHECK</strong></td><td>Sistema operativo, espacio, locks, servicios, GeoPOS, conectividad básica</td><td>No, salvo una excepción documentada (CA interna, ver abajo)</td></tr>
+    <tr><td><strong>PRECHECK</strong></td><td>Sistema operativo, espacio, locks, servicios, GeoPOS, conectividad básica</td><td>No, salvo 2 excepciones documentadas (CA interna y pausar agentes de seguridad, ver abajo)</td></tr>
     <tr><td><strong>VALIDATE</strong></td><td>Usa Zypper de verdad (metadata, GPG, TLS, solver), aislado y reversible</td><td>No, salvo la misma excepción (CA interna, ver abajo)</td></tr>
     <tr><td><strong>UPGRADE</strong></td><td>La migración real</td><td>Sí, con <code>confirm_production_upgrade: true</code></td></tr>
   </table>
@@ -324,7 +324,7 @@
   </div>
 
   <div class="callout risk">
-    <span class="label">Única excepción documentada: instalación de la CA interna</span>
+    <span class="label">Primera excepción documentada: instalación de la CA interna</span>
     Zypper valida TLS contra el almacén de confianza del sistema operativo, no contra
     ninguna variable de este proyecto. Sin la CA interna real ("CAColdecom") instalada,
     cualquier conexión real por HTTPS contra Foreman/Katello falla con un error de TLS
@@ -348,6 +348,32 @@
     </ul>
     <p style="margin-top:8px">La operación es idempotente (solo agrega confianza si falta; nunca
     elimina ninguna CA existente) y no reinicia ni afecta ningún servicio.</p>
+  </div>
+
+  <div class="callout risk">
+    <span class="label">Segunda excepción documentada: pausar agentes de seguridad corporativos</span>
+    Confirmado con evidencia real en laboratorio (SSH de solo lectura,
+    2026-10-06/07): <strong>Trend Micro Deep Security Agent</strong>
+    (<code>ds_agent.service</code>) y <strong>Nessus Agent</strong>
+    (<code>nessusagent.service</code>) toman intermitentemente el lock de
+    libzypp vía PackageKit (D-Bus) durante sus escaneos rutinarios de
+    vulnerabilidades/parches, haciendo fallar operaciones reales de Zypper
+    incluso con los reintentos agotados. No es un bug de este proyecto.
+    <p style="margin-top:8px"><code>roles/precheck/tasks/pause_competing_services.yml</code>
+    detiene temporalmente (nunca deshabilita ni desinstala) los agentes
+    configurados en <code>zypper_lock_competing_services</code> que estén
+    presentes y activos, y espera a que no quede ningún
+    <code>packagekitd</code> corriendo, decisión explícita del usuario
+    para este ambiente (2026-10-07) para que ya esté resuelto antes de que
+    arranque "Preparar repos" (Nodo 2, un Job de AWX separado). Se
+    descartó hacerlo en esa etapa en vez de en PRECHECK: confirmado con
+    evidencia real (job AWX #9257) que detener un agente no mata una
+    transacción de PackageKit ya en curso en ese instante — sigue
+    corriendo por su cuenta (D-Bus, no es un proceso hijo) hasta terminar,
+    y hacerlo justo antes de la primera operación de Zypper deja muy poco
+    margen. Preparar/Aplicar solo verifican/esperan (nunca vuelven a
+    detener nada); al terminar la migración real se asegura que vuelvan a
+    estar activos (ver README sección 8.4).</p>
   </div>
 
   <div class="callout decision">

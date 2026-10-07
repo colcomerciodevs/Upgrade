@@ -93,10 +93,14 @@
 # Detecta repos temporales de ESTA automatización (prefijo
 # temporary_repo_prefix) que quedaron HABILITADOS -- típicamente evidencia
 # de una fase "prepare" (upgrade_phase: prepare, ver
-# playbooks/group_vars/all.yml) que nunca llegó a completarse con su fase
-# "apply" correspondiente. Es informativo (WARNING, nunca bloquea el
-# precheck): puede ser intencional (está pendiente de ejecutar "apply"), no
-# algo que este precheck deba corregir automáticamente.
+# playbooks/group_vars/all.yml) que todavía no se completó con su fase
+# "apply" correspondiente. Puramente informativo, siempre OK (decisión
+# explícita del usuario para este ambiente, 2026-10-07: no marcarlo como
+# WARNING para no "ensuciar" el reporte durante el flujo normal
+# prepare -> apply, que deja estos repos habilitados a propósito como
+# parte esperada del diseño -- el precheck no puede distinguir ese caso
+# normal de uno realmente abandonado solo por el estado de los repos).
+# Nunca bloquea el precheck ni corrige nada automáticamente.
 - name: Calcular repositorios temporales de esta automatización que quedaron habilitados
   ansible.builtin.set_fact:
     _leftover_prepared_repos: "{{ (precheck_repo_inventory | selectattr('enabled', 'equalto', true) | map(attribute='alias') | list) | select('match', '^' ~ temporary_repo_prefix) | list }}"
@@ -106,9 +110,9 @@
   ansible.builtin.set_fact:
     precheck_checks: "{{ precheck_checks + [{
         'name': 'repos_preparacion_pendiente',
-        'status': ('WARNING' if _leftover_prepared_repos | length > 0 else 'OK'),
+        'status': 'OK',
         'detail': ('sin repos de preparación pendientes' if _leftover_prepared_repos | length == 0
-          else 'repos temporales de esta automatización ya habilitados -- probable fase prepare sin completar: ' ~ (_leftover_prepared_repos | join(', ')))
+          else 'repos temporales de esta automatización ya habilitados -- probable fase prepare esperando su fase apply: ' ~ (_leftover_prepared_repos | join(', ')))
       }] }}"
   when: _repo_inventory_reliable
 

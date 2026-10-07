@@ -146,15 +146,16 @@
 {% endif %}
 
 {% set _security_agents = stage_report.security_agents | default({}) %}
-{% if (_security_agents.stopped | default([])) | length > 0 %}
+{% if (_security_agents.packagekitd_wait_note | default('')) | length > 0 or (_security_agents.started | default([])) | length > 0 %}
 <h2>Agentes de seguridad (interferían con Zypper)</h2>
 <table>
-  <tr><th>Servicios detenidos en esta etapa</th><td colspan="3">{{ _security_agents.stopped | default([]) | join(', ') or 'ninguno' }}</td></tr>
+  <tr><th>Verificación de packagekitd al empezar esta etapa</th><td colspan="3">{{ _security_agents.packagekitd_wait_note | default('N/A') }}</td></tr>
   <tr><th>Servicios reiniciados en esta etapa</th><td colspan="3">{{ _security_agents.started | default([]) | join(', ') or 'ninguno' }}</td></tr>
   <tr><th>Nota</th><td colspan="3">{{ _security_agents.note | default('N/A') }}</td></tr>
 </table>
-<p class="muted">Ver README sección 8.4 para la evidencia real que justifica
-   detener estos agentes temporalmente durante la migración.</p>
+<p class="muted">Ver README sección 8.4 — los servicios se detienen una sola vez
+   en Precheck (Nodo 1), no en esta etapa; aquí solo se verifica/espera que
+   packagekitd ya esté libre, y al final se asegura que vuelvan a estar activos.</p>
 {% endif %}
 
 {% for label, categoria in [('Servicios críticos antes', stage_report.critical_services_before), ('Servicios críticos después', stage_report.critical_services_after)] %}
