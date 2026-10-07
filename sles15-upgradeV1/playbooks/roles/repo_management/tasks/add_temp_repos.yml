@@ -143,6 +143,10 @@
       {{ result }}
   when: _phase_failed_aliases | length > 0
 
+- name: "Diagnosticar qué bloquea a Zypper, si alguno de los fallos fue por lock (diagnóstico de solo lectura)"
+  ansible.builtin.include_tasks: diagnosticar_packagekit.yml
+  when: _phase_failed_aliases | length > 0
+
 - name: "Fallar explícitamente si algún repositorio temporal no pudo agregarse en esta fase {{ repo_management_alias_suffix }}"
   ansible.builtin.fail:
     msg: >-
@@ -150,6 +154,10 @@
       {{ _phase_failed_details | join(' | ') }}. Los que sí se agregaron
       correctamente antes del fallo quedaron registrados:
       {{ _phase_created_aliases | join(', ') or 'ninguno' }}.
+
+
+      Diagnóstico de qué bloquea a Zypper en este momento:
+      {{ packagekit_diagnostico | default('N/D') }}
   when: _phase_failed_aliases | length > 0
 
 - name: "Refrescar ÚNICAMENTE los alias temporales Foreman de esta fase (con --releasever si aplica)"
@@ -187,10 +195,18 @@
   # ya aplicado a addrepo más arriba y a disable_preexisting.yml/cleanup.yml).
   failed_when: false
 
+- name: "Diagnosticar qué bloquea a Zypper, si falló el refresh (diagnóstico de solo lectura)"
+  ansible.builtin.include_tasks: diagnosticar_packagekit.yml
+  when: repo_refresh_result.rc | default(1) != 0
+
 - name: "Fallar explícitamente, con el detalle real de Zypper, si falló el refresh de la fase {{ repo_management_alias_suffix }}"
   ansible.builtin.fail:
     msg: >-
       No se pudo refrescar la metadata de los repositorios temporales
       {{ _phase_created_aliases | join(', ') }} (rc={{ repo_refresh_result.rc }}):
       {{ ((repo_refresh_result.stdout | default('')) ~ ' ' ~ (repo_refresh_result.stderr | default(''))) | trim | truncate(4000) }}
+
+
+      Diagnóstico de qué bloquea a Zypper en este momento:
+      {{ packagekit_diagnostico | default('N/D') }}
   when: repo_refresh_result.rc | default(1) != 0

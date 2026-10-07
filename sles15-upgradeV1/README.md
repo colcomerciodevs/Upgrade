@@ -1245,11 +1245,17 @@ infraestructura y orden recomendado de la primera ejecución real).
   ante **cualquier** código de error (no solo `rc=7`), porque así lo exige
   el propio procedimiento de SUSE para esta orden (zypper puede pedir que
   se repita tras actualizarse a sí mismo). Si sigue fallando tras agotar los
-  reintentos, hay algo más que mantiene el lock de forma persistente
-  (revisar `ps aux | grep -i zypp`/`packagekitd` en el host; considerar,
-  como decisión explícita del administrador para ese host, detener
-  `packagekit.service` antes de la ventana de mantenimiento — este
-  proyecto no lo hace automáticamente).
+  reintentos, hay algo más que mantiene el lock de forma persistente —
+  considerar, como decisión explícita del administrador para ese host,
+  detener `packagekit.service` antes de la ventana de mantenimiento (este
+  proyecto ya lo hace automáticamente en Precheck para los agentes
+  conocidos, sección 8.4; esto es para cualquier otro caso).
+  **Diagnóstico automático** (decisión explícita del usuario, 2026-10-07):
+  cada uno de estos mensajes de fallo ya incluye, al final, la salida real
+  de `systemctl status packagekit.service` y de `ps -ef | grep -Ei
+  'packagekit|dnf|yum|rpm'` capturada en el momento exacto del fallo
+  (`roles/repo_management/tasks/diagnosticar_packagekit.yml`) — para saber
+  qué lo está bloqueando sin tener que conectarse por SSH.
 - **Etapa (prepare) fallaba antes (2026-10-06) en "migracion: No se pudo
   refrescar la metadata de los repositorios temporales..." con detalle
   "File 'repomd.xml' ... is unsigned ... continue? [yes/no] (no): no

@@ -72,6 +72,10 @@
       {{ result }}
   when: _removerepo_failed | length > 0
 
+- name: "Diagnosticar qué bloquea a Zypper (diagnóstico de solo lectura)"
+  ansible.builtin.include_tasks: diagnosticar_packagekit.yml
+  when: _removerepo_failed | length > 0
+
 - name: Fallar explícitamente si algún repositorio temporal no pudo eliminarse
   ansible.builtin.fail:
     msg: >-
@@ -79,4 +83,8 @@
       {{ _removerepo_failed_details | default(_removerepo_failed) | join(' | ') }}. Los que sí se eliminaron
       correctamente antes del fallo quedaron registrados:
       {{ _removerepo_ok | join(', ') or 'ninguno' }}.
+
+
+      Diagnóstico de qué bloquea a Zypper en este momento:
+      {{ packagekit_diagnostico | default('N/D') }}
   when: _removerepo_failed | length > 0

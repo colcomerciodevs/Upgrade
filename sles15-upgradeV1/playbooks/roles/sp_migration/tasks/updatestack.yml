@@ -36,10 +36,20 @@
     sp_migration_updatestack_output: >-
       {{ ((_updatestack_result.stdout | default('')) ~ '\n' ~ (_updatestack_result.stderr | default(''))) | trim | truncate(20000) }}
 
+- name: "Diagnosticar qué bloquea a Zypper (diagnóstico de solo lectura)"
+  ansible.builtin.include_role:
+    name: repo_management
+    tasks_from: diagnosticar_packagekit.yml
+  when: _updatestack_result.rc != 0
+
 - name: "Fallar explícitamente, con el detalle real de Zypper, si updatestack no fue exitoso"
   ansible.builtin.fail:
     msg: >-
       zypper patch --updatestack-only no fue exitoso tras
       {{ sp_migration_updatestack_retries }} reintentos (rc={{ _updatestack_result.rc }}):
       {{ sp_migration_updatestack_output }}
+
+
+      Diagnóstico de qué bloquea a Zypper en este momento:
+      {{ packagekit_diagnostico | default('N/D') }}
   when: _updatestack_result.rc != 0

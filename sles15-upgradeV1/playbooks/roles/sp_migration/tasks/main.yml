@@ -67,6 +67,12 @@
     sp_migration_dry_run_output: >-
       {{ ((sp_migration_dry_run_result.stdout | default('')) ~ '\n' ~ (sp_migration_dry_run_result.stderr | default(''))) | trim | truncate(20000) }}
 
+- name: "Diagnosticar qué bloquea a Zypper, si dup -D encontró problemas (diagnóstico de solo lectura)"
+  ansible.builtin.include_role:
+    name: repo_management
+    tasks_from: diagnosticar_packagekit.yml
+  when: sp_migration_dry_run_result.rc != 0
+
 - name: "Fallar explícitamente si dup -D encontró problemas (la salida completa queda en el reporte)"
   ansible.builtin.fail:
     msg: >-
@@ -77,6 +83,10 @@
       con conflictos de dependencias o cambios de proveedor (vendor).
       Corríjalos (o, si corresponde, documente y autorice la excepción) antes
       de reintentar esta etapa. No se ejecutó ningún cambio real.
+
+
+      Diagnóstico de qué bloquea a Zypper en este momento:
+      {{ packagekit_diagnostico | default('N/D') }}
   when: sp_migration_dry_run_result.rc != 0
 
 - name: Ejecutar la migración real (zypper dup)
@@ -95,11 +105,32 @@
   retries: "{{ zypper_lock_retries }}"
   delay: "{{ zypper_lock_delay }}"
   changed_when: true
-  failed_when: sp_migration_dup_result.rc != 0
+  # "failed_when: false" aquí es deliberado (igual que el gate dup -D de
+  # arriba): captura el resultado completo ANTES de decidir fallar, para
+  # no perder el stdout/stderr real de Zypper con el genérico "non-zero
+  # return code" de Ansible.
+  failed_when: false
 
 - name: Registrar salida resumida de la migración real
   ansible.builtin.set_fact:
     sp_migration_dup_output: "{{ sp_migration_dup_result.stdout | default('') | truncate(20000) }}"
+
+- name: "Diagnosticar qué bloquea a Zypper, si el dup real falló (diagnóstico de solo lectura)"
+  ansible.builtin.include_role:
+    name: repo_management
+    tasks_from: diagnosticar_packagekit.yml
+  when: sp_migration_dup_result.rc != 0
+
+- name: "Fallar explícitamente, con el detalle real de Zypper, si el dup real no fue exitoso"
+  ansible.builtin.fail:
+    msg: >-
+      zypper dup (migración real) no fue exitoso (rc={{ sp_migration_dup_result.rc }}):
+      {{ sp_migration_dup_output }}
+
+
+      Diagnóstico de qué bloquea a Zypper en este momento:
+      {{ packagekit_diagnostico | default('N/D') }}
+  when: sp_migration_dup_result.rc != 0
 
 - name: Marcar el dup como aplicado INMEDIATAMENTE (no depende del resultado del reinicio)
   ansible.builtin.set_fact:

@@ -1,0 +1,39 @@
+---
+# roles/repo_management/tasks/diagnosticar_packagekit.yml
+#
+# Captura un diagnóstico de solo lectura de qué está bloqueando a Zypper
+# (packagekitd u otro gestor de paquetes) justo en el momento del fallo,
+# para que el mensaje de error sea explícito sobre la causa real sin que
+# el operador tenga que conectarse por SSH. Decisión explícita del
+# usuario para este ambiente (2026-10-07).
+#
+# Deja el resultado en packagekit_diagnostico (string), para que quien
+# incluya este archivo lo agregue a su propio mensaje de fallo. Nunca
+# falla por sí mismo (failed_when: false en ambos comandos): es
+# diagnóstico, nunca debe tapar ni reemplazar el error real que lo
+# disparó.
+
+- name: "Diagnóstico de fallo Zypper: capturar estado del servicio packagekit"
+  ansible.builtin.command:
+    cmd: systemctl status packagekit.service
+  register: _diag_packagekit_status
+  become: true
+  changed_when: false
+  failed_when: false
+
+- name: "Diagnóstico de fallo Zypper: capturar procesos relacionados con gestión de paquetes"
+  ansible.builtin.shell:
+    cmd: "set -o pipefail; ps -ef | grep -Ei 'packagekit|dnf|yum|rpm' | grep -v grep"
+    executable: /bin/bash
+  register: _diag_package_processes
+  become: true
+  changed_when: false
+  failed_when: false
+
+- name: "Diagnóstico de fallo Zypper: consolidar"
+  ansible.builtin.set_fact:
+    packagekit_diagnostico: >-
+      {{ (
+        '--- systemctl status packagekit.service ---\n' ~ (_diag_packagekit_status.stdout | default('') | trim) ~
+        '\n--- procesos relacionados (packagekit/dnf/yum/rpm) ---\n' ~ ((_diag_package_processes.stdout | default('')) | trim or 'ninguno')
+      ) | trim | truncate(4000) }}

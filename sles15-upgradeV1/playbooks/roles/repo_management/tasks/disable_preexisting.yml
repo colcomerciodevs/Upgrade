@@ -53,6 +53,10 @@
       {{ result }}
   when: _disable_failed_items | length > 0
 
+- name: "Diagnosticar qué bloquea a Zypper (diagnóstico de solo lectura)"
+  ansible.builtin.include_tasks: diagnosticar_packagekit.yml
+  when: _disable_failed_items | length > 0
+
 - name: Fallar explícitamente si algún repositorio preexistente no pudo deshabilitarse
   ansible.builtin.fail:
     msg: >-
@@ -60,4 +64,8 @@
       {{ _disable_failed_details | default(_disable_failed_items) | join(' | ') }}. Los que sí se deshabilitaron
       correctamente antes del fallo quedaron registrados:
       {{ repos_disabled_by_upgrade | join(', ') or 'ninguno' }}.
+
+
+      Diagnóstico de qué bloquea a Zypper en este momento:
+      {{ packagekit_diagnostico | default('N/D') }}
   when: _disable_failed_items | length > 0
