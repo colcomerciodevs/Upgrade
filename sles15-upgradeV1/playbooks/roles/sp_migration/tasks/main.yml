@@ -144,6 +144,15 @@
   changed_when: false
   failed_when: false
 
+- name: "Deshabilitar permanentemente servicios que pueden colgar el arranque (si hay alguno configurado), antes del reinicio obligatorio"
+  # Decisión explícita del usuario para este ambiente (2026-10-07): ver
+  # playbooks/group_vars/all.yml (reboot_disable_services) para la
+  # evidencia real que lo justifica -- confirmado que postfix puede
+  # colgar INDEFINIDAMENTE el arranque tras un upgrade de Service Pack.
+  ansible.builtin.include_role:
+    name: repo_management
+    tasks_from: disable_boot_blocking_services.yml
+
 - name: Reiniciar el sistema y esperar reconexión (fallo capturado localmente; el dup ya quedó registrado)
   block:
     - name: Reiniciar el sistema tras la migración real (obligatorio, sin excepción)

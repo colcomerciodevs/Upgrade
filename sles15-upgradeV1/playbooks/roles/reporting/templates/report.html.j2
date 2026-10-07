@@ -47,7 +47,19 @@
     <tr><th>SP inicial</th><td>{{ stage_report.sp_inicial | default('N/D') }}</td><th>SP objetivo</th><td>{{ stage_report.sp_objetivo | default('N/D') }}</td></tr>
     <tr><th>SP final detectado</th><td>{{ stage_report.sp_final | default('N/D') }}</td><th>dup aplicado</th><td>{{ stage_report.migration.dup_applied | default(false) }}</td></tr>
     <tr><th>Kernel antes</th><td>{{ stage_report.kernel_antes | default('N/D') }}</td><th>Kernel después</th><td>{{ stage_report.kernel_despues | default('N/D') }}</td></tr>
+    {% set _sd_antes = stage_report.systemd_antes | default({}) %}
+    {% set _sd_despues = stage_report.systemd_despues | default({}) %}
+    <tr>
+      <th>systemd antes (<code>is-system-running</code>)</th>
+      <td><span class="badge badge-{{ 'WARNING' if (_sd_antes.unidades_failed | default([])) | length > 0 else 'OK' }}">{{ _sd_antes.estado | default('N/D') }}</span>{% if (_sd_antes.unidades_failed | default([])) | length > 0 %} — <code>--failed</code>: {{ _sd_antes.unidades_failed | join(', ') }}{% endif %}</td>
+      <th>systemd después</th>
+      <td><span class="badge badge-{{ 'WARNING' if (_sd_despues.unidades_failed | default([])) | length > 0 else 'OK' }}">{{ _sd_despues.estado | default('N/D') }}</span>{% if (_sd_despues.unidades_failed | default([])) | length > 0 %} — <code>--failed</code>: {{ _sd_despues.unidades_failed | join(', ') }}{% endif %}</td>
+    </tr>
   </table>
+  <p class="muted">"systemd" es informativo (<code>systemctl is-system-running</code> /
+     <code>systemctl --failed</code>): nunca decide por sí solo el resultado de la etapa
+     — un servicio fallido puede ser irrelevante o puede ser algo real; revisar
+     manualmente si aparece alguna unidad listada arriba.</p>
   {% if stage_report.failure_stage %}
   <p><strong>Etapa/check exacto que falló:</strong> {{ stage_report.failure_stage }}</p>
   {% endif %}
@@ -140,9 +152,13 @@
 <table>
   <tr><th>Reinicio completado</th><td>{{ stage_report.reboot.completed | default(false) }}</td></tr>
   <tr><th>Reconexión exitosa</th><td>{{ stage_report.reboot.reconnected | default(false) }}</td></tr>
+  <tr><th>Servicios deshabilitados permanentemente antes de reiniciar</th><td>{{ (stage_report.reboot.boot_blocking_services_disabled | default([])) | join(', ') or 'ninguno' }}</td></tr>
 </table>
 <p class="muted">Un upgrade real de Service Pack siempre reinicia si el dup se aplicó: no
-   existe una opción para omitirlo.</p>
+   existe una opción para omitirlo. Los servicios listados arriba (si hay
+   alguno) quedan deshabilitados de forma permanente, no se reinician
+   después — ver README sección 8.4/15 para la evidencia real que lo
+   justifica.</p>
 {% endif %}
 
 {% set _security_agents = stage_report.security_agents | default({}) %}

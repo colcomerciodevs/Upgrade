@@ -66,6 +66,25 @@
         or (_zypper_sles_version in _version_id)
       }}
 
+- name: "Verificar estado general de systemd (informativo, para que el operador revise si queda algo importante)"
+  # Decisión explícita del usuario para este ambiente (2026-10-07):
+  # informativo únicamente -- NUNCA decide por sí solo el resultado de la
+  # etapa (un "degraded" puede ser completamente irrelevante, como
+  # postfix/correo, o puede ser algo real; el operador es quien debe
+  # revisarlo, ver README sección 11).
+  ansible.builtin.command:  # noqa command-instead-of-module
+    cmd: systemctl is-system-running
+  register: _systemd_system_state_raw
+  changed_when: false
+  failed_when: false
+
+- name: "Listar unidades de systemd en estado failed (informativo)"
+  ansible.builtin.command:  # noqa command-instead-of-module
+    cmd: systemctl --failed --no-legend --plain
+  register: _systemd_failed_units_raw
+  changed_when: false
+  failed_when: false
+
 - name: Construir fotografía del estado del sistema
   ansible.builtin.set_fact:
     system_state_snapshot:
@@ -81,4 +100,6 @@
       zypper_products_xml_evidence: "{{ _zypper_products_raw.stdout | default('NOT_CHECKED') }}"
       zypper_sles_version: "{{ _zypper_sles_version if _zypper_sles_version | length > 0 else 'NOT_CHECKED' }}"
       sp_cross_check_consistent: "{{ _sp_cross_check_consistent }}"
+      systemd_system_state: "{{ _systemd_system_state_raw.stdout | default('NOT_CHECKED') | trim }}"
+      systemd_failed_units: "{{ (_systemd_failed_units_raw.stdout | default('')).splitlines() | select() | list }}"
       captured_at: "{{ lookup('pipe', 'date -u +%Y-%m-%dT%H:%M:%SZ') }}"

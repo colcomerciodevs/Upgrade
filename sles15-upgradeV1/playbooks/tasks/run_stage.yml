@@ -319,6 +319,7 @@
                 stage_reboot_info:
                   completed: "{{ sp_migration_reboot_completed | default(false) }}"
                   reconnected: "{{ sp_migration_reconnected | default(false) }}"
+                  boot_blocking_services_disabled: "{{ boot_blocking_services_disabled | default([]) }}"
       rescue:
         - name: Marcar la etapa como fallida en la preparación/migración
           ansible.builtin.set_fact:
@@ -483,6 +484,20 @@
       ansible.builtin.set_fact:
         _stage_note_cleanup: "FALLÓ el intento de limpieza forzada tras el fallo, revisar manualmente"
 
+- name: "Calcular si el host está presumiblemente inalcanzable (dup aplicado, pero el reinicio obligatorio nunca completó/reconectó)"
+  # Confirmado con evidencia real (2026-10-07, job AWX #9299): un host que
+  # se queda colgado en el arranque (ver sección 15, "postfix") hace que
+  # Ansible marque el siguiente intento de conexión como UNREACHABLE (no
+  # simplemente FAILED) -- y UNREACHABLE salta cualquier rescue Y TODAS
+  # las tareas restantes de la etapa para ese host, incluida la generación
+  # del reporte. Por eso, a partir de aquí, ningún paso que necesite
+  # conectarse de nuevo al host (reiniciar agentes de seguridad,
+  # inventariar repos al final) se intenta si ya sabemos que el reinicio
+  # nunca completó -- se deja constancia explícita (NOT_CHECKED) en vez de
+  # intentarlo y arriesgar perder el reporte completo otra vez.
+  ansible.builtin.set_fact:
+    _host_presumiblemente_inalcanzable: "{{ sp_migration_dup_applied | default(false) and not (sp_migration_reboot_completed | default(false)) }}"
+
 - name: "Calcular si corresponde reiniciar ahora los agentes de seguridad (zypper_lock_competing_services)"
   # NUNCA entre los 2 saltos encadenados de upgrade_mode: full (reiniciarlos
   # ahí los dejaría activos para nada, ya que el siguiente salto los
@@ -495,6 +510,16 @@
   # directamente de si hay algo configurado para asegurar que vuelva a
   # estar activo. Decisión explícita del usuario para este ambiente,
   # 2026-10-07.
+  # "and not (dup_applied y NOT reboot_completed)": si el dup se aplicó
+  # pero el host nunca volvió a responder tras el reinicio obligatorio,
+  # NO intentar nada más contra él -- confirmado con evidencia real
+  # (2026-10-07, job AWX #9299): un host colgado en el arranque (ver
+  # sección 15, "postfix") deja a Ansible marcando el host como
+  # UNREACHABLE (no simplemente FAILED) en el primer intento de conexión
+  # posterior, y UNREACHABLE salta el "rescue" de este mismo bloque Y
+  # TODAS las tareas restantes de la etapa para ese host -- incluida la
+  # generación del reporte. Por eso "Inventariar repositorios..." (más
+  # abajo) tiene la misma protección.
   ansible.builtin.set_fact:
     _resume_security_agents_now: >-
       {{
@@ -505,6 +530,7 @@
           or stage_target_sp == 'sp7'
           or stage_status == 'FAILED'
         )
+        and not _host_presumiblemente_inalcanzable
       }}
 
 - name: "Reiniciar agentes de seguridad configurados (si corresponde en esta etapa)"
@@ -528,14 +554,28 @@
         else (
           'ninguno configurado (zypper_lock_competing_services vacío)'
           if (zypper_lock_competing_services | default([])) | length == 0
-          else 'se dejan detenidos a propósito -- se reiniciarán en la etapa/fase que llegue a SP7 (o si esa etapa falla)'
+          else ('no se intentó: el host no respondió tras el reinicio obligatorio (revisar manualmente cuando vuelva a estar disponible)'
+          if _host_presumiblemente_inalcanzable
+          else 'se dejan detenidos a propósito -- se reiniciarán en la etapa/fase que llegue a SP7 (o si esa etapa falla)')
         )
       }}
 
-- name: Inventariar repositorios habilitados al final de la etapa (siempre, independientemente del resultado)
+- name: "Inventariar repositorios habilitados al final de la etapa (siempre, salvo que el host esté presumiblemente inalcanzable)"
   ansible.builtin.include_role:
     name: repo_management
     tasks_from: final_inventory.yml
+  when: not _host_presumiblemente_inalcanzable
+
+- name: "Registrar inventario final como NOT_CHECKED sin intentar conectarse (host presumiblemente inalcanzable)"
+  ansible.builtin.set_fact:
+    repos_enabled_after: []
+    _final_inventory_status: NOT_CHECKED
+    _final_inventory_detail: >-
+      no se intentó: el host no respondió tras el reinicio obligatorio de
+      esta etapa (ver sección "Reinicio" de este reporte). Revisar
+      manualmente qué repositorios quedaron habilitados cuando el host
+      vuelva a estar disponible.
+  when: _host_presumiblemente_inalcanzable
 
 - name: "Ensamblar reporte de la etapa {{ stage_target_sp }}"
   ansible.builtin.set_fact:
@@ -555,6 +595,12 @@
       sp_final: "{{ system_state_snapshot_after.current_sp_id | default(system_state_snapshot_before.current_sp_id) }}"
       kernel_antes: "{{ system_state_snapshot_before.kernel | default('N/D') }}"
       kernel_despues: "{{ system_state_snapshot_after.kernel | default('N/A (sin migración real aplicada en esta etapa)') }}"
+      systemd_antes:
+        estado: "{{ system_state_snapshot_before.systemd_system_state | default('NOT_CHECKED') }}"
+        unidades_failed: "{{ system_state_snapshot_before.systemd_failed_units | default([]) }}"
+      systemd_despues:
+        estado: "{{ system_state_snapshot_after.systemd_system_state | default('N/A (sin migración real aplicada en esta etapa)') }}"
+        unidades_failed: "{{ system_state_snapshot_after.systemd_failed_units | default([]) }}"
       precheck: "{{ precheck_result }}"
       preflight: {}
       repos:

@@ -58,6 +58,12 @@
           sp_final: "{{ system_state_snapshot_before.current_sp_id }}"
           kernel_antes: "{{ system_state_snapshot_before.kernel }}"
           kernel_despues: "N/A (precheck no modifica el sistema)"
+          systemd_antes:
+            estado: "{{ system_state_snapshot_before.systemd_system_state | default('NOT_CHECKED') }}"
+            unidades_failed: "{{ system_state_snapshot_before.systemd_failed_units | default([]) }}"
+          systemd_despues:
+            estado: "N/A (precheck no modifica el sistema)"
+            unidades_failed: []
           precheck: "{{ precheck_result }}"
           preflight: {}
           repos: {}

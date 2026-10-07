@@ -733,6 +733,35 @@ más, junto a los demás). El reporte de la etapa que finalmente los
 reinicia incluye la verificación de `packagekitd` al empezar y qué
 agentes se reiniciaron al terminar (sección 11).
 
+### 8.5 Servicios que pueden colgar el arranque — deshabilitado permanente
+
+Decisión explícita del usuario para este ambiente (2026-10-07), aplicable
+a **todos** los hosts que gestiona este proyecto: confirmado con evidencia
+real en laboratorio que `postfix.service` puede colgar **indefinidamente**
+el arranque de un host tras un upgrade de Service Pack (se esperó un
+tiempo arbitrariamente largo, sin avanzar — no es un simple retraso).
+Causa raíz confirmada: `inet_interfaces = localhost` en
+`/etc/postfix/main.cf` intenta resolver `::1` (IPv6) en un host que no
+tiene IPv6 configurado en absoluto. Con el sistema ya arrancado y
+estable, el mismo error falla rápido (menos de 1 segundo, confirmado vía
+`journalctl`); durante el arranque, antes de que la red esté
+completamente lista, la misma resolución se cuelga en vez de fallar
+rápido.
+
+A diferencia de los agentes de seguridad (sección 8.4), que se **pausan**
+temporalmente porque el problema es transitorio: `playbooks/group_vars/all.yml`
+define `reboot_disable_services` (lista vacía válida; actualmente
+`[postfix]`), y `roles/repo_management/tasks/disable_boot_blocking_services.yml`
+los deshabilita **permanentemente** (`systemctl disable` + `stop`, nunca
+se vuelven a reiniciar automáticamente) justo antes de **cualquier**
+reinicio obligatorio de este proyecto (`roles/sp_migration/tasks/main.yml`)
+— porque el problema es una configuración rota del host, no algo
+temporal. Confirmado explícitamente por el usuario que ningún servidor
+GeoPOS depende de `postfix` para nada antes de aplicar esto a todos los
+hosts. Solo actúa sobre los servicios configurados que estén realmente
+presentes en cada host; queda registrado en el reporte, sección "Reinicio"
+(sección 11).
+
 ---
 
 ## 9. UPGRADE real (modos `sp4_to_sp5` / `sp5_to_sp6` / `sp6_to_sp7` / `full`)
@@ -867,6 +896,14 @@ supone que solo prepara.
 - El bloque de repositorios del reporte muestra explícitamente:
   `repos_enabled_before`, `repos_disabled_before`, `repos_disabled_by_upgrade`,
   `repos_temporary_created`, `repos_temporary_removed`, `repos_enabled_after`.
+- **Estado general de `systemd` antes/después** (decisión explícita del
+  usuario, 2026-10-07): `systemctl is-system-running` + `systemctl --failed`,
+  capturados junto con el resto de la fotografía del sistema
+  (`roles/precheck/tasks/capture_state.yml`). Puramente **informativo** —
+  nunca decide por sí solo el resultado de la etapa (un `degraded` puede
+  ser irrelevante, como un servicio de correo sin usar, o puede ser algo
+  real); el operador debe revisar manualmente la lista de unidades
+  `failed` si aparece alguna.
 - Estados usados: `OK`, `WARNING`, `FAILED`, `NOT_CHECKED`.
 - Cada ejecución añade una línea a `run_summary.jsonl` (en `report_local_dir`
   **y** en `report_destination` si ya está configurado — ver advertencia de

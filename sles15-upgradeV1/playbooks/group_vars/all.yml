@@ -277,6 +277,31 @@ zypper_lock_competing_services:
   - ds_agent
   - nessusagent
 
+# Servicios que deben quedar PERMANENTEMENTE deshabilitados (systemctl
+# disable, no solo detenidos) antes de CUALQUIER reinicio obligatorio de
+# este proyecto. Decisión explícita del usuario para este ambiente
+# (2026-10-07), aplicable a todos los hosts que gestiona este proyecto --
+# confirmado por el usuario que ningún servidor GeoPOS depende de
+# postfix para nada.
+#
+# Confirmado con evidencia real en laboratorio: "postfix.service" puede
+# colgar INDEFINIDAMENTE el arranque tras un upgrade de Service Pack (se
+# esperó un tiempo arbitrariamente largo, sin avanzar) -- causa raíz:
+# `inet_interfaces = localhost` en /etc/postfix/main.cf intenta resolver
+# "::1" (IPv6), y este host no tiene IPv6 configurado en absoluto. Con el
+# sistema ya arrancado y estable, el mismo error falla rápido (<1s,
+# confirmado vía journalctl); durante el arranque, antes de que la red
+# esté completamente lista, la misma resolución se queda colgada en vez
+# de fallar rápido.
+#
+# A diferencia de zypper_lock_competing_services (que se PAUSAN
+# temporalmente y se reinician después, porque el problema es
+# transitorio): estos se deshabilitan de forma PERMANENTE y nunca se
+# vuelven a reiniciar automáticamente, porque el problema es una
+# configuración rota del host, no algo temporal. Lista vacía es válida.
+reboot_disable_services:
+  - postfix
+
 # Ante un fallo, por defecto NO se limpian los repositorios temporales
 # ni el respaldo, para preservar información de diagnóstico.
 cleanup_repositories_on_failure: false

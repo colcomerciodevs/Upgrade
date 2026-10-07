@@ -1,0 +1,43 @@
+---
+# roles/repo_management/tasks/disable_boot_blocking_services.yml
+#
+# Deshabilita PERMANENTEMENTE (systemctl disable + stop; nunca se vuelven
+# a reiniciar automáticamente) los servicios configurados en
+# reboot_disable_services, justo antes de cualquier reinicio obligatorio
+# de este proyecto. Decisión explícita del usuario para este ambiente,
+# 2026-10-07 -- ver playbooks/group_vars/all.yml para la evidencia real
+# que lo justifica (postfix puede colgar indefinidamente el arranque tras
+# un upgrade de Service Pack).
+#
+# Solo actúa sobre los que estén realmente presentes en el host (no falla
+# si alguno no existe en un host en particular); es idempotente (no hace
+# nada si ya estaba deshabilitado).
+
+- name: Detectar servicios presentes en este host
+  ansible.builtin.service_facts: {}
+
+- name: "Calcular qué servicios configurados para deshabilitar están presentes en este host"
+  ansible.builtin.set_fact:
+    _boot_blocking_services_present: |-
+      {% set result = [] %}
+      {% for svc in reboot_disable_services | default([]) %}
+      {% set unit = svc ~ '.service' %}
+      {% if unit in ansible_facts.services %}
+      {% set _ = result.append(svc) %}
+      {% endif %}
+      {% endfor %}
+      {{ result }}
+
+- name: "Deshabilitar permanentemente los servicios que pueden colgar el arranque (si hay alguno presente)"
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    enabled: false
+    state: stopped
+  loop: "{{ _boot_blocking_services_present }}"
+  become: true
+  when: _boot_blocking_services_present | length > 0
+
+- name: Registrar qué servicios se deshabilitaron permanentemente (para el reporte)
+  ansible.builtin.set_fact:
+    boot_blocking_services_disabled: "{{ _boot_blocking_services_present }}"
+  when: _boot_blocking_services_present | length > 0
