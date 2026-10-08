@@ -344,7 +344,9 @@ el archivo, extensamente comentado, para el detalle):
   `sp7_repositories`), `temporary_repo_prefix`, `cleanup_repositories_on_failure`.
   `permanent_repos` es puramente informativo (sección 2.4).
 - **Sistema**: `critical_services` (vacía por defecto — CHANGE_ME real),
-  `precheck_disk_checks`, `precheck_btrfs_double_space_check`.
+  `precheck_disk_checks`, `precheck_btrfs_double_space_check`,
+  `reboot_disable_services` (sección 8.5), `journald_enable_persistent`,
+  `systemd_settle_retries`/`systemd_settle_delay` (sección 8.6).
 - **GeoPOS**: `geopos_validation.*` (ver sección 7).
 - **Reportes**: `report_enabled`, `report_local_dir`, `report_destination`.
 
@@ -762,6 +764,57 @@ hosts. Solo actúa sobre los servicios configurados que estén realmente
 presentes en cada host; queda registrado en el reporte, sección "Reinicio"
 (sección 11).
 
+### 8.6 Trazabilidad del reinicio y conservación de evidencia
+
+Motivadas por un caso real (upgrade a SP7 exitoso, pero con el arranque
+posterior aparentemente colgado un tiempo, sin más información visible en
+el momento): tres mecanismos adicionales, todos informativos — ninguno
+decide por sí solo el resultado de la etapa — para poder diagnosticar un
+arranque lento/raro sin depender de conectarse por SSH mientras ocurre.
+
+**boot_id antes/después, hora de inicio, duración de Ansible y tiempo de
+reconexión** (`roles/sp_migration/tasks/main.yml`). `/proc/sys/kernel/
+random/boot_id` es un UUID que el kernel genera de nuevo en cada arranque:
+compararlo antes/después del reinicio obligatorio es la única forma de
+confirmar que el host realmente reinició a nivel de kernel, y no solo que
+Ansible volvió a conectar tras una caída breve de red. Además se registran
+la hora exacta en que se pidió el reinicio, la hora en que se confirmó la
+reconexión, la duración que el propio módulo `ansible.builtin.reboot`
+reporta haber esperado, y un cálculo independiente de reloj de pared entre
+esas dos horas — mismo principio de doble evidencia que la verificación de
+Service Pack (sección 7): si ambos números difieren mucho, es una señal
+real de algo raro durante el arranque. Si el reinicio o la reconexión
+fallan, el `boot_id` de antes queda igual registrado para diagnóstico.
+
+**Validación post-reinicio con espera acotada**
+(`roles/precheck/tasks/wait_system_running.yml`, llamada desde
+`playbooks/tasks/run_stage.yml` justo después de reconectar, antes de
+tomar la fotografía "después"). En vez de una sola lectura instantánea de
+`systemctl is-system-running` (que podría capturar al sistema todavía en
+`starting` y parecer peor de lo que es), se reintenta hasta
+`systemd_settle_retries` veces cada `systemd_settle_delay` segundos
+(`playbooks/group_vars/all.yml`; por defecto 24×5s = 120s máximo) hasta que
+deje de estar en `starting`. Si se agota el tiempo y sigue en `starting`,
+se registra explícitamente (`systemd_settle_timed_out: true`) y se
+continúa igual — nunca bloquea la etapa, es evidencia para el operador.
+
+**journald persistente antes de la migración real**
+(`roles/sp_migration/tasks/ensure_journald_persistent.yml`, se ejecuta
+siempre antes del gate `dup -D`). Es el mecanismo documentado por SUSE
+para que los logs estructurados (con `boot_id` y prioridad por mensaje,
+consultables con `journalctl --list-boots` / `journalctl -b -1`)
+sobrevivan al reinicio obligatorio, en vez de perderse si journald seguía
+en modo volátil (solo en memoria). Configura `Storage=persistent` en
+`/etc/systemd/journald.conf`, crea `/var/log/journal` con los permisos
+estándar, y reinicia `systemd-journald` (operación no disruptiva) para que
+el journal de ese mismo arranque — incluida la migración que está a punto
+de correr — también quede en disco. Idempotente: si ya estaba habilitado,
+no cambia nada. Controlado por `journald_enable_persistent` (por defecto
+`true`). No reemplaza a rsyslog (`/var/log/messages`, `/var/log/warn`): es
+evidencia adicional, con más detalle estructurado.
+
+Los tres quedan en el reporte, sección "Reinicio" (sección 11).
+
 ---
 
 ## 9. UPGRADE real (modos `sp4_to_sp5` / `sp5_to_sp6` / `sp6_to_sp7` / `full`)
@@ -904,6 +957,12 @@ supone que solo prepara.
   ser irrelevante, como un servicio de correo sin usar, o puede ser algo
   real); el operador debe revisar manualmente la lista de unidades
   `failed` si aparece alguna.
+- **Trazabilidad del reinicio** (sección 8.6): `boot_id` antes/después (y
+  si cambió), hora de inicio y de reconexión, duración devuelta por el
+  módulo `ansible.builtin.reboot` y tiempo de reconexión por reloj de
+  pared, resultado de la espera acotada a que `systemd` saliera de
+  `starting`, y estado de `journald` persistente — todo en la sección
+  "Reinicio" del reporte de cada etapa, puramente informativo.
 - Estados usados: `OK`, `WARNING`, `FAILED`, `NOT_CHECKED`.
 - Cada ejecución añade una línea a `run_summary.jsonl` (en `report_local_dir`
   **y** en `report_destination` si ya está configurado — ver advertencia de
@@ -1211,6 +1270,30 @@ existen en este proyecto (sección 9).
 `serial_batch_size: 1` — un host a la vez en producción. Puede
 sobrescribirse vía extra-vars/Survey si el operador decide explícitamente
 procesar más de uno en paralelo, bajo su propio criterio de riesgo.
+
+**Ejemplo concreto: un Lote con varios servidores.** El match CRQ/Lote/
+Ambiente (arriba) no limita la selección a un solo host: si 4 filas del
+Excel comparten el mismo CRQ, el mismo Lote y el mismo Ambiente, las 4
+entran al grupo `upgrade_target` con una sola declaración del Survey — no
+hace falta lanzar la ejecución 4 veces ni listar los hostnames en ningún
+campo. Lo que decide cuántos de esos 4 se tocan **a la vez** es
+`serial_batch_size`, no el tamaño del Lote:
+
+- Con el valor por defecto (`1`), Ansible termina **todas** las tareas de
+  la etapa en el primer host antes de empezar con el segundo, y así con
+  los 4 — nunca en paralelo.
+- Este proyecto no fija `any_errors_fatal`, así que si el segundo host
+  falla (por ejemplo, el precheck), Ansible **sigue** con el tercero y el
+  cuarto igual — un host con problemas no deja sin ejecutar a los demás
+  del mismo Lote.
+- Cada uno de los 4 termina con su propio `status` (`OK`/`WARNING`/
+  `FAILED`/`NOT_CHECKED`) y su propio reporte por host; al final,
+  `report_consolidado.yml` genera un único reporte consolidado del Lote
+  con el resultado real de los 4 lado a lado — nunca se marca el Lote
+  como `OK` si alguno no lo estuvo (sección 11).
+- En el Workflow de 5 etapas (sección 13), esto se repite en cada nodo:
+  Precheck pasa por los 4 (uno a la vez), luego Preparar repos por los 4,
+  luego — tras la aprobación, si existe — Aplicar por los 4.
 
 ---
 

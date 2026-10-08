@@ -1,857 +1,109 @@
-<!--
-  Documento único de arquitectura y diseño técnico del proyecto
-  ansible-sles-upgrade (sin versión .md ni .pdf paralela: este HTML es la
-  fuente). Abrir directamente en cualquier navegador.
--->
 <!DOCTYPE html>
+
+<!DOCTYPE html>
+
 <html lang="es">
 <head>
-<meta charset="utf-8">
-<title>Arquitectura y diseño técnico — ansible-sles-upgrade</title>
+<meta charset="utf-8"/>
+<title>Arquitectura y diseño técnico</title>
 <style>
-  @page {
-    size: A4;
-    margin: 2.2cm 1.8cm 2cm 1.8cm;
-    @bottom-center {
-      content: "ansible-sles-upgrade — Arquitectura y diseño técnico · página " counter(page) " de " counter(pages);
-      font-size: 8.5pt;
-      color: #777;
-    }
-  }
-  @page cover {
-    margin: 0;
-    @bottom-center { content: none; }
-  }
+:root{--navy:#112342;--navy2:#09172e;--teal:#087f77;--teal2:#16a08d;--gray-dark:#1f2d40;--gray-mid:#63758c;--light-bg:#f5f8fc;--ok-green:#138364;--warn-amber:#b57317;--fail-red:#bb3e4b;--line:#e0e7ef;--card:#fff;--ink:#213047}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:#f3f6fb;color:var(--ink);font:15px/1.72 'Segoe UI',Inter,'Helvetica Neue',Arial,sans-serif;-webkit-font-smoothing:antialiased}a{color:var(--teal);text-decoration:none}a:hover{text-decoration:underline}h1,h2,h3,h4{font-family:'Segoe UI',Inter,Arial,sans-serif;color:var(--navy);line-height:1.25}h3{font-size:17px;margin:27px 0 12px}h4{margin:22px 0 8px}p{margin:11px 0 17px}strong{font-weight:720}
+header.top{background:radial-gradient(ellipse 90% 200% at 90% 5%,#275472 0%,#142e50 42%,#09172e 100%);color:#fff;padding:52px 0 40px;margin:0;border-bottom:5px solid #17ab91}
+header.top .wrap{max-width:1280px;padding:0 40px}header.top .kicker,.cover .kicker{letter-spacing:.18em;text-transform:uppercase;font-size:11px;color:#75d8c5;font-weight:750;margin-bottom:12px}header.top h1{font-size:clamp(30px,4vw,45px);line-height:1.12;letter-spacing:-.035em;color:#fff;margin:0 0 14px;max-width:900px}header.top .subtitle{font-size:16px;color:#c9d9e8;max-width:940px;line-height:1.68}.callout.top-note{background:#223d58;border:1px solid #46768b;color:#e6f4f7;margin:24px 0 0;padding:16px 18px;max-width:1000px}
+.wrap{max-width:1280px;margin:0 auto;padding:0 40px 60px}nav.quicknav{display:none}.doc-layout{max-width:1360px;margin:0 auto;display:grid;grid-template-columns:254px minmax(0,1fr);align-items:start;gap:28px;padding:32px 28px 80px}.doc-sidebar{position:sticky;top:24px;background:#fff;border:1px solid #e5edf3;border-radius:16px;padding:22px 15px;box-shadow:0 6px 25px rgba(18,39,66,.04);max-height:calc(100vh - 48px);overflow-y:auto}.sidebar-eyebrow{display:block;font-size:10px;letter-spacing:.14em;color:#8392a4;font-weight:800;margin:0 11px 13px}.doc-sidebar a{display:block;color:#516079;padding:8px 11px;border-radius:8px;font-size:12.5px;line-height:1.35;font-weight:570}.doc-sidebar a.active,.doc-sidebar a:hover{background:#e8f6f3;color:#087e72;text-decoration:none}.doc-sidebar small{display:block;font-size:11px;color:#8392a4;line-height:1.45}.sidebar-progress{background:#f4f9f9;border-radius:11px;padding:15px 12px;margin-top:22px}.sidebar-progress strong{display:block;font-size:22px;color:#087f77}.progress-track{background:#dfebe9;height:7px;border-radius:10px;overflow:hidden;margin:9px 0}.progress-fill{height:100%;background:#18a68f;width:0;transition:width .25s}.doc-main{min-width:0;max-width:1000px}.doc-main .wrap{padding:0;max-width:none}.doc-toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:17px}.doc-toolbar input[type='search']{border:1px solid #dbe5ef;background:#fff;color:#14243d;border-radius:9px;padding:12px 15px;width:270px;font:inherit;font-size:13px;outline:none}.doc-toolbar input:focus{border-color:#18a68f;box-shadow:0 0 0 3px #18a68f1a}.action-btn{border:1px solid #d8e3eb;background:#fff;color:#28405c;border-radius:9px;padding:10px 13px;cursor:pointer;font-weight:650;font-size:12px}.action-btn:hover{border-color:#12a78d;color:#087c73}.overview{background:#fff;border:1px solid #e3eaf0;border-radius:18px;padding:26px 28px 29px;margin:0 0 20px;box-shadow:0 3px 20px #182e4610}.overview h2{font-size:23px;letter-spacing:-.03em;margin:0 0 8px}.overview>p{max-width:780px;color:#617186;margin:0 0 19px}.kpi-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.kpi{background:#f4f8fb;border:1px solid #e8edf2;border-radius:12px;padding:16px;min-height:110px}.kpi strong{font-size:21px;color:#0a766f;display:block;line-height:1.2}.kpi small{font-size:12px;line-height:1.45;color:#5c6d80;display:block;margin-top:8px}.section-head{display:flex;align-items:center;gap:13px;border:0;padding:0 0 19px;margin:0 0 18px;border-bottom:1px solid #e4ebf3}.section-num{display:flex;align-items:center;justify-content:center;min-width:39px;width:39px;height:39px;border-radius:12px;background:#e5f5f1;color:#0c8175;font-size:16px;font-weight:850}.section-head h2{font-size:clamp(20px,2.1vw,25px);margin:0;letter-spacing:-.025em}.main-section{background:#fff;border:1px solid #e2e9f1;border-radius:17px;padding:29px 31px 33px;margin:0 0 18px;box-shadow:0 3px 19px #20354c09;scroll-margin-top:20px}.main-section:first-of-type{margin-top:0}.main-section p,.main-section li{overflow-wrap:anywhere}.callout{border-left:4px solid #a4acb8;background:#f6f8fb;padding:15px 17px;margin:19px 0;border-radius:0 10px 10px 0}.callout .label{display:block;font-size:11px;letter-spacing:.07em;font-weight:800;text-transform:uppercase;margin-bottom:5px}.callout.risk{border-color:#e2ad52;background:#fffaee}.callout.risk .label{color:#9b641a}.callout.note{border-color:#27a891;background:#f0f9f7}.callout.note .label{color:#0b8171}.callout.decision{border-color:#315e99;background:#f2f6fd}.callout.decision .label{color:#315e99}.callout.lesson{border-color:#cc7080;background:#fff5f5}.callout.top-note .label{color:#fff}.main-section ul.checklist{list-style:none;padding:0;margin:15px 0}.main-section ul.checklist li{display:flex;align-items:flex-start;gap:12px;padding:12px 11px;border:1px solid #ecf0f4;border-radius:10px;margin-bottom:8px;transition:background .15s}.main-section ul.checklist li:hover{background:#f9fbfd}.main-section ul.checklist input[type=checkbox]{width:20px;height:20px;accent-color:#159c83;flex:none;margin:3px 0 0;cursor:pointer}.main-section ul.checklist label{cursor:pointer;flex:1}.main-section ul.checklist li:has(input:checked){background:#f0faf6;border-color:#d1e9df}.main-section ul.checklist li:has(input:checked) label>strong{color:#0b866b}.detail{display:block;color:#65768a;font-size:12.5px;margin-top:5px}.track-head{display:flex;gap:15px;align-items:start;margin:26px 0 13px}.track-head h3{margin:0 0 4px;font-size:20px}.track-head p{margin:0;font-size:13px;color:#66768b}.track-num{display:inline-grid;place-items:center;background:#e6f2f4;color:#0d7c78;border-radius:12px;padding:10px;font-weight:850}.test-groups{margin-bottom:22px}table.clean{border-collapse:separate;border-spacing:0;width:100%;border:1px solid #e1e9f1;border-radius:10px;overflow:hidden;font-size:13px;margin:18px 0}table.clean th{text-align:left;background:#193452;color:#fff;padding:13px 12px;font-size:12px;white-space:normal}table.clean td{padding:12px;border-bottom:1px solid #e7edf2;vertical-align:top}table.clean tr:last-child td{border-bottom:0}table.clean tr:nth-child(even) td{background:#f8fafc}table.clean td code{word-break:break-word}.table-scroll{overflow-x:auto;margin:17px 0}code{background:#edf3f8;color:#235578;border-radius:5px;padding:2px 5px;font:0.9em Consolas,'DejaVu Sans Mono',monospace;overflow-wrap:anywhere}pre{background:#0e2239;color:#e5f1fa;border-radius:12px;padding:18px 20px;overflow-x:auto;white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.65 Consolas,'DejaVu Sans Mono',monospace;border:1px solid #1e3f5f}pre code{background:transparent;color:inherit}.main-section ol li,.main-section ul.plain li{margin-bottom:10px}.steps{padding-left:24px}.step-title{display:flex;gap:10px;align-items:center;margin-top:25px}.step-title h3{margin:0}.stepnum{width:32px;height:32px;display:inline-grid;place-items:center;background:#0b8c80;color:white;border-radius:10px;font-weight:800}.mini-flow,.flow-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:17px 0}.mini-flow span{background:#e9f4f4;padding:9px 12px;border-radius:8px;color:#1b5d5a;font-size:12px;font-weight:750}.mini-flow b,.flow-row .arrow{color:#8192a3}.mini-flow small{display:block;font-weight:500}.route-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:19px 0}.route{background:#f7fafc;border:1px solid #e0eaf1;padding:17px;border-radius:12px;display:flex;flex-direction:column;gap:7px}.route b{font-size:10px;letter-spacing:.08em;color:#668399}.route strong{font-size:20px;letter-spacing:-.02em;color:#193857}.route span{font-size:12px;color:#6b7c8b}.route.featured{background:#e7f5f1;border-color:#c7eae0}.route.featured strong{color:#078374}.numbered-steps{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.numbered-steps>div{background:#f8fafc;border:1px solid #e5ebf0;padding:17px;border-radius:10px}.numbered-steps i{display:block;font-style:normal;color:#0c8378;font-size:21px;font-weight:800}.numbered-steps strong{display:block}.numbered-steps p{font-size:12px;color:#677689;margin:5px 0}.lede{font-size:16px;color:#43566e;line-height:1.65}.box{min-width:120px;border-radius:10px;padding:14px 12px;color:white;font-weight:750;text-align:center;background:#112b4a;font-size:12px}.box.outline{background:#f0f7fa;border:1px solid #b9d3dd;color:#1a4b61}.box.teal{background:#087f77}.box.navy{background:#183e60}.box.gray{background:#697d91}.box small{display:block;font-size:10px;font-weight:500;opacity:.9}.two-col{display:grid;grid-template-columns:1fr 1fr;gap:12px}.check-list{list-style:none;padding:0}.check-list li{padding:5px 0 6px 29px;position:relative}.check-list li:before{content:'✓';position:absolute;left:0;color:#138364;font-weight:900}.pill-badge{font-size:10px;padding:5px 9px;background:#dcefe9;border-radius:8px;color:#0a846e}.pill-badge.before{background:#ffdfdf;color:#a7373d}.pill-badge.after{background:#c9f0df;color:#138364}.text-success{color:#138364}.page-footer{text-align:center;font-size:12px;color:#8491a1;padding:22px 0 38px}.main-section:has(.search-hidden){display:none}.main-section.search-hidden{display:none}
+/* architecture source cover and TOC integrated into sidebar-oriented web document */
+.cover{background:linear-gradient(115deg,#0b1c34,#174c69);color:white;padding:43px 43px 38px;border-bottom:5px solid #18aa93;min-height:0;height:auto;margin:0}.cover h1{color:white;font-size:clamp(29px,3.7vw,41px);margin:0 0 12px;line-height:1.16;letter-spacing:-.03em}.cover .subtitle{color:#cfe0ec;font-size:17px;max-width:900px}.cover .meta{border-top:1px solid #50718a;color:#d6e5ec;font-size:12px;margin-top:22px;padding-top:14px;line-height:1.7}.cover code{color:#c4fae7;background:#214661}.toc{display:none}.architecture-wrap{margin:0;padding:0}.doc-layout.arch-layout{max-width:1360px}.main-section .diagram{margin:15px 0}
+@media(max-width:980px){.doc-layout{grid-template-columns:1fr;padding:20px 14px}.doc-sidebar{position:static;max-height:none}.doc-sidebar nav{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.main-section{padding:21px 17px}.kpi-grid{grid-template-columns:1fr 1fr}.doc-toolbar input[type=search]{width:100%}.doc-main{max-width:none}}@media(max-width:560px){header.top .wrap{padding:0 22px}.kpi-grid,.route-grid,.numbered-steps,.two-col{grid-template-columns:1fr}.doc-sidebar nav{grid-template-columns:1fr}.overview{padding:20px}.doc-toolbar{align-items:stretch}.doc-toolbar input[type=search]{width:100%}.mini-flow,.flow-row{gap:6px}.box{min-width:95px}table.clean{font-size:12px}}
+@media print{@page{size:A4;margin:15mm}html,body{background:#fff!important;color:#111!important;font-size:10.5pt}header.top,.cover{background:#18324c!important;color:white!important;print-color-adjust:exact;-webkit-print-color-adjust:exact;padding:20mm 14mm}.doc-layout{display:block;padding:0}.doc-sidebar,.doc-toolbar{display:none!important}.doc-main,.doc-main .wrap{max-width:none}.main-section{border:0;box-shadow:none;padding:18px 0;margin:0;border-radius:0;break-inside:auto}.main-section+.main-section{break-before:page}.main-section table,.main-section .callout,.main-section pre,.overview{break-inside:avoid}.overview{border:0;padding:15px 0}.kpi-grid{grid-template-columns:repeat(3,1fr)}.page-footer{display:none}table.clean th{background:#203c56!important;color:white!important;print-color-adjust:exact;-webkit-print-color-adjust:exact}a{color:#16374c}}
 
-  :root {
-    --navy: #1b2a4a;
-    --teal: #1f7a6c;
-    --gray-dark: #333;
-    --gray-mid: #666;
-    --light-bg: #f4f6f8;
-    --ok-green: #2e7d32;
-    --warn-amber: #b8860b;
-    --fail-red: #c62828;
-  }
-
-  * { box-sizing: border-box; }
-
-  body {
-    font-family: "Helvetica Neue", Arial, sans-serif;
-    color: var(--gray-dark);
-    font-size: 10.3pt;
-    line-height: 1.5;
-  }
-
-  h1, h2, h3 { font-family: Arial, sans-serif; color: var(--navy); }
-
-  code, pre {
-    font-family: "DejaVu Sans Mono", Consolas, monospace;
-    font-size: 9pt;
-  }
-
-  code {
-    background: var(--light-bg);
-    padding: 1px 4px;
-    border-radius: 3px;
-  }
-
-  pre {
-    background: var(--light-bg);
-    padding: 10px 12px;
-    border-radius: 6px;
-    white-space: pre-wrap;
-    word-wrap: break-word;
-    line-height: 1.4;
-  }
-
-  a { color: var(--teal); text-decoration: none; }
-
-  /* ---------------- Portada ---------------- */
-  .cover {
-    page: cover;
-    height: 29.7cm;
-    background: var(--navy);
-    color: white;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    padding: 0 4cm;
-    page-break-after: always;
-  }
-  .cover .kicker {
-    color: #8fb3e8;
-    font-size: 13pt;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    margin-bottom: 0.6cm;
-  }
-  .cover h1 {
-    color: white;
-    font-size: 30pt;
-    margin: 0 0 0.3cm 0;
-    line-height: 1.2;
-  }
-  .cover .subtitle {
-    color: #c9d6e8;
-    font-size: 15pt;
-    margin-bottom: 1cm;
-  }
-  .cover .meta {
-    color: #7fd6c4;
-    font-size: 11pt;
-    border-top: 1px solid rgba(255,255,255,0.25);
-    padding-top: 0.5cm;
-    margin-top: 1cm;
-  }
-
-  /* ---------------- TOC ---------------- */
-  .toc { page-break-after: always; }
-  .toc h1 { font-size: 20pt; border-bottom: 3px solid var(--navy); padding-bottom: 0.2cm; }
-  .toc ol { list-style: none; padding: 0; margin-top: 0.8cm; counter-reset: tocnum; }
-  .toc li {
-    counter-increment: tocnum;
-    padding: 0.28cm 0;
-    border-bottom: 1px dotted #ccc;
-    font-size: 11.5pt;
-    display: flex;
-    justify-content: flex-start;
-    gap: 0.3cm;
-  }
-  .toc li::before {
-    content: counter(tocnum) ".";
-    color: var(--teal);
-    font-weight: bold;
-    margin-right: 0.3cm;
-  }
-
-  /* ---------------- Secciones ---------------- */
-  section.main-section {
-    page-break-before: always;
-  }
-  section.main-section:first-of-type { page-break-before: auto; }
-
-  .section-head {
-    display: flex;
-    align-items: center;
-    gap: 0.4cm;
-    border-bottom: 3px solid var(--navy);
-    padding-bottom: 0.25cm;
-    margin-bottom: 0.5cm;
-  }
-  .section-num {
-    background: var(--navy);
-    color: white;
-    font-weight: bold;
-    font-size: 15pt;
-    width: 1.1cm;
-    height: 1.1cm;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-  }
-  .section-head h2 { margin: 0; font-size: 16pt; }
-
-  /* ---------------- Callouts ---------------- */
-  .callout {
-    border-left: 5px solid var(--gray-mid);
-    background: var(--light-bg);
-    padding: 0.35cm 0.5cm;
-    margin: 0.4cm 0;
-    border-radius: 0 6px 6px 0;
-  }
-  .callout .label {
-    font-weight: bold;
-    font-size: 8.5pt;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    display: block;
-    margin-bottom: 0.15cm;
-  }
-  .callout.decision { border-left-color: var(--navy); }
-  .callout.decision .label { color: var(--navy); }
-  .callout.risk { border-left-color: var(--warn-amber); background: #fdf6e8; }
-  .callout.risk .label { color: var(--warn-amber); }
-  .callout.lesson { border-left-color: var(--fail-red); background: #fdeceb; }
-  .callout.lesson .label { color: var(--fail-red); }
-  .callout.note { border-left-color: var(--teal); }
-  .callout.note .label { color: var(--teal); }
-
-  /* ---------------- Diagramas ---------------- */
-  .diagram { margin: 0.5cm 0; }
-  .flow-row {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.25cm;
-    margin: 0.3cm 0;
-    flex-wrap: wrap;
-  }
-  .box {
-    border-radius: 8px;
-    padding: 0.3cm 0.4cm;
-    color: white;
-    font-size: 9.5pt;
-    font-weight: bold;
-    text-align: center;
-    min-width: 2.6cm;
-  }
-  .box.navy { background: var(--navy); }
-  .box.teal { background: var(--teal); }
-  .box.gray { background: var(--gray-mid); }
-  .box.outline {
-    background: white;
-    border: 2px solid var(--navy);
-    color: var(--navy);
-  }
-  .box small { display: block; font-weight: normal; font-size: 8pt; opacity: 0.9; margin-top: 0.08cm; }
-  .arrow { color: var(--gray-mid); font-size: 14pt; }
-  .arrow-down { text-align: center; color: var(--gray-mid); font-size: 14pt; margin: 0.05cm 0; }
-
-  table.clean {
-    width: 100%;
-    border-collapse: collapse;
-    margin: 0.4cm 0;
-    font-size: 9.3pt;
-  }
-  table.clean th {
-    background: var(--navy);
-    color: white;
-    padding: 0.2cm 0.3cm;
-    text-align: left;
-  }
-  table.clean td {
-    padding: 0.2cm 0.3cm;
-    border-bottom: 1px solid #ddd;
-    vertical-align: top;
-  }
-  table.clean tr:nth-child(even) td { background: #fafbfc; }
-
-  .check-list { list-style: none; padding: 0; margin: 0.3cm 0; }
-  .check-list li {
-    padding: 0.15cm 0 0.15cm 0.7cm;
-    position: relative;
-    font-size: 9.8pt;
-  }
-  .check-list li::before {
-    content: "✓";
-    color: var(--ok-green);
-    font-weight: bold;
-    position: absolute;
-    left: 0;
-  }
-
-  .pill-badge {
-    display: inline-block;
-    padding: 2px 9px;
-    border-radius: 10px;
-    font-size: 8.5pt;
-    font-weight: bold;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-    color: white !important;
-  }
-  .pill-badge.before { background: var(--fail-red); }
-  .pill-badge.after { background: var(--ok-green); }
-
-  .two-col { display: flex; gap: 0.5cm; }
-  .two-col > div { flex: 1; }
-</style>
-</head>
-<body>
-
-<!-- =========================== PORTADA =========================== -->
-<div class="cover">
-  <div class="kicker">ansible-sles-upgrade · documento técnico</div>
-  <h1>Arquitectura y diseño técnico</h1>
-  <div class="subtitle">Por qué el proyecto está diseñado como está — SLES 15 SP4 → SP5 → SP6 → SP7 para GeoPOS</div>
-  <div class="meta">
-    La <strong>operación</strong> (cómo ejecutarlo, variables, AWX, troubleshooting) está en README.md.<br>
-    La explicación para audiencia no técnica está en la presentación ejecutiva (docs/presentacion/).<br>
-    El checklist operativo antes del laboratorio está en docs/CHECKLIST_LABORATORIO.html.
-  </div>
+/* Estructura documental mejorada */
+.doc-crosslinks{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin:18px 0}.doc-crosslinks a{display:block;padding:17px;background:#f2f9f8;border:1px solid #c8e4df;border-radius:12px;font-weight:650;color:var(--navy)}
+.arch-diagram{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:20px 0}.arch-diagram .arch-node{background:#fff;border:1px solid var(--line);border-top:4px solid var(--teal);padding:16px;border-radius:12px;box-shadow:0 5px 20px #1b34570c}.arch-node strong{display:block;font-size:17px;color:var(--navy)}.arch-node small{display:block;font-size:13px;margin-top:6px;color:var(--gray-mid)}
+.phase-strip{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin:20px 0}.phase-strip div{border:1px solid #dbe5ef;border-radius:11px;padding:12px 9px;background:#f5f9fc}.phase-strip span{color:var(--teal);font-weight:800;font-size:11px}.phase-strip strong{display:block;font-size:13px;color:var(--navy);margin:3px 0}.phase-strip small{font-size:11px;color:#53657b}
+.pill{font-size:11px;padding:4px 9px;display:inline-block;font-weight:750;border-radius:20px;background:#ecf4fc;color:#264f79}.pill.done{background:#e2f8ed;color:#08754c}.pill.pending{background:#fff2df;color:#936111}.pill.control{background:#edf1f9;color:#314e78}
+.finding{margin:12px 0;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:white}.finding summary{cursor:pointer;padding:17px 18px;color:var(--navy);font-weight:750;background:#f6f9fc}.finding[open] summary{border-bottom:1px solid var(--line)}.finding .finding-body{padding:16px 20px}.finding-body p:first-of-type{margin-top:0}.finding-body .callout{margin-top:4px}
+.evidence-field{min-width:180px;max-width:280px;width:100%;padding:8px;border-radius:7px;border:1px solid #ccd9e5;font:inherit;font-size:13px}
+.result-check{height:20px;width:20px;accent-color:#0b9561;vertical-align:middle}.test-matrix td{vertical-align:middle}.test-matrix tr.passed td{background:#eaf9f0!important}.test-matrix tr.pending td{background:#fff!important}
+.small-note{font-size:13px;color:var(--gray-mid)}.source-note{font-size:12px;color:var(--gray-mid);border-top:1px solid var(--line);padding-top:9px;margin-top:10px}
+@media(max-width:900px){.phase-strip{grid-template-columns:repeat(2,minmax(0,1fr))}.arch-diagram{grid-template-columns:1fr}}@media print{.finding:not([open]) .finding-body{display:block!important}.finding summary{background:#fff!important}.evidence-field{border:none}.arch-diagram,.phase-strip{break-inside:avoid}}
+</style><meta content="width=device-width, initial-scale=1" name="viewport"/></head>
+<body class="sles-doc doc-awx_setup">
+<header class="top">
+<div class="wrap">
+<div class="kicker">ansible-sles-upgrade · documento de diseño</div>
+<h1>Arquitectura y diseño técnico</h1>
+<div class="subtitle">Cómo funciona la automatización SLES 15, por qué está construida así y cuáles son sus controles y límites. No incluye el historial de incidentes.</div>
 </div>
-
-<!-- =========================== TOC =========================== -->
-<div class="toc">
-  <h1>Contenido</h1>
-  <ol>
-    <li><span>Los tres niveles: PRECHECK, VALIDATE, UPGRADE</span></li>
-    <li><span>Por qué <code>--reposd-dir</code> y no <code>--disable-repositories</code> + <code>--plus-repo</code></span></li>
-    <li><span>Modelo de dos fases: origen y destino</span></li>
-    <li><span>Repos preexistentes: inventario, no lista de excepciones</span></li>
-    <li><span>Por qué no existe <code>dry_run</code>, y por qué el reinicio es obligatorio</span></li>
-    <li><span>Modelo de estados de la migración y <code>stage_validated</code></span></li>
-    <li><span>Verificación de Service Pack por doble evidencia</span></li>
-    <li><span>Variables del proyecto y AWX</span></li>
-    <li><span>Reportes: qué es y no es persistente</span></li>
-    <li><span>Simplicidad deliberada</span></li>
-    <li><span>SP4 → SP5: por qué es independiente</span></li>
-    <li><span>Qué falta confirmar en un laboratorio real</span></li>
-  </ol>
+</header>
+<div class="doc-layout"><aside class="doc-sidebar"><span class="sidebar-eyebrow">CONTENIDOS</span><nav><a href="#s0">01  Propósito y componentes</a><a href="#s1">02  Modos de migración y regla secuencial</a><a href="#s2">03  Orquestación del Workflow de AWX</a><a href="#s3">04  Gestión de repositorios y contenidos</a><a href="#s4">05  Controles preventivos y límites operativos</a><a href="#s5">06  Máquina de estados y criterios de avance</a><a href="#s6">07  Validación de GeoPOS y salud del sistema</a><a href="#s7">08  Inventario, variables, reportes y persistencia</a><a href="#s8">09  Decisiones, restricciones y documentos vinculados</a></nav><div class="sidebar-progress"><small>DOCUMENTACIÓN DEL PROYECTO</small><a href="ARQUITECTURA_Y_DISENO_TECNICO.html">Arquitectura y diseño técnico</a><a href="AWX_SETUP.html">Configuración AWX</a><a href="INFORME_VALIDACION_Y_PRUEBAS.html">Informe de validación y pruebas</a><small>Estos documentos forman un mismo conjunto.</small></div></aside><div class="doc-main"><div class="doc-toolbar"><input aria-label="Buscar secciones" id="doc-search" placeholder="Buscar dentro del documento…" type="search"/><div class="toolbar-buttons"><button class="action-btn" onclick="window.print()" type="button">Imprimir / PDF</button> </div></div><div class="overview"><h2>Una visión clara de la solución vigente</h2><p><p>Referencia técnica estable: componentes, modos de upgrade, secuencia AWX, políticas de repositorios, condiciones de avance y evidencias generadas.</p></p><div class="kpi-grid"><div class="kpi"><strong>4 rutas</strong><small>Tres individuales y FULL desde SP5</small></div><div class="kpi"><strong>5 etapas</strong><small>Workflow configurable en AWX</small></div><div class="kpi"><strong>1 host</strong><small>Ejecución serial por defecto</small></div></div></div><div class="wrap"><section class="main-section" id="s0"><div class="section-head"><div class="section-num">01</div><h2>Propósito y componentes</h2></div>
+<p class="lede">La automatización centraliza la migración de SUSE Linux Enterprise Server 15 para GeoPOS, con ejecución gobernada desde AWX, lógica reutilizable en Ansible, repositorios internos Foreman/Katello y evidencias por servidor y lote.</p>
+<div class="arch-diagram">
+<div class="arch-node"><strong>AWX + inventario SharePoint</strong><small>Selecciona alcance por CRQ/RFC, lote y ambiente. Controla los Jobs, el Survey y la autorización.</small></div>
+<div class="arch-node"><strong>Ansible</strong><small>Aplica las etapas, controles de Zypper, reinicios, verificaciones y reportes.</small></div>
+<div class="arch-node"><strong>Servidores SLES + GeoPOS</strong><small>Objetivo del cambio. Foreman/Katello suministra los repositorios internos para cada Service Pack.</small></div>
 </div>
-
-<!-- =========================== 1 =========================== -->
-<section class="main-section">
-  <div class="section-head"><div class="section-num">1</div><h2>Los tres niveles: PRECHECK, VALIDATE, UPGRADE</h2></div>
-
-  <p>El requisito explícito del proyecto es que estos tres niveles <strong>nunca se confundan</strong>:</p>
-
-  <div class="flow-row" style="flex-wrap: nowrap; gap: 0.15cm;">
-    <div class="box outline" style="min-width:4.2cm; flex:1;">PRECHECK<small>¿está el servidor en condiciones de intentar algo?</small></div>
-    <div class="arrow">→</div>
-    <div class="box outline" style="min-width:4.2cm; flex:1;">VALIDATE<small>¿funcionaría realmente la migración contra Foreman ahora?</small></div>
-    <div class="arrow">→</div>
-    <div class="box navy" style="min-width:4.2cm; flex:1;">UPGRADE<small>ejecución real, con modificación del servidor</small></div>
-  </div>
-
-  <table class="clean">
-    <tr><th>Nivel</th><th>Responde</th><th>¿Modifica el sistema?</th></tr>
-    <tr><td><strong>PRECHECK</strong></td><td>Sistema operativo, espacio, locks, servicios, GeoPOS, conectividad básica</td><td>No, salvo 2 excepciones documentadas (CA interna y pausar agentes de seguridad, ver abajo)</td></tr>
-    <tr><td><strong>VALIDATE</strong></td><td>Usa Zypper de verdad (metadata, GPG, TLS, solver), aislado y reversible</td><td>No, salvo la misma excepción (CA interna, ver abajo)</td></tr>
-    <tr><td><strong>UPGRADE</strong></td><td>La migración real</td><td>Sí, con <code>confirm_production_upgrade: true</code></td></tr>
-  </table>
-
-  <div class="callout decision">
-    <span class="label">Decisión de arquitectura</span>
-    La tentación más común sería fusionar PRECHECK y VALIDATE (ambos de solo lectura, salvo la CA interna), o
-    VALIDATE y UPGRADE (ambos "usan Zypper de verdad"). Se evitó deliberadamente: PRECHECK debe poder ejecutarse
-    con mucha frecuencia y ser barato (sin invocar el solver de Zypper contra Foreman); VALIDATE debe dar una
-    respuesta autoritativa sin ningún riesgo de dejar el sistema modificado más allá de esa misma excepción;
-    UPGRADE es la única que puede dejar el sistema realmente distinto de como estaba (paquetes, Service Pack).
-  </div>
-
-  <div class="callout risk">
-    <span class="label">Primera excepción documentada: instalación de la CA interna</span>
-    Zypper valida TLS contra el almacén de confianza del sistema operativo, no contra
-    ninguna variable de este proyecto. Sin la CA interna real ("CAColdecom") instalada,
-    cualquier conexión real por HTTPS contra Foreman/Katello falla con un error de TLS
-    — incluida la propia prueba de alcanzabilidad de PRECHECK, que entonces reportaría
-    <code>FAILED</code> únicamente por falta de confianza TLS, no por un problema real de
-    red/Foreman (esto se confirmó en un laboratorio real: un host que nunca había corrido
-    nada antes fallaba los 20 checks <code>endpoint_alcanzable_*</code> con
-    <code>CERTIFICATE_VERIFY_FAILED</code>).
-    <p style="margin-top:8px">Por eso <code>playbooks/roles/repo_management/tasks/ensure_ca_trusted.yml</code>
-    instala esa CA (si todavía no está presente) desde 2 lugares, decisión explícita del
-    usuario para este ambiente (ver orden de fuentes de verdad en CLAUDE.md), no una
-    ampliación silenciosa del alcance:</p>
-    <ul style="margin:4px 0 0 0">
-      <li><strong>PRECHECK</strong> (<code>roles/precheck/tasks/repos_reachability.yml</code>) — así
-        la propia prueba de alcanzabilidad de PRECHECK es representativa del TLS real, y
-        UPGRADE ya no necesita instalarla por su cuenta (siempre ejecuta PRECHECK primero,
-        ver <code>playbooks/tasks/run_stage.yml</code>).</li>
-      <li><strong>VALIDATE</strong> (<code>roles/sp_migration/tasks/preflight.yml</code>) — porque
-        VALIDATE no pasa por <code>repos_reachability.yml</code>, así que necesita asegurarla
-        por su cuenta para seguir funcionando de forma independiente.</li>
-    </ul>
-    <p style="margin-top:8px">La operación es idempotente (solo agrega confianza si falta; nunca
-    elimina ninguna CA existente) y no reinicia ni afecta ningún servicio.</p>
-  </div>
-
-  <div class="callout risk">
-    <span class="label">Segunda excepción documentada: pausar agentes de seguridad corporativos</span>
-    Confirmado con evidencia real en laboratorio (SSH de solo lectura,
-    2026-10-06/07): <strong>Trend Micro Deep Security Agent</strong>
-    (<code>ds_agent.service</code>) y <strong>Nessus Agent</strong>
-    (<code>nessusagent.service</code>) toman intermitentemente el lock de
-    libzypp vía PackageKit (D-Bus) durante sus escaneos rutinarios de
-    vulnerabilidades/parches, haciendo fallar operaciones reales de Zypper
-    incluso con los reintentos agotados. No es un bug de este proyecto.
-    <p style="margin-top:8px"><code>roles/precheck/tasks/pause_competing_services.yml</code>
-    detiene temporalmente (nunca deshabilita ni desinstala) los agentes
-    configurados en <code>zypper_lock_competing_services</code> que estén
-    presentes y activos, y espera a que no quede ningún
-    <code>packagekitd</code> corriendo, decisión explícita del usuario
-    para este ambiente (2026-10-07) para que ya esté resuelto antes de que
-    arranque "Preparar repos" (Nodo 2, un Job de AWX separado). Se
-    descartó hacerlo en esa etapa en vez de en PRECHECK: confirmado con
-    evidencia real (job AWX #9257) que detener un agente no mata una
-    transacción de PackageKit ya en curso en ese instante — sigue
-    corriendo por su cuenta (D-Bus, no es un proceso hijo) hasta terminar,
-    y hacerlo justo antes de la primera operación de Zypper deja muy poco
-    margen. Preparar/Aplicar solo verifican/esperan (nunca vuelven a
-    detener nada); al terminar la migración real se asegura que vuelvan a
-    estar activos (ver README sección 8.4).</p>
-  </div>
-
-  <div class="callout decision">
-    <span class="label">Por qué el precheck DENTRO de "preparar"/"aplicar" es más liviano que el de la Etapa 1</span>
-    Decisión explícita del usuario para este ambiente, tras una prueba real en
-    laboratorio: los 2 prechecks mostraban resultados casi idénticos cuando ambos
-    apuntaban al mismo salto, repitiendo locks/disco/inventario completo de
-    repos/alcanzabilidad/GeoPOS sin necesidad. <code>playbooks/tasks/run_stage.yml</code>
-    ahora solo repite el <strong>único</strong> chequeo que de verdad depende de la
-    etapa específica que se está preparando/aplicando — Service Pack actual vs.
-    esperado (<code>roles/precheck/tasks/sp_version.yml</code>) — porque el precheck
-    genérico de la Etapa 1 (<code>playbooks/precheck_only.yml</code>) usa una etapa
-    objetivo <strong>autodetectada</strong>, no necesariamente la misma que eligió el
-    operador en el Survey para <code>upgrade_mode</code>. El resto de la evidencia
-    (locks, disco, repos, GeoPOS) sigue disponible en el reporte de la Etapa 1,
-    inmediatamente anterior — no se perdió, solo no se duplica.
-  </div>
-</section>
-
-<!-- =========================== 2 =========================== -->
-<section class="main-section">
-  <div class="section-head"><div class="section-num">2</div><h2>Por qué <code>--reposd-dir</code> y no <code>--disable-repositories</code> + <code>--plus-repo</code></h2></div>
-
-  <div class="two-col">
-    <div class="callout lesson">
-      <span class="pill-badge before" style="margin-bottom:0.2cm">Descartado</span><br>
-      <code>--disable-repositories</code> + <code>--plus-repo</code><br><br>
-      Zypper documenta <code>--disable-repositories</code> como "Do not read meta-data from repositories" — describe
-      qué deja de hacer con los repos <strong>configurados</strong>, pero no garantiza documentalmente que el repo
-      agregado con <code>--plus-repo</code> sea el <strong>único</strong> que el solver considere. Patrón común, pero
-      <strong>inferido</strong>, no garantizado por texto oficial.
-    </div>
-    <div class="callout decision">
-      <span class="pill-badge after" style="margin-bottom:0.2cm">Elegido</span><br>
-      <code>--reposd-dir &lt;dir&gt;</code><br><br>
-      Le dice a Zypper <strong>dónde buscar</strong> definiciones de repositorio. Si ese directorio solo contiene los
-      repos Foreman de la etapa, Zypper no tiene forma de ver ningún otro repo. Es una <strong>garantía por
-      construcción</strong>, no por inferencia de comportamiento.
-    </div>
-  </div>
-
-  <p><code>playbooks/roles/sp_migration/tasks/preflight.yml</code> usa este mecanismo para VALIDATE, en dos directorios
-  aislados <strong>independientes</strong> (uno para origen con solo <code>refresh</code>, otro para destino con
-  <code>refresh</code> + <code>dup -D</code>) — nunca el mismo directorio, para que el solver de <code>dup -D</code>
-  jamás vea accidentalmente los repos de la otra fase.</p>
-
-  <div class="callout note">
-    <span class="label">Alcance exacto</span>
-    <code>--reposd-dir</code> aísla los archivos <code>.repo</code> — no se afirma que también aísle servicios de
-    Zypper (<code>services.d</code>): este proyecto nunca usa servicios de Zypper para descubrir repositorios, así
-    que esa capa es irrelevante aquí. Por la misma razón, ningún <code>refresh</code> usa <code>-s</code>/<code>--services</code>
-    (refrescaría <em>todos</em> los servicios del sistema); siempre se listan como argumento explícito los alias
-    exactos recién creados.
-  </div>
-
-  <div class="callout risk">
-    <span class="label">A confirmar en laboratorio</span>
-    <code>--reposd-dir</code> no se probó contra un Zypper real de SLES 15 (no se dispuso de host de laboratorio
-    durante el desarrollo). Se verificó que es una opción documentada y estable de Zypper, y se simuló exhaustivamente
-    el comportamiento esperado — pero es el principal punto a confirmar antes de confiar en <code>validate</code>
-    como autoritativo.
-  </div>
-</section>
-
-<!-- =========================== 3 =========================== -->
-<section class="main-section">
-  <div class="section-head"><div class="section-num">3</div><h2>Modelo de dos fases: origen y destino</h2></div>
-
-  <p>La guía oficial de SUSE ("Upgrading with plain Zypper") ejecuta <code>updatestack-only</code>
-  <strong>antes</strong> de cambiar los repositorios al Service Pack destino. Este proyecto refleja eso
-  literalmente, con repos Foreman explícitos para cada rol:</p>
-
-  <div class="diagram">
-    <div class="flow-row">
-      <div class="box outline">SP4</div>
-      <div class="arrow">→</div>
-      <div class="box teal">SP5<small>destino dup (SP4→SP5)<br>origen updatestack (SP5→SP6)</small></div>
-      <div class="arrow">→</div>
-      <div class="box teal">SP6<small>destino dup (SP5→SP6)<br>origen updatestack (SP6→SP7)</small></div>
-      <div class="arrow">→</div>
-      <div class="box outline">SP7</div>
-    </div>
-  </div>
-
-  <table class="clean">
-    <tr><th>Variable</th><th>Rol</th></tr>
-    <tr><td><code>katello.sp4_repositories</code></td><td>origen de la etapa SP4→SP5 (<code>updatestack</code>)</td></tr>
-    <tr><td><code>katello.sp5_repositories</code></td><td>destino de SP4→SP5 (<code>dup</code>) <strong>y</strong> origen de SP5→SP6 (<code>updatestack</code>)</td></tr>
-    <tr><td><code>katello.sp6_repositories</code></td><td>destino de SP5→SP6 (<code>dup</code>) <strong>y</strong> origen de SP6→SP7 (<code>updatestack</code>)</td></tr>
-    <tr><td><code>katello.sp7_repositories</code></td><td>destino de la etapa SP6→SP7 (<code>dup</code>)</td></tr>
-  </table>
-
-  <p>Cada fase usa un sufijo de alias distinto (<code>-src-</code> / <code>-dst-</code>) para que nunca puedan
-  confundirse ni colisionar dentro de la misma etapa, y cada uno se retira apenas cumple su función (el
-  <code>-src-</code> inmediatamente después de <code>updatestack</code>; el <code>-dst-</code> al final de una etapa
-  exitosa). Esto exige que <strong>ningún repositorio preexistente del servidor</strong> compita por atención del
-  solver durante <code>updatestack</code> o <code>dup</code> (ver sección 4).</p>
-
-  <div class="callout decision">
-    <span class="label">Consecuencia directa para PRECHECK</span>
-    Como una etapa depende de <em>dos</em> conjuntos de repos Foreman (origen y destino), y el de origen se necesita
-    recién a mitad de la etapa, verificar solo el destino antes de empezar no es suficiente — se podría descubrir a
-    mitad de camino, con los repos preexistentes ya deshabilitados, que falta el repo de origen. Por eso
-    <code>playbooks/roles/precheck/tasks/repos_reachability.yml</code> valida <strong>ambos</strong> conjuntos (configurados,
-    sin <code>CHANGE_ME</code>, alcanzables) antes de que <code>repo_management</code> toque cualquier repositorio.
-  </div>
-</section>
-
-<!-- =========================== 4 =========================== -->
-<section class="main-section">
-  <div class="section-head"><div class="section-num">4</div><h2>Repos preexistentes: inventario, no lista de excepciones</h2></div>
-
-  <div class="callout lesson">
-    <span class="label">Modelo abandonado</span>
-    Una versión anterior usaba <code>permanent_repos</code> como "repos que nunca se tocan". Se abandonó para la
-    ejecución real por una razón concreta: <strong>cualquier repo preexistente que quede habilitado durante
-    <code>dup</code> puede influir en el solver</strong>, sin importar si está en una lista de confianza o no.
-    <code>--no-allow-vendor-change</code> protege contra que paquetes de terceros sean <em>reemplazados</em>, pero no
-    evita que un repo preexistente habilitado participe en el cálculo de qué actualizar.
-  </div>
-
-  <div class="callout decision">
-    <span class="label">Modelo actual: inventariar, no decidir por adelantado</span>
-    <ul class="check-list">
-      <li><code>repo_management/tasks/backup.yml</code> clasifica cada repo configurado en <code>repos_enabled_before</code> / <code>repos_disabled_before</code> según su estado real.</li>
-      <li><code>disable_preexisting.yml</code> deshabilita exactamente <code>repos_enabled_before</code> — ni más, ni menos.</li>
-      <li><code>permanent_repos</code> sobrevive solo como lista informativa para PRECHECK ("¿hay un repo que no reconozco?") — sin efecto sobre la migración.</li>
-      <li>Los repos deshabilitados <strong>nunca se reactivan automáticamente</strong>: responsabilidad del proceso corporativo de parchado.</li>
-    </ul>
-  </div>
-</section>
-
-<!-- =========================== 5 =========================== -->
-<section class="main-section">
-  <div class="section-head"><div class="section-num">5</div><h2>Por qué no existe <code>dry_run</code>, y por qué el reinicio es obligatorio</h2></div>
-
-  <div class="callout lesson">
-    <span class="label">Diseño original descartado</span>
-    <code>dry_run: true</code> permitía ejecutar precheck + preparación de repos + <code>dup -D</code> y detenerse
-    ahí, usando el mismo <code>upgrade_mode</code> que la migración real. Dos problemas:
-    <ol>
-      <li><strong>Ambigüedad</strong>: el mismo modo podía significar "solo mira" o "aplica de verdad" según otra variable — fácil de configurar mal en un Survey de AWX.</li>
-      <li><strong>Redundancia</strong>: una vez que VALIDATE hace un preflight real y aislado, un "dry-run" adicional dentro de UPGRADE no aporta nada nuevo.</li>
-    </ol>
-  </div>
-
-  <div class="flow-row">
-    <div class="box outline">¿Quiero ver qué pasaría<br>sin tocar nada?</div>
-    <div class="arrow">→</div>
-    <div class="box teal"><code style="color:white">upgrade_mode: validate</code></div>
-  </div>
-  <div class="flow-row">
-    <div class="box outline">Modo real<br>(sp4_to_sp5 / sp5_to_sp6 / sp6_to_sp7 / full)</div>
-    <div class="arrow">→</div>
-    <div class="box navy"><code style="color:white">dup -D</code> gate obligatorio<small>automático, siempre, antes del dup real</small></div>
-  </div>
-
-  <p><code>dup -D</code> se ejecuta siempre, automáticamente, inmediatamente antes del <code>dup</code> real; si
-  falla, la etapa se detiene sin aplicar cambios ni reiniciar. No es una opción del operador: es parte fija del
-  procedimiento.</p>
-
-  <div class="callout decision">
-    <span class="label">Reinicio obligatorio</span>
-    Se eliminó <code>reboot_after_upgrade</code> por el mismo principio: un <code>dup</code> aplicado sin reiniciar
-    dejaría el sistema en un estado mixto (binarios nuevos, kernel/servicios viejos en ejecución) que este proyecto
-    nunca debe reportar como una etapa completa.
-  </div>
-
-  <h3>5.1 <code>upgrade_phase</code>: partir un modo real en "preparar" y "aplicar" (decisión posterior, no contradice lo anterior)</h3>
-  <p>Más adelante se agregó <code>upgrade_phase</code> (<code>prepare</code> | <code>apply</code> | <code>both</code>,
-  default <code>both</code>) para permitir correr un modo real en 2 pasos separados — por ejemplo, como 2 Job
-  Templates de un Workflow en AWX, con un Approval Node entre ambos. A primera vista se parece al
-  <code>dry_run</code> descartado arriba; la diferencia es exactamente el punto que hacía a ese diseño ambiguo:</p>
-  <table class="clean">
-    <tr><th></th><th><code>dry_run</code> (descartado)</th><th><code>upgrade_phase: prepare</code> (actual)</th></tr>
-    <tr><td>¿Modifica el sistema?</td><td>No — se detenía después de <code>dup -D</code>, que nunca escribe nada</td><td>Sí — corre <code>updatestack</code> real y deja los repos de destino realmente habilitados</td></tr>
-    <tr><td>¿Para qué se usa?</td><td>"Mirar sin tocar" — redundante con <code>validate</code>, que ya hace exactamente eso de forma aislada</td><td>Dejar el sistema listo para un <code>apply</code> posterior — un paso intermedio real, no un ensayo</td></tr>
-    <tr><td>¿Se puede dejar así indefinidamente?</td><td>N/A (no modificaba nada)</td><td>Sí, a propósito: el host queda en un estado intermedio conocido (repos de destino listos, sin aplicar) hasta que se ejecute <code>apply</code></td></tr>
-  </table>
-  <p><code>upgrade_phase: apply</code> NO repite el preflight aislado de <code>validate</code>: en vez de eso, verifica
-  (gate, reutilizando <code>assert_enabled_repos.yml</code>) que los repos de destino de una fase <code>prepare</code>
-  previa sigan exactamente habilitados y, si es así, ejecuta el mismo <code>dup -D</code> obligatorio de siempre —
-  ahora contra los repos reales, no contra una copia aislada — seguido del <code>dup</code> real y el reinicio. El
-  orden interno (<code>dup -D</code> antes de <code>dup</code>) sigue siendo exactamente el recomendado por la guía
-  oficial de SUSE ("SLES Upgrade Guide", sección "Upgrading with plain Zypper", paso 6): ejecutar la simulación,
-  corregir problemas si los hay, y solo entonces aplicar el <code>dup</code> real.</p>
-  <div class="callout decision">
-    <span class="label"><code>upgrade_mode: full</code> ignora <code>upgrade_phase</code> (con una excepción)</span>
-    <code>full</code> encadena 2 saltos (SP5→SP6 y SP6→SP7), cada uno con su propio set de repos: no existe un único
-    momento de "preparar" válido para ambos a la vez. Por eso <code>full</code> siempre se comporta como <code>both</code>
-    para cada salto — <strong>excepto</strong> cuando <code>upgrade_phase: prepare</code>, caso en el que esa etapa no
-    hace absolutamente nada (<code>_effective_upgrade_phase = 'skip'</code> en <code>playbooks/tasks/run_stage.yml</code>).
-    Esto evita que un mismo diseño de Workflow en AWX (pensado para un salto individual) dispare por error un
-    <code>dup</code> real en el nodo que el operador esperaba fuera "solo preparar" cuando el modo elegido es <code>full</code>.
-  </div>
-</section>
-
-<!-- =========================== 6 =========================== -->
-<section class="main-section">
-  <div class="section-head"><div class="section-num">6</div><h2>Modelo de estados de la migración y <code>stage_validated</code></h2></div>
-
-  <p>"¿Puedo continuar a SP7?" no puede responderse solo con "¿se ejecutó <code>dup</code>?". Por eso el estado se
-  modela con <strong>tres hechos independientes</strong>, cada uno escrito inmediatamente después de la operación
-  real que representa:</p>
-
-  <ul class="check-list">
-    <li><code>sp_migration_dup_applied</code> → <code>true</code> justo después del <code>dup</code> real exitoso</li>
-    <li><code>sp_migration_reboot_completed</code> → <code>true</code> solo si el reinicio realmente terminó</li>
-    <li><code>sp_migration_reconnected</code> → <code>true</code> solo si Ansible reconectó tras reiniciar</li>
-  </ul>
-
-  <div class="callout decision">
-    Un reinicio fallido se captura con un <code>block/rescue</code> local, <strong>dentro</strong> del rol
-    <code>sp_migration</code>, de modo que su fallo nunca borra <code>sp_migration_dup_applied</code> ya
-    establecido. Un <code>dup</code> exitoso con reinicio fallido produce, correctamente,
-    <code>dup_applied: true, reboot_completed: false</code> — evidencia íntegra pese al fallo posterior.
-  </div>
-
-  <p><code>stage_validated</code> es una bandera separada, calculada solo al final del bloque de validación
-  post-reboot:</p>
-
-  <pre>stage_validated =   dup aplicado
-                  AND reinicio + reconexión ocurrieron
-                  AND Service Pack final == objetivo (doble evidencia, sección 7)
-                  AND todos los servicios críticos == OK
-                  AND ningún componente GeoPOS crítico insalubre</pre>
-
-  <p>Es la única condición (junto con "el host ya partía de SP6") que permite que <code>full</code> continúe de
-  SP5→SP6 a SP6→SP7. Probado con 4 escenarios de <code>full</code> más un escenario dedicado de "dup exitoso,
-  reinicio fallido".</p>
-
-  <div class="callout lesson">
-    <span class="label">Lección de diseño — el <code>when</code> de un <code>block:</code> se hereda por tarea</span>
-    Se encontró un defecto real: tareas de cierre ("conservar repos tras fallo", "inventariar al final") vivían
-    dentro de un <code>block:</code> con <code>when: stage_status != 'FAILED'</code> heredado. Ansible aplica ese
-    <code>when</code> a <strong>cada tarea interna</strong> y lo <strong>reevalúa en el momento exacto</strong> en
-    que se ejecuta — no una sola vez al entrar al bloque. Como el bloque cambiaba <code>stage_status</code> a
-    <code>FAILED</code> en su propio interior, esas tareas se saltaban en silencio aunque su condición propia pidiera
-    lo contrario. Resultado observable: <code>repos_enabled_after</code> quedaba vacío aunque hubiera un repo
-    temporal sin retirar. <strong>Corrección</strong>: esas tareas se movieron a nivel superior, fuera del bloque,
-    con su propia condición explícita. <strong>Regla general</strong>: una tarea que reacciona a que algo salió mal
-    dentro de un bloque no debe vivir dentro de ese mismo bloque si el bloque tiene su propio <code>when</code>.
-  </div>
-</section>
-
-<!-- =========================== 7 =========================== -->
-<section class="main-section">
-  <div class="section-head"><div class="section-num">7</div><h2>Verificación de Service Pack por doble evidencia</h2></div>
-
-  <div class="flow-row">
-    <div class="box outline">/etc/os-release<small>fuente primaria (SUSE §1.8)</small></div>
-    <div class="arrow">+</div>
-    <div class="box outline">zypper products -i<small>segunda fuente</small></div>
-    <div class="arrow">→</div>
-    <div class="box navy">¿consistentes?<small>gate real</small></div>
-  </div>
-
-  <div class="callout lesson">
-    <span class="label">Comportamiento anterior (corregido)</span>
-    Una revisión anterior trataba la comparación entre ambas fuentes solo como <strong>informativa</strong> (una
-    advertencia si no coincidían, sin afectar el resultado real). Eso permitía, en teoría, que SP7 comenzara
-    únicamente porque <code>os-release</code> dijera SP6, sin que la segunda fuente lo hubiera confirmado —
-    precisamente lo que este proyecto necesita evitar.
-  </div>
-
-  <p><code>playbooks/tasks/run_stage.yml</code> exige ahora las tres condiciones para dar por bueno el SP alcanzado:</p>
-  <ol>
-    <li><code>os-release</code> reporta el objetivo.</li>
-    <li>Hay evidencia de <code>zypper products</code> <strong>disponible</strong> (el parser reconoció el formato).</li>
-    <li>Ambas evidencias son consistentes entre sí.</li>
-  </ol>
-  <p>Si falta la evidencia de Zypper, o no coincide con <code>os-release</code>, la etapa queda <code>FAILED</code>
-  — no se continúa automáticamente apoyándose solo en <code>os-release</code>.</p>
-
-  <div class="callout risk">
-    <span class="label">Limitación reconocida (y por qué la regla sigue siendo correcta)</span>
-    La documentación oficial de SUSE solo muestra el formato exacto del atributo <code>version</code> para un
-    producto <strong>GA</strong> (<code>version="15" release="0"</code>); no hay confirmación documental de cómo se
-    representa un Service Pack específico en ese mismo atributo. Por eso la comparación es por
-    <strong>coincidencia de subcadena</strong>, no por igualdad estricta. Si aun así el parser no reconoce el formato
-    real de un SLES de laboratorio, la etapa se reporta <strong>no validada</strong>, con la evidencia cruda completa
-    en el reporte (<code>zypper_products_xml_evidence</code>) para ajustar
-    <code>playbooks/roles/precheck/tasks/capture_state.yml</code> — en vez de continuar sobre un supuesto no confirmado. Es el
-    principal punto a observar en la primera ejecución de laboratorio.
-  </div>
-
-  <div class="callout note">
-    <span class="label">Nota de implementación</span>
-    <code>system_state_snapshot_before</code> y <code>_after</code> son hechos distintos y explícitos. La tarea que
-    captura el estado siempre escribe en una variable de trabajo (<code>system_state_snapshot</code>); quien la
-    invoca debe copiar el resultado de inmediato al nombre correspondiente. Hubo un defecto real de este tipo
-    (la variable de trabajo se sobrescribía y el reporte mostraba el mismo valor para "antes" y "después");
-    quedó corregido con nombres explícitos en todo el código.
-  </div>
-</section>
-
-<!-- =========================== 8 =========================== -->
-<section class="main-section">
-  <div class="section-head"><div class="section-num">8</div><h2>Variables del proyecto y AWX</h2></div>
-
-  <p>Ansible descubre <code>group_vars/</code>/<code>host_vars/</code> en dos lugares: junto al inventario en uso, y
-  junto al <strong>playbook que se ejecuta</strong>.</p>
-
-  <div class="two-col">
-    <div class="callout lesson">
-      <span class="pill-badge before">Antes</span><br><br>
-      <code>inventory/group_vars/</code><br><br>
-      Funciona perfectamente en local (<code>inventory/hosts.ini</code>) — pero en AWX el Inventory lo administra
-      AWX, no es un archivo de este repositorio. Si llega a ser dinámico o simplemente otra ruta, esta carpeta deja
-      de tener relación con el inventario realmente usado: <strong>las variables del proyecto no se cargarían</strong>.
-    </div>
-    <div class="callout decision">
-      <span class="pill-badge after">Después</span><br><br>
-      <code>playbooks/group_vars/</code><br><br>
-      El mecanismo de descubrimiento por <strong>directorio del playbook</strong> no depende de qué Inventory se use.
-      <code>playbooks/upgrade.yml</code> es el mismo archivo en local y en AWX, así que sus <code>group_vars</code>/
-      <code>host_vars</code> se cargan igual en ambos casos.
-    </div>
-  </div>
-
-  <p>Se verificó ejecutando el precheck real con un inventario deliberadamente ajeno al proyecto: las variables se
-  resolvieron correctamente en vez de fallar como indefinidas. El Inventory de AWX conserva su rol propio
-  (hosts, grupos, variables de conexión) sin conflicto, porque este repositorio nunca define variables de conexión.
-  Para variables de <strong>negocio</strong>, <code>playbooks/group_vars</code> tiene más precedencia que las
-  variables de grupo del Inventory de AWX — por diseño, para que la configuración viva versionada en este
-  repositorio. Ver README, sección 6.2, para la tabla de precedencia completa.</p>
-
-  <div class="callout note">
-    <span class="label">Matiz: la "receta" del Inventory sí puede vivir como código, los datos no</span>
-    Que "el Inventory es responsabilidad de AWX" no significa que su
-    configuración no pueda versionarse. Este proyecto incluye
-    <code>inventory/linux_excel_inventory.yml</code>, la definición de un
-    Inventory Source dinámico (plugin que lee un Excel real de SharePoint),
-    pensado para usarse en AWX como "Sourced from a Project" — y también
-    el propio código del plugin (<code>inventory_plugins/excel_inventory.py</code>),
-    habilitado en <code>ansible.cfg</code>. Es código (la receta de cómo
-    construir el inventario y el mecanismo que la ejecuta), no datos — los
-    hosts reales y sus variables de conexión siguen resolviéndose en
-    tiempo de ejecución, dinámicamente, igual que cualquier otro Inventory
-    Source de AWX. No contradice la sección 8: sigue sin haber variables
-    de <em>negocio</em> de este proyecto en el Inventory.
-  </div>
-</section>
-
-<!-- =========================== 9 =========================== -->
-<section class="main-section">
-  <div class="section-head"><div class="section-num">9</div><h2>Reportes: qué es y no es persistente</h2></div>
-
-  <div class="callout risk">
-    <span class="label">Honestidad sobre persistencia</span>
-    Un Execution Environment de AWX puede ser efímero incluso para "localhost" — no hay garantía de que sobreviva al
-    Job. Por eso este proyecto <strong>nunca afirma</strong> que escribir en <code>report_local_dir</code> (con
-    <code>delegate_to: localhost</code>) equivale a persistencia: es solo el área de trabajo mientras corre el
-    playbook. La persistencia real depende exclusivamente de que <code>report_destination</code> apunte a un destino
-    real (recurso compartido, objeto, API), y hasta que eso ocurra, el propio reporte lo declara explícitamente en
-    pantalla.
-  </div>
-
-  <div class="callout note">
-    <span class="label">Estado real</span>
-    <code>report_destination</code> ya está configurado:
-    <code>/data/work/Salida_Upgrade</code>. Es una copia de archivo
-    (<code>ansible.builtin.copy</code> con <code>remote_src: true</code>),
-    ejecutada con <code>delegate_to: localhost</code> — se resuelve en el
-    mismo nodo de control/Execution Environment donde corre Ansible, nunca
-    en el servidor SLES administrado. Quedan dos cosas que solo se pueden
-    confirmar contra el AWX real: que la ruta exista con permisos de
-    escritura (el módulo <code>copy</code> no crea directorios padre), y
-    que sea un volumen/mount realmente persistente y no una carpeta dentro
-    de un contenedor de Execution Environment que se destruye al terminar
-    el Job — en cuyo caso no cumpliría su propósito.
-  </div>
-
-  <div class="callout note">
-    <span class="label">Estructura de carpetas: CRQ → hostname → etapa</span>
-    Tanto <code>report_local_dir</code> como <code>report_destination</code> organizan
-    cada reporte individual en <code>&lt;CRQ sanitizado&gt;/&lt;hostname&gt;/&lt;etapa&gt;/</code>
-    (<code>upgrade_crq</code> con espacios/caracteres especiales convertidos a <code>_</code>;
-    <code>etapa</code> = <code>action</code>, o <code>action_phase</code> cuando
-    <code>upgrade_phase</code> es <code>prepare</code>/<code>apply</code>). Decisión
-    explícita del usuario para este ambiente. Como la copia hacia
-    <code>report_destination</code> ahora crea varios niveles de subcarpetas (no un
-    solo archivo plano como antes), se agregó un paso explícito de creación de
-    directorio antes de copiar (<code>roles/reporting/tasks/main.yml</code>) — el
-    módulo <code>copy</code> nunca crea directorios padre por sí mismo.
-  </div>
-
-  <div class="callout note">
-    <span class="label">Sincronización a SharePoint: por qué es una etapa separada, no parte de "Reporting"</span>
-    <code>playbooks/sync_sharepoint.yml</code> sube ese mismo árbol
-    (<code>report_destination/&lt;CRQ&gt;/</code>) a SharePoint vía Microsoft Graph
-    (token por client credentials + un <code>PUT</code> por archivo, sin dependencias
-    de Python adicionales). Se mantuvo como una 5ª etapa aparte de "Reporting" (en vez
-    de agregarla ahí mismo) porque depende de una credencial distinta (la misma
-    del inventario dinámico, con permiso de escritura) y de una red externa (SharePoint) que
-    puede no estar disponible — un fallo de red hacia SharePoint nunca debe impedir que
-    el reporte consolidado local (<code>consolidado_&lt;LOTE&gt;.html</code>) se
-    genere. Sincroniza desde
-    <code>report_destination</code>, nunca desde <code>report_local_dir</code>: este
-    último es el área de trabajo efímera de CADA Job por separado, y un nodo del
-    Workflow no puede ver los archivos que escribió otro nodo ahí.
-  </div>
-</section>
-
-<!-- =========================== 10 =========================== -->
-<section class="main-section">
-  <div class="section-head"><div class="section-num">10</div><h2>Simplicidad deliberada (qué se decidió NO construir)</h2></div>
-
-  <ul class="check-list">
-    <li><strong>Un solo rol de migración parametrizado</strong> (<code>sp_migration</code>), no uno por Service Pack: la diferencia entre etapas es de <strong>datos</strong> (repos, <code>--releasever</code>), no de <strong>procedimiento</strong>.</li>
-    <li><strong>Sin mecanismo de rollback automático propio</strong>: si la raíz es Btrfs con snapshots, el procedimiento de SUSE (<code>snapper rollback</code>) ya existe y es real; una capa propia habría añadido complejidad sin garantía adicional.</li>
-    <li><strong>Sin plantillas de reposd-dir persistentes</strong>: el directorio de VALIDATE se genera y destruye en cada ejecución.</li>
-    <li><strong><code>permanent_repos</code> reducido a informativo</strong>: mantenerlo como mecanismo de exclusión real habría reintroducido el riesgo que el modelo de aislamiento por fases busca eliminar (sección 4).</li>
-    <li><strong>El Workflow por etapas (<code>upgrade_phase</code>, sección 5.1) es la configuración por defecto; el Job Template único es la alternativa simplificada</strong>: no se creó un segundo playbook ni un segundo rol de migración para soportarlo — es la misma lógica de <code>run_stage.yml</code>, con <code>when:</code> adicionales. La alternativa simplificada (<code>upgrade_phase: both</code>) reproduce exactamente el comportamiento original de un solo Job Template, para quien no necesite el control granular por etapa.</li>
-  </ul>
-</section>
-
-<!-- =========================== 11 =========================== -->
-<section class="main-section">
-  <div class="section-head"><div class="section-num">11</div><h2>SP4 → SP5: por qué es independiente</h2></div>
-
-  <p>El proyecto nació con la ruta SP5 → SP6 → SP7. Al confirmarse que existen servidores reales todavía en SP4, se
-  agregó <code>SP4 → SP5</code> como etapa adicional — pero <strong>deliberadamente no</strong> como una cuarta
-  etapa de <code>full</code>.</p>
-
-  <div class="diagram">
-    <table class="clean">
-      <tr><th>Modo</th><th>Etapas</th><th>¿Se encadena automáticamente?</th></tr>
-      <tr><td><code>sp4_to_sp5</code></td><td>SP4 → SP5</td><td><strong>No</strong> — independiente</td></tr>
-      <tr><td><code>sp5_to_sp6</code></td><td>SP5 → SP6</td><td>No — independiente</td></tr>
-      <tr><td><code>sp6_to_sp7</code></td><td>SP6 → SP7</td><td>No — independiente</td></tr>
-      <tr><td><code>full</code></td><td>SP5 → SP6 → SP7</td><td>Sí, con gate <code>stage_validated</code> entre ambas — <strong>nunca incluye SP4</strong></td></tr>
-    </table>
-  </div>
-
-  <div class="callout decision">
-    <span class="label">Por qué fue técnicamente trivial agregarla</span>
-    <code>playbooks/tasks/run_stage.yml</code> ya era genérico (parametrizado por <code>stage_current_sp</code>/
-    <code>stage_target_sp</code>/<code>stage_releasever</code>), no específico de un Service Pack. SP4 → SP5
-    reutiliza exactamente el mismo código que SP5 → SP6 — incluso el mismo patrón <strong>sin</strong>
-    <code>--releasever</code>, confirmado contra la guía oficial <em>SLES 15 SP5 Upgrade Guide</em>. Agregar la etapa
-    fue, en esencia, una cuestión de datos (<code>katello.sp4_repositories</code>) y de dos diccionarios de mapeo
-    SP-actual/SP-objetivo, no de arquitectura nueva.
-  </div>
-
-  <div class="callout decision">
-    <span class="label">Por qué, aun así, se mantuvo fuera de <code>full</code></span>
-    Es una decisión explícita del operador, no una limitación técnica. <code>full</code> ya tenía una semántica clara
-    y validada — extenderla a cuatro etapas habría significado volver a probar el encadenamiento completo y ampliar
-    el alcance de lo que ya se había congelado para laboratorio. Se prefirió la opción de menor riesgo: SP4 → SP5
-    como modo independiente, ejecutado aparte, y <code>full</code> intacto.
-  </div>
-
-  <div class="callout note">
-    <span class="label">Qué pasa si alguien ejecuta <code>full</code> sobre un host en SP4</span>
-    El precheck de la etapa <code>sp5_to_sp6</code> (la primera que intenta <code>full</code>) calcula
-    <code>precheck_expected_current_sp = 'sp5'</code> y lo compara contra el SP real detectado (<code>sp4</code>) —
-    no coinciden, el check <code>service_pack_actual</code> queda <code>FAILED</code> y el precheck bloquea la etapa
-    antes de tocar cualquier repositorio. No hay manera de que <code>full</code> "salte" SP4 → SP5 silenciosamente:
-    falla explícito, con la causa exacta en el reporte.
-  </div>
-</section>
-
-<!-- =========================== 12 =========================== -->
-<section class="main-section">
-  <div class="section-head"><div class="section-num">12</div><h2>Qué falta confirmar en un laboratorio real</h2></div>
-
-  <p>Ver también README, sección 16 ("Riesgos que no pueden validarse sin un SLES real"). En orden de importancia
-  para la seguridad del procedimiento:</p>
-
-  <table class="clean">
-    <tr><th>#</th><th>Riesgo</th><th>Impacto si no se confirma</th></tr>
-    <tr><td>1</td><td><code>--reposd-dir</code> aislando realmente a Zypper en SLES 15 SP4/SP5/SP6/SP7</td><td>VALIDATE podría no ser 100% autoritativo</td></tr>
-    <tr><td>2</td><td>Formato real del atributo <code>version</code> de Zypper para un Service Pack</td><td>La etapa queda <code>FAILED</code> en vez de avanzar sin la segunda evidencia (fail-safe, sección 7)</td></tr>
-    <tr><td>3</td><td>Comportamiento y tiempos reales de <code>updatestack-only</code>, <code>dup</code>, reinicio</td><td>Timeouts configurados podrían necesitar ajuste</td></tr>
-    <tr><td>4</td><td>Todo lo específico de Foreman/Katello del ambiente real (<code>CHANGE_ME</code>)</td><td>Bloquea PRECHECK explícitamente hasta completarse</td></tr>
-  </table>
-</section>
-
-</body>
+<div class="callout note"><span class="label">Separación de responsabilidades</span>Este documento explica <strong>qué hace la solución y por qué</strong>. Los pasos de aprovisionamiento están en <a href="AWX_SETUP.html">Configuración AWX</a>; los incidentes, pruebas y evidencias están en <a href="INFORME_VALIDACION_Y_PRUEBAS.html">Informe de validación y pruebas</a>.</div>
+</section><section class="main-section" id="s1"><div class="section-head"><div class="section-num">02</div><h2>Modos de migración y regla secuencial</h2></div>
+<p>Existen <strong>cuatro modos</strong>: tres rutas individuales y una ejecución FULL. El proceso no omite Service Packs.</p>
+<table class="clean"><thead><tr><th>Modo</th><th>Recorrido</th><th>Regla</th></tr></thead><tbody>
+<tr><td><code>sp4_to_sp5</code></td><td>SP4 → SP5</td><td>Individual, fuera de FULL</td></tr>
+<tr><td><code>sp5_to_sp6</code></td><td>SP5 → SP6</td><td>Individual</td></tr>
+<tr><td><code>sp6_to_sp7</code></td><td>SP6 → SP7</td><td>Individual</td></tr>
+<tr><td><code>full</code></td><td>SP5 → SP6 → SP7</td><td>Valida SP6 antes de continuar hacia SP7</td></tr>
+</tbody></table>
+<div class="callout decision"><span class="label">Por qué FULL no incluye SP4</span>Se optó por mantener un flujo FULL de dos transiciones para evitar complejidad adicional y porque, según la estimación operativa del proyecto, cerca del 90 % de los servidores parte de SP5. Los equipos en SP4 se actualizan primero con el modo independiente.</div>
+</section><section class="main-section" id="s2"><div class="section-head"><div class="section-num">03</div><h2>Orquestación del Workflow de AWX</h2></div>
+<div class="phase-strip"><div><span>01</span><strong>PRECHECK</strong><small>Versión, espacio, conectividad y salud</small></div><div><span>02</span><strong>PREPARAR</strong><small>Repositorios de origen y destino</small></div><div><span>03</span><strong>APLICAR</strong><small>Simulación, migración, reinicio y validación</small></div><div><span>04</span><strong>REPORTAR</strong><small>Evidencia individual y consolidada</small></div><div><span>05</span><strong>SINCRONIZAR</strong><small>Copia opcional a SharePoint</small></div></div>
+<p>El Workflow de cinco nodos permite controlar cada fase y añadir una <strong>aprobación humana opcional entre Preparar y Aplicar</strong>. La ejecución es secuencial por defecto: <code>serial_batch_size: 1</code>. Si un servidor del lote falla, se registra su estado sin presumir que los demás también fallaron o tuvieron éxito.</p>
+<div class="callout note"><span class="label">Prevención antes del cambio real</span>La simulación <code>zypper dup -D</code> se realiza <strong>dentro de Aplicar</strong>, justo antes de modificar paquetes. No existe un modo independiente para ejecutarla desde el Survey.</div>
+</section><section class="main-section" id="s3"><div class="section-head"><div class="section-num">04</div><h2>Gestión de repositorios y contenidos</h2></div>
+<p>La migración utiliza <strong>repositorios internos Foreman/Katello</strong> por cada Service Pack. Antes de intervenir, inventaría los repositorios existentes, deshabilita los activos y conserva registro de su estado original; los repositorios temporales de la automatización se retiran tras una etapa satisfactoria.</p>
+<table class="clean"><thead><tr><th>Momento</th><th>Acción</th><th>Razón de diseño</th></tr></thead><tbody>
+<tr><td>Precheck</td><td>Comprueba repositorios de origen y destino, conectividad y configuración.</td><td>Detectar requisitos faltantes antes de modificar repositorios.</td></tr>
+<tr><td>Preparar</td><td>Usa repositorios temporales de origen para actualizar la pila de paquetes; los retira y deja listos los de destino.</td><td>Evitar mezcla de versiones y separar preparación de migración.</td></tr>
+<tr><td>Aplicar</td><td>Ejecuta <code>zypper dup -D</code>, luego <code>zypper dup</code> y retira los repositorios temporales tras completar la etapa.</td><td>Aplicar únicamente cuando la resolución preventiva es satisfactoria.</td></tr>
+</tbody></table>
+<p>Las listas se parametrizan con <code>katello.sp4_repositories</code>, <code>katello.sp5_repositories</code>, <code>katello.sp6_repositories</code> y <code>katello.sp7_repositories</code>; los alias temporales distinguen los repositorios de origen (<code>-src-</code>) y destino (<code>-dst-</code>).</p>
+<div class="callout risk"><span class="label">Excepción documentada de seguridad</span>En el ambiente documentado, los repositorios Foreman temporales se agregan con <code>--no-gpgcheck</code> por repositorio, conforme a una decisión explícita registrada durante el proyecto. <strong>Esto no deshabilita la validación TLS/CA</strong>. La excepción de integridad debe revisarse con Seguridad y Foreman antes de producción; diagnóstico original en el <a href="INFORME_VALIDACION_Y_PRUEBAS.html#s4">informe de pruebas</a>.</div>
+</section><section class="main-section" id="s4"><div class="section-head"><div class="section-num">05</div><h2>Controles preventivos y límites operativos</h2></div>
+<ul class="plain"><li><strong>Selección del objetivo:</strong> coincidencia de CRQ/RFC, lote y ambiente contra inventario; un modo incompatible con el SP actual bloquea el servidor.</li><li><strong>Confianza TLS:</strong> instalación idempotente de la CA interna cuando falta para conectar a Foreman/Katello.</li><li><strong>Contención de conflictos:</strong> gestión temporal de agentes de seguridad configurados y espera para liberar <code>packagekitd</code>; algunos agentes pueden tener autoprotección y requieren coordinación con Seguridad.</li><li><strong>Servicios de arranque:</strong> mitigaciones específicas de servicios identificados que afectan el reinicio, según la configuración del proyecto.</li><li><strong>Reinicio obligatorio:</strong> ninguna migración real se declara completa antes de reiniciar y recuperar conectividad.</li><li><strong>Sin rollback universal:</strong> la recuperación depende de la plataforma y sus mecanismos disponibles, como snapshots de Btrfs cuando existan.</li></ul>
+<div class="callout note"><span class="label">Naturaleza de PRECHECK</span>Es una fase de comprobación con excepciones técnicas idempotentes documentadas: por ejemplo, instalar la CA corporativa si falta y gestionar temporalmente servicios que interfieren con Zypper. No debe describirse como absolutamente libre de cambios.</div>
+</section><section class="main-section" id="s5"><div class="section-head"><div class="section-num">06</div><h2>Máquina de estados y criterios de avance</h2></div>
+<p>El proyecto no considera suficiente la ejecución de <code>zypper dup</code>. La etapa comprueba por separado <code>sp_migration_dup_applied</code>, <code>reboot_completed</code> y <code>reconnected</code>, y consolida la validación en <code>stage_validated</code>.</p>
+<div class="arch-diagram"><div class="arch-node"><strong>Migración aplicada</strong><small>El gestor de paquetes concluyó el cambio real.</small></div><div class="arch-node"><strong>Reinicio y reconexión</strong><small>El sistema reinició y volvió a estar accesible.</small></div><div class="arch-node"><strong>Verificación posterior</strong><small>SP objetivo y controles críticos confirmados.</small></div></div>
+<p>En modo FULL, el salto SP6→SP7 comienza solamente cuando la fase SP5→SP6 satisface los criterios de avance. El resultado del SP se contrasta mediante evidencia del sistema operativo y del producto instalado; las discrepancias impiden declararlo exitoso.</p>
+<div class="callout decision"><span class="label">Fallo controlado</span>Cuando una condición crítica no se cumple, se registra como fallo o no verificado según corresponda. El error no se transforma en una aprobación y se conserva información útil para el diagnóstico.</div>
+<p>La comprobación de <code>reboot_completed</code>/<code>reconnected</code> se complementa con evidencia adicional pensada para diagnóstico post-incidente: <code>boot_id</code> (de <code>/proc/sys/kernel/random/boot_id</code>) antes y después del reinicio -- confirma que ocurrió un reinicio real a nivel de kernel, no solo una reconexión de Ansible tras un corte de red transitorio --, hora de inicio/fin, la duración que devuelve <code>ansible.builtin.reboot</code> y un cálculo independiente del tiempo de reconexión ("doble evidencia", el mismo patrón ya usado para confirmar el Service Pack). Inmediatamente después del reinicio, una espera acotada y no bloqueante (<code>systemd_settle_retries</code>/<code>systemd_settle_delay</code>, 120&nbsp;s por defecto) deja que <code>systemctl is-system-running</code> salga de <code>starting</code> antes de fijar el estado final (<code>running</code>/<code>degraded</code>/agotado sin tiempo).</p>
+<div class="callout note"><span class="label">Conservar evidencia: journald persistente</span>Antes de ejecutar la migración real se habilita <code>Storage=persistent</code> en journald (<code>journald_enable_persistent</code>, idempotente) — mecanismo documentado por SUSE para que los registros estructurados por arranque sobrevivan al reinicio obligatorio, en vez de perderse si journald seguía en modo volátil. Toda esta trazabilidad del reinicio es informativa y queda en el reporte HTML por servidor: nunca decide el resultado de la etapa. Ver README sección 8.6.</div>
+</section><section class="main-section" id="s6"><div class="section-head"><div class="section-num">07</div><h2>Validación de GeoPOS y salud del sistema</h2></div>
+<p>El modelo permite configurar, por servidor, controles de <strong>servicios systemd, procesos Java, puertos TCP y URLs de salud opcionales</strong>. La validación puede activarse por categoría y admite uno o varios elementos por servidor.</p>
+<table class="clean"><thead><tr><th>Dimensión</th><th>Qué verifica</th><th>Consideración</th></tr></thead><tbody><tr><td>Servicios</td><td>Unidades systemd definidas como críticas.</td><td>Nombres reales por servidor.</td></tr><tr><td>Procesos Java</td><td>Patrones identificables del proceso de GeoPOS.</td><td>No usar simplemente <code>java</code> como único patrón.</td></tr><tr><td>Red</td><td>Puertos TCP y URLs de health check si existen.</td><td>Configurar los endpoints aplicables.</td></tr></tbody></table>
+<div class="callout risk"><span class="label">Estado actual</span>La parametrización con nombres reales de los servicios de GeoPOS sigue pendiente de validación en QA. Una comprobación no configurada debe indicarse como <strong>NO VERIFICADA</strong>, nunca como satisfactoria.</div>
+</section><section class="main-section" id="s7"><div class="section-head"><div class="section-num">08</div><h2>Inventario, variables, reportes y persistencia</h2></div>
+<p>El origen del inventario puede ser un Excel de SharePoint sincronizado mediante el plugin versionado en el proyecto <code>inventory_plugins/excel_inventory.py</code>. Las variables del proyecto se declaran junto al playbook (<code>playbooks/group_vars/</code> y <code>playbooks/host_vars/</code>), independientemente de dónde AWX obtenga los hosts.</p>
+<p>El alcance se determina con <code>playbooks/select_target_hosts.yml</code> y los campos <code>upgrade_crq</code>, <code>upgrade_lote</code> y <code>upgrade_ambiente</code>. La ejecución produce resultados por servidor y etapa, y un <strong>consolidado por lote</strong>. Estados diferenciados: OK, ADVERTENCIA, FALLIDO y NO VERIFICADO.</p>
+<div class="callout note"><span class="label">Ruta y persistencia</span><code>report_local_dir</code> pertenece al área de trabajo del Job, potencialmente efímera. <code>report_destination</code> está configurado a <code>/data/work/Salida_Upgrade</code>; su persistencia y permisos deben confirmarse en el AWX real. La sincronización a SharePoint es una etapa separada y opcional.</div>
+</section><section class="main-section" id="s8"><div class="section-head"><div class="section-num">09</div><h2>Decisiones, restricciones y documentos vinculados</h2></div>
+<ul class="plain"><li>Un solo rol <code>sp_migration</code> parametrizado para las transiciones, en vez de un rol por Service Pack.</li><li>Separación de preparación y aplicación para facilitar aprobación y seguimiento.</li><li>Inventario confiable de repositorios preexistentes y prohibición de mezclarlos con los temporales de migración.</li><li>No se implementa un mecanismo propio de reversión automática aplicable a todos los servidores.</li><li>SP4→SP5 independiente y FULL limitado a dos transiciones desde SP5.</li></ul>
+<div class="doc-crosslinks"><a href="AWX_SETUP.html">→ Configurar y ejecutar en AWX</a><a href="INFORME_VALIDACION_Y_PRUEBAS.html">→ Consultar ensayos, errores y soluciones</a></div>
+<p class="small-note">La descripción corresponde al diseño documentado del proyecto. Las observaciones históricas y el estado de aprobación por ambiente se mantienen separados en el informe de validación y pruebas.</p>
+</section></div></div></div><footer class="page-footer">ansible-sles-upgrade · Documentación técnica · Octubre de 2026</footer><script>
+(function(){
+ const fileKey='sles-docs-20261008-'+location.pathname.split('/').pop();
+ const checks=[...document.querySelectorAll('.doc-main input[type="checkbox"]')];
+ const writable=checks.filter(x=>!x.disabled);
+ for(const x of writable){
+  const k=fileKey+':'+x.id;
+  try{const value=localStorage.getItem(k); if(value!==null)x.checked=value==='1'}catch(_){}
+  x.addEventListener('change',()=>{try{localStorage.setItem(k,x.checked?'1':'0')}catch(_){} update()});
+ }
+ function update(){const done=checks.filter(x=>x.checked).length,total=checks.length;const el=document.querySelector('#count-done');if(el)el.textContent=done+' / '+total; const bar=document.querySelector('#progress-fill');if(bar)bar.style.width=(total?done/total*100:0)+'%'}
+ update();
+ const btn=document.querySelector('#reset-checks');if(btn)btn.addEventListener('click',()=>{if(confirm('¿Deseas desmarcar las actividades editables de este documento? No cambia las ya verificadas por el proyecto.')){writable.forEach(x=>{x.checked=false;try{localStorage.removeItem(fileKey+':'+x.id)}catch(_){}});update()}});
+ const search=document.querySelector('#doc-search');if(search)search.addEventListener('input',()=>{const q=search.value.trim().toLocaleLowerCase('es');document.querySelectorAll('.doc-main section.main-section').forEach(sec=>{sec.classList.toggle('search-hidden',!!q&&!sec.textContent.toLocaleLowerCase('es').includes(q))})});
+ const anchors=[...document.querySelectorAll('.doc-sidebar nav a')]; if('IntersectionObserver' in window){const observer=new IntersectionObserver(entries=>{entries.forEach(en=>{if(en.isIntersecting){anchors.forEach(a=>a.classList.toggle('active',a.hash==='#'+en.target.id))}})},{rootMargin:'-10% 0px -70% 0px'});document.querySelectorAll('.doc-main section.main-section').forEach(s=>observer.observe(s))}
+ document.querySelectorAll('table.clean').forEach(t=>{if(!t.parentElement.classList.contains('table-scroll')){const wrapper=document.createElement('div');wrapper.className='table-scroll';t.parentNode.insertBefore(wrapper,t);wrapper.appendChild(t)}});
+})();
+</script></body>
 </html>

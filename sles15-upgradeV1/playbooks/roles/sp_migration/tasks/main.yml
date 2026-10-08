@@ -34,6 +34,10 @@
 # única bandera que además exige reconexión, SP confirmado, servicios
 # críticos y GeoPOS crítico OK.
 
+- name: "Conservar evidencia: habilitar journald persistente antes de la migración real"
+  ansible.builtin.include_tasks: ensure_journald_persistent.yml
+  when: journald_enable_persistent | default(true)
+
 - name: Ejecutar dup -D como gate obligatorio inmediatamente antes del dup real
   # "failed_when: false" aquí es deliberado: si se deja que esta tarea falle
   # por sí sola (rc != 0), Ansible aborta ANTES de llegar a la tarea
@@ -153,6 +157,24 @@
     name: repo_management
     tasks_from: disable_boot_blocking_services.yml
 
+- name: "Trazabilidad del reinicio: leer boot_id y hora de inicio ANTES de reiniciar"
+  # boot_id (/proc/sys/kernel/random/boot_id) es un UUID que el kernel
+  # genera de nuevo en cada arranque -- comparar el de antes/después es
+  # la única forma de confirmar que el host realmente reinició (y no, por
+  # ejemplo, que Ansible reconectó a la misma sesión tras una caída breve
+  # de red sin que el kernel haya cambiado). No requiere become: el
+  # archivo es de lectura pública.
+  block:
+    - name: Leer boot_id actual (antes del reinicio)
+      ansible.builtin.slurp:
+        src: /proc/sys/kernel/random/boot_id
+      register: _boot_id_before_raw
+
+    - name: Registrar boot_id "antes" y hora de inicio del reinicio
+      ansible.builtin.set_fact:
+        sp_migration_reboot_boot_id_before: "{{ (_boot_id_before_raw.content | b64decode) | trim }}"
+        sp_migration_reboot_started_at: "{{ lookup('pipe', 'date -u +%Y-%m-%dT%H:%M:%SZ') }}"
+
 - name: Reiniciar el sistema y esperar reconexión (fallo capturado localmente; el dup ya quedó registrado)
   block:
     - name: Reiniciar el sistema tras la migración real (obligatorio, sin excepción)
@@ -164,12 +186,50 @@
       become: true
       register: sp_migration_reboot_result
 
+    - name: "Trazabilidad del reinicio: leer boot_id DESPUÉS de reconectar y calcular duraciones"
+      block:
+        - name: Leer boot_id actual (después de reconectar)
+          ansible.builtin.slurp:
+            src: /proc/sys/kernel/random/boot_id
+          register: _boot_id_after_raw
+
+        - name: Registrar boot_id "después" y comparar con el de antes
+          ansible.builtin.set_fact:
+            sp_migration_reboot_boot_id_after: "{{ (_boot_id_after_raw.content | b64decode) | trim }}"
+            sp_migration_reboot_finished_at: "{{ lookup('pipe', 'date -u +%Y-%m-%dT%H:%M:%SZ') }}"
+
+        - name: Calcular si el boot_id realmente cambió y el tiempo de reconexión real
+          ansible.builtin.set_fact:
+            sp_migration_reboot_boot_id_changed: "{{ sp_migration_reboot_boot_id_after != sp_migration_reboot_boot_id_before }}"
+            # "duración devuelta por Ansible": tiempo que el propio módulo
+            # reboot reporta haber esperado (incluye pre_reboot_delay +
+            # espera de reconexión). "tiempo de reconexión": cálculo
+            # independiente por reloj de pared (started_at vs
+            # finished_at, ambos capturados por esta misma automatización)
+            # -- mismo principio de doble evidencia que la verificación de
+            # Service Pack (sección 7 del README): si ambos números
+            # difieren mucho, es una señal real de algo raro durante el
+            # arranque, no solo un detalle de instrumentación.
+            sp_migration_reboot_elapsed_ansible_seconds: "{{ sp_migration_reboot_result.elapsed | default('NOT_CHECKED') }}"
+            sp_migration_reboot_reconnect_seconds: >-
+              {{
+                (
+                  (sp_migration_reboot_finished_at | to_datetime(format='%Y-%m-%dT%H:%M:%SZ'))
+                  - (sp_migration_reboot_started_at | to_datetime(format='%Y-%m-%dT%H:%M:%SZ'))
+                ).total_seconds() | int
+              }}
+
     - name: Marcar reinicio y reconexión como completados
       ansible.builtin.set_fact:
         sp_migration_reboot_completed: true
         sp_migration_reconnected: true
   rescue:
-    - name: Registrar que el reinicio o la reconexión fallaron (el dup sigue registrado como aplicado)
+    - name: "Registrar que el reinicio o la reconexión fallaron (el dup sigue registrado como aplicado; se conserva boot_id 'antes' para diagnóstico)"
       ansible.builtin.set_fact:
         sp_migration_reboot_completed: false
         sp_migration_reconnected: false
+        sp_migration_reboot_boot_id_after: "NOT_CHECKED: el host no reconectó tras el reinicio"
+        sp_migration_reboot_boot_id_changed: "NOT_CHECKED"
+        sp_migration_reboot_finished_at: "{{ lookup('pipe', 'date -u +%Y-%m-%dT%H:%M:%SZ') }}"
+        sp_migration_reboot_elapsed_ansible_seconds: "NOT_CHECKED"
+        sp_migration_reboot_reconnect_seconds: "NOT_CHECKED"

@@ -302,6 +302,24 @@ zypper_lock_competing_services:
 reboot_disable_services:
   - postfix
 
+# Conservar evidencia: habilitar almacenamiento persistente de journald
+# (Storage=persistent + /var/log/journal) justo antes de ejecutar la
+# migración real, para que los logs estructurados de la migración y del
+# reinicio sobrevivan aunque el arranque siguiente tenga problemas. Ver
+# roles/sp_migration/tasks/ensure_journald_persistent.yml. Idempotente;
+# deshabilitar solo si el host ya gestiona esto por otro medio (ej. un
+# forwarder centralizado que requiera journald en modo volátil).
+journald_enable_persistent: true
+
+# Validación post-reinicio: tras el reinicio obligatorio, cuánto tiempo
+# (acotado) esperar a que systemd salga de "starting" antes de tomar la
+# fotografía "después" (ver roles/precheck/tasks/wait_system_running.yml).
+# 24 intentos x 5s = 120s máximo. Nunca bloquea ni falla la etapa: si se
+# agota sin salir de "starting", se registra como informativo
+# (systemd_settle_timed_out) y se continúa igual.
+systemd_settle_retries: 24
+systemd_settle_delay: 5
+
 # Ante un fallo, por defecto NO se limpian los repositorios temporales
 # ni el respaldo, para preservar información de diagnóstico.
 cleanup_repositories_on_failure: false

@@ -1,0 +1,69 @@
+---
+# roles/sp_migration/tasks/ensure_journald_persistent.yml
+#
+# Conservar evidencia: habilitar almacenamiento persistente de journald
+# (Storage=persistent en /etc/systemd/journald.conf + /var/log/journal)
+# ANTES de ejecutar la migración real -- es el mecanismo documentado por
+# SUSE para que los logs estructurados (journalctl, con boot_id y
+# prioridad por mensaje) sobrevivan al reinicio obligatorio, en vez de
+# perderse si journald seguía en modo volátil (solo en /run, memoria).
+# No reemplaza a rsyslog (/var/log/messages, /var/log/warn): es evidencia
+# adicional, con más detalle estructurado y separada por arranque
+# (journalctl --list-boots / journalctl -b -1).
+#
+# Idempotente: si Storage=persistent ya estaba configurado y el
+# directorio ya existía, no cambia nada y no reinicia journald.
+#
+# Efecto inmediato a propósito: se reinicia systemd-journald (si hubo
+# cambios) para que el journal de ESTE arranque -- incluida la migración
+# real que está a punto de correr -- también quede en disco, no solo los
+# arranques posteriores. Reiniciar systemd-journald es una operación
+# estándar y no disruptiva (no interrumpe otros servicios).
+
+- name: Verificar si journald ya tiene Storage=persistent configurado
+  ansible.builtin.command: grep -E '^Storage=persistent' /etc/systemd/journald.conf
+  register: _journald_storage_check
+  changed_when: false
+  failed_when: false
+
+- name: Configurar Storage=persistent en journald.conf
+  ansible.builtin.lineinfile:
+    path: /etc/systemd/journald.conf
+    regexp: '^#?\s*Storage='
+    line: 'Storage=persistent'
+    insertafter: '^\[Journal\]'
+  become: true
+  register: _journald_conf_result
+  when: _journald_storage_check.rc != 0
+
+- name: Crear el directorio persistente de journald si no existe
+  ansible.builtin.file:
+    path: /var/log/journal
+    state: directory
+    owner: root
+    group: systemd-journal
+    mode: "2755"
+  become: true
+  register: _journald_dir_result
+
+- name: Aplicar permisos/ACL estándar de systemd-tmpfiles al directorio de journald
+  # Siempre (sin "when: .changed"): systemd-tmpfiles --create es idempotente
+  # y barato -- más simple que condicionarlo, y evita que ansible-lint lo
+  # trate como candidato a handler.
+  ansible.builtin.command: systemd-tmpfiles --create --prefix /var/log/journal
+  become: true
+  changed_when: false
+  failed_when: false
+
+- name: Reiniciar systemd-journald para activar el almacenamiento persistente de inmediato (solo si hubo cambios)
+  ansible.builtin.systemd:
+    name: systemd-journald
+    state: restarted
+  become: true
+  when: (_journald_conf_result.changed | default(false)) or _journald_dir_result.changed
+
+- name: Registrar si journald persistente quedó habilitado en esta corrida (para el reporte)
+  ansible.builtin.set_fact:
+    journald_persistent_result:
+      ya_estaba_habilitado: "{{ _journald_storage_check.rc == 0 }}"
+      se_habilito_ahora: "{{ (_journald_conf_result.changed | default(false)) or _journald_dir_result.changed }}"

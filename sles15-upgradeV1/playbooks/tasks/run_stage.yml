@@ -58,6 +58,17 @@
     sp_migration_dup_applied: false
     sp_migration_reboot_completed: false
     sp_migration_reconnected: false
+    sp_migration_reboot_boot_id_before: "NOT_CHECKED"
+    sp_migration_reboot_boot_id_after: "NOT_CHECKED"
+    sp_migration_reboot_boot_id_changed: "NOT_CHECKED"
+    sp_migration_reboot_started_at: "NOT_CHECKED"
+    sp_migration_reboot_finished_at: "NOT_CHECKED"
+    sp_migration_reboot_elapsed_ansible_seconds: "NOT_CHECKED"
+    sp_migration_reboot_reconnect_seconds: "NOT_CHECKED"
+    journald_persistent_result: {}
+    systemd_settle_timed_out: "NOT_CHECKED"
+    systemd_settle_waited_seconds: "NOT_CHECKED"
+    systemd_settle_final_state: "NOT_CHECKED"
     system_state_snapshot_after: {}
     critical_services_after: []
     geopos_validation_after:
@@ -316,10 +327,18 @@
                   dry_run_gate_output: "{{ sp_migration_dry_run_output | default('') }}"
                   output_summary: "{{ sp_migration_dup_output | default('') }}"
                   orphaned_packages: "{{ sp_migration_orphaned_packages.stdout | default('') }}"
+                  journald_persistente: "{{ journald_persistent_result | default({}) }}"
                 stage_reboot_info:
                   completed: "{{ sp_migration_reboot_completed | default(false) }}"
                   reconnected: "{{ sp_migration_reconnected | default(false) }}"
                   boot_blocking_services_disabled: "{{ boot_blocking_services_disabled | default([]) }}"
+                  started_at: "{{ sp_migration_reboot_started_at | default('NOT_CHECKED') }}"
+                  finished_at: "{{ sp_migration_reboot_finished_at | default('NOT_CHECKED') }}"
+                  boot_id_before: "{{ sp_migration_reboot_boot_id_before | default('NOT_CHECKED') }}"
+                  boot_id_after: "{{ sp_migration_reboot_boot_id_after | default('NOT_CHECKED') }}"
+                  boot_id_changed: "{{ sp_migration_reboot_boot_id_changed | default('NOT_CHECKED') }}"
+                  elapsed_ansible_seconds: "{{ sp_migration_reboot_elapsed_ansible_seconds | default('NOT_CHECKED') }}"
+                  reconnect_seconds: "{{ sp_migration_reboot_reconnect_seconds | default('NOT_CHECKED') }}"
       rescue:
         - name: Marcar la etapa como fallida en la preparación/migración
           ansible.builtin.set_fact:
@@ -343,6 +362,15 @@
       block:
         - name: Releer hechos del sistema tras el reinicio
           ansible.builtin.setup: {}
+
+        - name: "Validación post-reinicio: esperar (acotado) a que systemd termine de arrancar"
+          ansible.builtin.include_role:
+            name: precheck
+            tasks_from: wait_system_running.yml
+
+        - name: Agregar el resultado de la espera post-reinicio a la trazabilidad del reinicio
+          ansible.builtin.set_fact:
+            stage_reboot_info: "{{ stage_reboot_info | combine({'systemd_settle_timed_out': systemd_settle_timed_out, 'systemd_settle_waited_seconds': systemd_settle_waited_seconds, 'systemd_settle_final_state': systemd_settle_final_state}) }}"
 
         - name: Capturar fotografía del sistema post-migración
           ansible.builtin.include_role:

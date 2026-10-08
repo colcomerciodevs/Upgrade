@@ -145,6 +145,14 @@
 <p><strong>Paquetes huérfanos/no necesarios detectados tras la migración (informativo, no se eliminan automáticamente):</strong></p>
 <pre>{{ stage_report.migration.orphaned_packages }}</pre>
 {% endif %}
+{% set _journald = stage_report.migration.journald_persistente | default({}) %}
+{% if _journald %}
+<p><strong>Journald persistente (evidencia):</strong>
+   {% if _journald.ya_estaba_habilitado | default(false) %}ya estaba habilitado antes de esta corrida
+   {% elif _journald.se_habilito_ahora | default(false) %}se habilitó recién en esta corrida (<code>Storage=persistent</code> + <code>/var/log/journal</code>), antes del dup real
+   {% else %}NO quedó habilitado (revisar manualmente){% endif %}
+   <span class="muted"> — permite <code>journalctl --list-boots</code> / <code>journalctl -b -1</code> tras el reinicio.</span></p>
+{% endif %}
 {% endif %}
 
 {% if stage_report.reboot %}
@@ -153,12 +161,30 @@
   <tr><th>Reinicio completado</th><td>{{ stage_report.reboot.completed | default(false) }}</td></tr>
   <tr><th>Reconexión exitosa</th><td>{{ stage_report.reboot.reconnected | default(false) }}</td></tr>
   <tr><th>Servicios deshabilitados permanentemente antes de reiniciar</th><td>{{ (stage_report.reboot.boot_blocking_services_disabled | default([])) | join(', ') or 'ninguno' }}</td></tr>
+  <tr><th>Hora de inicio del reinicio</th><td>{{ stage_report.reboot.started_at | default('NOT_CHECKED') }}</td></tr>
+  <tr><th>Hora de reconexión confirmada</th><td>{{ stage_report.reboot.finished_at | default('NOT_CHECKED') }}</td></tr>
+  <tr><th>boot_id antes</th><td><code>{{ stage_report.reboot.boot_id_before | default('NOT_CHECKED') }}</code></td></tr>
+  <tr><th>boot_id después</th><td><code>{{ stage_report.reboot.boot_id_after | default('NOT_CHECKED') }}</code></td></tr>
+  <tr><th>¿boot_id cambió? (confirma que sí hubo un reinicio real a nivel de kernel)</th>
+      <td><span class="badge badge-{{ 'OK' if stage_report.reboot.boot_id_changed == true else ('FAILED' if stage_report.reboot.boot_id_changed == false else 'NOT_CHECKED') }}">{{ stage_report.reboot.boot_id_changed | default('NOT_CHECKED') }}</span></td></tr>
+  <tr><th>Duración devuelta por el módulo de Ansible (seg.)</th><td>{{ stage_report.reboot.elapsed_ansible_seconds | default('NOT_CHECKED') }}</td></tr>
+  <tr><th>Tiempo de reconexión por reloj de pared (seg., cálculo independiente)</th><td>{{ stage_report.reboot.reconnect_seconds | default('NOT_CHECKED') }}</td></tr>
+  <tr><th>Espera post-reinicio a que systemd saliera de "starting"</th>
+      <td>
+        {% if stage_report.reboot.systemd_settle_timed_out is defined %}
+          estado final: <span class="badge badge-{{ 'WARNING' if stage_report.reboot.systemd_settle_timed_out else 'OK' }}">{{ stage_report.reboot.systemd_settle_final_state | default('NOT_CHECKED') }}</span>,
+          esperó {{ stage_report.reboot.systemd_settle_waited_seconds | default('NOT_CHECKED') }}s
+          {% if stage_report.reboot.systemd_settle_timed_out %} — <strong>seguía en "starting" al agotar el tiempo acotado</strong>{% endif %}
+        {% else %}NOT_CHECKED{% endif %}
+      </td></tr>
 </table>
 <p class="muted">Un upgrade real de Service Pack siempre reinicia si el dup se aplicó: no
    existe una opción para omitirlo. Los servicios listados arriba (si hay
    alguno) quedan deshabilitados de forma permanente, no se reinician
    después — ver README sección 8.4/15 para la evidencia real que lo
-   justifica.</p>
+   justifica. El <code>boot_id</code> y la espera de systemd son
+   informativos para diagnóstico (ej. un arranque que se percibió
+   "colgado"): nunca decide por sí solo el resultado de la etapa.</p>
 {% endif %}
 
 {% set _security_agents = stage_report.security_agents | default({}) %}

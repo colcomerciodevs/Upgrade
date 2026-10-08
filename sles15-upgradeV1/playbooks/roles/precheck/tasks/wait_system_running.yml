@@ -1,0 +1,29 @@
+---
+# roles/precheck/tasks/wait_system_running.yml
+#
+# Validación post-reinicio: espera, de forma ACOTADA, a que systemd salga
+# del estado "starting" tras el reinicio obligatorio, antes de que
+# capture_state.yml tome la fotografía "después" -- así ese snapshot
+# refleja un sistema que ya terminó de arrancar (running/degraded/etc.),
+# no una lectura a mitad de arranque que parecería peor de lo que es.
+#
+# NUNCA bloquea la etapa ni falla por sí solo: si systemd sigue en
+# "starting" al agotar systemd_settle_retries/_delay (ver
+# playbooks/group_vars/all.yml), se registra ese hecho explícitamente
+# (systemd_settle_timed_out: true) y se continúa igual -- es informativo,
+# mismo criterio que systemd_system_state en capture_state.yml.
+
+- name: "Esperar (de forma acotada) a que systemd salga de 'starting' tras el reinicio"
+  ansible.builtin.command: systemctl is-system-running  # noqa command-instead-of-module
+  register: _wait_system_running_result
+  changed_when: false
+  failed_when: false
+  until: (_wait_system_running_result.stdout | default('') | trim) != 'starting'
+  retries: "{{ systemd_settle_retries }}"
+  delay: "{{ systemd_settle_delay }}"
+
+- name: Registrar el resultado de la espera post-reinicio (informativo, para el reporte)
+  ansible.builtin.set_fact:
+    systemd_settle_timed_out: "{{ (_wait_system_running_result.stdout | default('') | trim) == 'starting' }}"
+    systemd_settle_waited_seconds: "{{ ((_wait_system_running_result.attempts | default(1)) - 1) * (systemd_settle_delay | int) }}"
+    systemd_settle_final_state: "{{ _wait_system_running_result.stdout | default('') | trim }}"

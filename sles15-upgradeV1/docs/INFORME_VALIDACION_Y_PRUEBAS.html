@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+
+<!DOCTYPE html>
+
+<html lang="es">
+<head>
+<meta charset="utf-8"/>
+<title>Informe técnico de validación y pruebas</title>
+<style>
+:root{--navy:#112342;--navy2:#09172e;--teal:#087f77;--teal2:#16a08d;--gray-dark:#1f2d40;--gray-mid:#63758c;--light-bg:#f5f8fc;--ok-green:#138364;--warn-amber:#b57317;--fail-red:#bb3e4b;--line:#e0e7ef;--card:#fff;--ink:#213047}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:#f3f6fb;color:var(--ink);font:15px/1.72 'Segoe UI',Inter,'Helvetica Neue',Arial,sans-serif;-webkit-font-smoothing:antialiased}a{color:var(--teal);text-decoration:none}a:hover{text-decoration:underline}h1,h2,h3,h4{font-family:'Segoe UI',Inter,Arial,sans-serif;color:var(--navy);line-height:1.25}h3{font-size:17px;margin:27px 0 12px}h4{margin:22px 0 8px}p{margin:11px 0 17px}strong{font-weight:720}
+header.top{background:radial-gradient(ellipse 90% 200% at 90% 5%,#275472 0%,#142e50 42%,#09172e 100%);color:#fff;padding:52px 0 40px;margin:0;border-bottom:5px solid #17ab91}
+header.top .wrap{max-width:1280px;padding:0 40px}header.top .kicker,.cover .kicker{letter-spacing:.18em;text-transform:uppercase;font-size:11px;color:#75d8c5;font-weight:750;margin-bottom:12px}header.top h1{font-size:clamp(30px,4vw,45px);line-height:1.12;letter-spacing:-.035em;color:#fff;margin:0 0 14px;max-width:900px}header.top .subtitle{font-size:16px;color:#c9d9e8;max-width:940px;line-height:1.68}.callout.top-note{background:#223d58;border:1px solid #46768b;color:#e6f4f7;margin:24px 0 0;padding:16px 18px;max-width:1000px}
+.wrap{max-width:1280px;margin:0 auto;padding:0 40px 60px}nav.quicknav{display:none}.doc-layout{max-width:1360px;margin:0 auto;display:grid;grid-template-columns:254px minmax(0,1fr);align-items:start;gap:28px;padding:32px 28px 80px}.doc-sidebar{position:sticky;top:24px;background:#fff;border:1px solid #e5edf3;border-radius:16px;padding:22px 15px;box-shadow:0 6px 25px rgba(18,39,66,.04);max-height:calc(100vh - 48px);overflow-y:auto}.sidebar-eyebrow{display:block;font-size:10px;letter-spacing:.14em;color:#8392a4;font-weight:800;margin:0 11px 13px}.doc-sidebar a{display:block;color:#516079;padding:8px 11px;border-radius:8px;font-size:12.5px;line-height:1.35;font-weight:570}.doc-sidebar a.active,.doc-sidebar a:hover{background:#e8f6f3;color:#087e72;text-decoration:none}.doc-sidebar small{display:block;font-size:11px;color:#8392a4;line-height:1.45}.sidebar-progress{background:#f4f9f9;border-radius:11px;padding:15px 12px;margin-top:22px}.sidebar-progress strong{display:block;font-size:22px;color:#087f77}.progress-track{background:#dfebe9;height:7px;border-radius:10px;overflow:hidden;margin:9px 0}.progress-fill{height:100%;background:#18a68f;width:0;transition:width .25s}.doc-main{min-width:0;max-width:1000px}.doc-main .wrap{padding:0;max-width:none}.doc-toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:17px}.doc-toolbar input[type='search']{border:1px solid #dbe5ef;background:#fff;color:#14243d;border-radius:9px;padding:12px 15px;width:270px;font:inherit;font-size:13px;outline:none}.doc-toolbar input:focus{border-color:#18a68f;box-shadow:0 0 0 3px #18a68f1a}.action-btn{border:1px solid #d8e3eb;background:#fff;color:#28405c;border-radius:9px;padding:10px 13px;cursor:pointer;font-weight:650;font-size:12px}.action-btn:hover{border-color:#12a78d;color:#087c73}.overview{background:#fff;border:1px solid #e3eaf0;border-radius:18px;padding:26px 28px 29px;margin:0 0 20px;box-shadow:0 3px 20px #182e4610}.overview h2{font-size:23px;letter-spacing:-.03em;margin:0 0 8px}.overview>p{max-width:780px;color:#617186;margin:0 0 19px}.kpi-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.kpi{background:#f4f8fb;border:1px solid #e8edf2;border-radius:12px;padding:16px;min-height:110px}.kpi strong{font-size:21px;color:#0a766f;display:block;line-height:1.2}.kpi small{font-size:12px;line-height:1.45;color:#5c6d80;display:block;margin-top:8px}.section-head{display:flex;align-items:center;gap:13px;border:0;padding:0 0 19px;margin:0 0 18px;border-bottom:1px solid #e4ebf3}.section-num{display:flex;align-items:center;justify-content:center;min-width:39px;width:39px;height:39px;border-radius:12px;background:#e5f5f1;color:#0c8175;font-size:16px;font-weight:850}.section-head h2{font-size:clamp(20px,2.1vw,25px);margin:0;letter-spacing:-.025em}.main-section{background:#fff;border:1px solid #e2e9f1;border-radius:17px;padding:29px 31px 33px;margin:0 0 18px;box-shadow:0 3px 19px #20354c09;scroll-margin-top:20px}.main-section:first-of-type{margin-top:0}.main-section p,.main-section li{overflow-wrap:anywhere}.callout{border-left:4px solid #a4acb8;background:#f6f8fb;padding:15px 17px;margin:19px 0;border-radius:0 10px 10px 0}.callout .label{display:block;font-size:11px;letter-spacing:.07em;font-weight:800;text-transform:uppercase;margin-bottom:5px}.callout.risk{border-color:#e2ad52;background:#fffaee}.callout.risk .label{color:#9b641a}.callout.note{border-color:#27a891;background:#f0f9f7}.callout.note .label{color:#0b8171}.callout.decision{border-color:#315e99;background:#f2f6fd}.callout.decision .label{color:#315e99}.callout.lesson{border-color:#cc7080;background:#fff5f5}.callout.top-note .label{color:#fff}.main-section ul.checklist{list-style:none;padding:0;margin:15px 0}.main-section ul.checklist li{display:flex;align-items:flex-start;gap:12px;padding:12px 11px;border:1px solid #ecf0f4;border-radius:10px;margin-bottom:8px;transition:background .15s}.main-section ul.checklist li:hover{background:#f9fbfd}.main-section ul.checklist input[type=checkbox]{width:20px;height:20px;accent-color:#159c83;flex:none;margin:3px 0 0;cursor:pointer}.main-section ul.checklist label{cursor:pointer;flex:1}.main-section ul.checklist li:has(input:checked){background:#f0faf6;border-color:#d1e9df}.main-section ul.checklist li:has(input:checked) label>strong{color:#0b866b}.detail{display:block;color:#65768a;font-size:12.5px;margin-top:5px}.track-head{display:flex;gap:15px;align-items:start;margin:26px 0 13px}.track-head h3{margin:0 0 4px;font-size:20px}.track-head p{margin:0;font-size:13px;color:#66768b}.track-num{display:inline-grid;place-items:center;background:#e6f2f4;color:#0d7c78;border-radius:12px;padding:10px;font-weight:850}.test-groups{margin-bottom:22px}table.clean{border-collapse:separate;border-spacing:0;width:100%;border:1px solid #e1e9f1;border-radius:10px;overflow:hidden;font-size:13px;margin:18px 0}table.clean th{text-align:left;background:#193452;color:#fff;padding:13px 12px;font-size:12px;white-space:normal}table.clean td{padding:12px;border-bottom:1px solid #e7edf2;vertical-align:top}table.clean tr:last-child td{border-bottom:0}table.clean tr:nth-child(even) td{background:#f8fafc}table.clean td code{word-break:break-word}.table-scroll{overflow-x:auto;margin:17px 0}code{background:#edf3f8;color:#235578;border-radius:5px;padding:2px 5px;font:0.9em Consolas,'DejaVu Sans Mono',monospace;overflow-wrap:anywhere}pre{background:#0e2239;color:#e5f1fa;border-radius:12px;padding:18px 20px;overflow-x:auto;white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.65 Consolas,'DejaVu Sans Mono',monospace;border:1px solid #1e3f5f}pre code{background:transparent;color:inherit}.main-section ol li,.main-section ul.plain li{margin-bottom:10px}.steps{padding-left:24px}.step-title{display:flex;gap:10px;align-items:center;margin-top:25px}.step-title h3{margin:0}.stepnum{width:32px;height:32px;display:inline-grid;place-items:center;background:#0b8c80;color:white;border-radius:10px;font-weight:800}.mini-flow,.flow-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:17px 0}.mini-flow span{background:#e9f4f4;padding:9px 12px;border-radius:8px;color:#1b5d5a;font-size:12px;font-weight:750}.mini-flow b,.flow-row .arrow{color:#8192a3}.mini-flow small{display:block;font-weight:500}.route-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:19px 0}.route{background:#f7fafc;border:1px solid #e0eaf1;padding:17px;border-radius:12px;display:flex;flex-direction:column;gap:7px}.route b{font-size:10px;letter-spacing:.08em;color:#668399}.route strong{font-size:20px;letter-spacing:-.02em;color:#193857}.route span{font-size:12px;color:#6b7c8b}.route.featured{background:#e7f5f1;border-color:#c7eae0}.route.featured strong{color:#078374}.numbered-steps{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.numbered-steps>div{background:#f8fafc;border:1px solid #e5ebf0;padding:17px;border-radius:10px}.numbered-steps i{display:block;font-style:normal;color:#0c8378;font-size:21px;font-weight:800}.numbered-steps strong{display:block}.numbered-steps p{font-size:12px;color:#677689;margin:5px 0}.lede{font-size:16px;color:#43566e;line-height:1.65}.box{min-width:120px;border-radius:10px;padding:14px 12px;color:white;font-weight:750;text-align:center;background:#112b4a;font-size:12px}.box.outline{background:#f0f7fa;border:1px solid #b9d3dd;color:#1a4b61}.box.teal{background:#087f77}.box.navy{background:#183e60}.box.gray{background:#697d91}.box small{display:block;font-size:10px;font-weight:500;opacity:.9}.two-col{display:grid;grid-template-columns:1fr 1fr;gap:12px}.check-list{list-style:none;padding:0}.check-list li{padding:5px 0 6px 29px;position:relative}.check-list li:before{content:'✓';position:absolute;left:0;color:#138364;font-weight:900}.pill-badge{font-size:10px;padding:5px 9px;background:#dcefe9;border-radius:8px;color:#0a846e}.pill-badge.before{background:#ffdfdf;color:#a7373d}.pill-badge.after{background:#c9f0df;color:#138364}.text-success{color:#138364}.page-footer{text-align:center;font-size:12px;color:#8491a1;padding:22px 0 38px}.main-section:has(.search-hidden){display:none}.main-section.search-hidden{display:none}
+/* architecture source cover and TOC integrated into sidebar-oriented web document */
+.cover{background:linear-gradient(115deg,#0b1c34,#174c69);color:white;padding:43px 43px 38px;border-bottom:5px solid #18aa93;min-height:0;height:auto;margin:0}.cover h1{color:white;font-size:clamp(29px,3.7vw,41px);margin:0 0 12px;line-height:1.16;letter-spacing:-.03em}.cover .subtitle{color:#cfe0ec;font-size:17px;max-width:900px}.cover .meta{border-top:1px solid #50718a;color:#d6e5ec;font-size:12px;margin-top:22px;padding-top:14px;line-height:1.7}.cover code{color:#c4fae7;background:#214661}.toc{display:none}.architecture-wrap{margin:0;padding:0}.doc-layout.arch-layout{max-width:1360px}.main-section .diagram{margin:15px 0}
+@media(max-width:980px){.doc-layout{grid-template-columns:1fr;padding:20px 14px}.doc-sidebar{position:static;max-height:none}.doc-sidebar nav{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.main-section{padding:21px 17px}.kpi-grid{grid-template-columns:1fr 1fr}.doc-toolbar input[type=search]{width:100%}.doc-main{max-width:none}}@media(max-width:560px){header.top .wrap{padding:0 22px}.kpi-grid,.route-grid,.numbered-steps,.two-col{grid-template-columns:1fr}.doc-sidebar nav{grid-template-columns:1fr}.overview{padding:20px}.doc-toolbar{align-items:stretch}.doc-toolbar input[type=search]{width:100%}.mini-flow,.flow-row{gap:6px}.box{min-width:95px}table.clean{font-size:12px}}
+@media print{@page{size:A4;margin:15mm}html,body{background:#fff!important;color:#111!important;font-size:10.5pt}header.top,.cover{background:#18324c!important;color:white!important;print-color-adjust:exact;-webkit-print-color-adjust:exact;padding:20mm 14mm}.doc-layout{display:block;padding:0}.doc-sidebar,.doc-toolbar{display:none!important}.doc-main,.doc-main .wrap{max-width:none}.main-section{border:0;box-shadow:none;padding:18px 0;margin:0;border-radius:0;break-inside:auto}.main-section+.main-section{break-before:page}.main-section table,.main-section .callout,.main-section pre,.overview{break-inside:avoid}.overview{border:0;padding:15px 0}.kpi-grid{grid-template-columns:repeat(3,1fr)}.page-footer{display:none}table.clean th{background:#203c56!important;color:white!important;print-color-adjust:exact;-webkit-print-color-adjust:exact}a{color:#16374c}}
+
+/* Estructura documental mejorada */
+.doc-crosslinks{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin:18px 0}.doc-crosslinks a{display:block;padding:17px;background:#f2f9f8;border:1px solid #c8e4df;border-radius:12px;font-weight:650;color:var(--navy)}
+.arch-diagram{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:20px 0}.arch-diagram .arch-node{background:#fff;border:1px solid var(--line);border-top:4px solid var(--teal);padding:16px;border-radius:12px;box-shadow:0 5px 20px #1b34570c}.arch-node strong{display:block;font-size:17px;color:var(--navy)}.arch-node small{display:block;font-size:13px;margin-top:6px;color:var(--gray-mid)}
+.phase-strip{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin:20px 0}.phase-strip div{border:1px solid #dbe5ef;border-radius:11px;padding:12px 9px;background:#f5f9fc}.phase-strip span{color:var(--teal);font-weight:800;font-size:11px}.phase-strip strong{display:block;font-size:13px;color:var(--navy);margin:3px 0}.phase-strip small{font-size:11px;color:#53657b}
+.pill{font-size:11px;padding:4px 9px;display:inline-block;font-weight:750;border-radius:20px;background:#ecf4fc;color:#264f79}.pill.done{background:#e2f8ed;color:#08754c}.pill.pending{background:#fff2df;color:#936111}.pill.control{background:#edf1f9;color:#314e78}
+.finding{margin:12px 0;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:white}.finding summary{cursor:pointer;padding:17px 18px;color:var(--navy);font-weight:750;background:#f6f9fc}.finding[open] summary{border-bottom:1px solid var(--line)}.finding .finding-body{padding:16px 20px}.finding-body p:first-of-type{margin-top:0}.finding-body .callout{margin-top:4px}
+.evidence-field{min-width:180px;max-width:280px;width:100%;padding:8px;border-radius:7px;border:1px solid #ccd9e5;font:inherit;font-size:13px}
+.result-check{height:20px;width:20px;accent-color:#0b9561;vertical-align:middle}.test-matrix td{vertical-align:middle}.test-matrix tr.passed td{background:#eaf9f0!important}.test-matrix tr.pending td{background:#fff!important}
+.small-note{font-size:13px;color:var(--gray-mid)}.source-note{font-size:12px;color:var(--gray-mid);border-top:1px solid var(--line);padding-top:9px;margin-top:10px}
+@media(max-width:900px){.phase-strip{grid-template-columns:repeat(2,minmax(0,1fr))}.arch-diagram{grid-template-columns:1fr}}@media print{.finding:not([open]) .finding-body{display:block!important}.finding summary{background:#fff!important}.evidence-field{border:none}.arch-diagram,.phase-strip{break-inside:avoid}}
+</style><meta content="width=device-width, initial-scale=1" name="viewport"/></head>
+<body class="sles-doc doc-awx_setup">
+<header class="top">
+<div class="wrap">
+<div class="kicker">ansible-sles-upgrade · evidencias y seguimiento</div>
+<h1>Informe técnico de validación y pruebas</h1>
+<div class="subtitle">Historial de pruebas sobre plantilla y QA, incidentes encontrados, análisis, correcciones y actividades de cierre de la automatización SLES 15.</div>
+</div>
+</header>
+<div class="doc-layout"><aside class="doc-sidebar"><span class="sidebar-eyebrow">CONTENIDOS</span><nav><a href="#s0">01  Resumen ejecutivo de validaciones</a><a href="#s1">02  Matriz de pruebas y seguimiento</a><a href="#s2">03  Preparación y condiciones de laboratorio</a><a href="#s3">04  Parámetros y configuraciones verificables</a><a href="#s4">05  Hallazgos, causa y acciones correctivas</a><a href="#s5">06  Notas de ejecución y diagnóstico de AWX</a><a href="#s6">07  Comprobaciones y riesgos pendientes</a><a href="#s7">08  Criterios de aceptación y cierre</a></nav><div class="sidebar-progress"><small>AVANCE DE ESCENARIOS</small><strong id="count-done">0 / 0</strong><div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div><small>1 de 8 escenarios iniciales confirmado; las demás marcas quedan solo en este navegador.</small></div><div class="sidebar-progress"><small>DOCUMENTACIÓN DEL PROYECTO</small><a href="ARQUITECTURA_Y_DISENO_TECNICO.html">Arquitectura y diseño técnico</a><a href="AWX_SETUP.html">Configuración AWX</a><a href="INFORME_VALIDACION_Y_PRUEBAS.html">Informe de validación y pruebas</a><small>Estos documentos forman un mismo conjunto.</small></div></aside><div class="doc-main"><div class="doc-toolbar"><input aria-label="Buscar secciones" id="doc-search" placeholder="Buscar dentro del documento…" type="search"/><div class="toolbar-buttons"><button class="action-btn" onclick="window.print()" type="button">Imprimir / PDF</button> <button class="action-btn" id="reset-checks" type="button">Restablecer marcas</button></div></div><div class="overview"><h2>Resultados y trazabilidad del proyecto</h2><p><p>Separación explícita entre resultados confirmados, hallazgos técnicos documentados y pruebas todavía pendientes. La matriz permite registrar el avance sin alterar la arquitectura.</p></p><div class="kpi-grid"><div class="kpi"><strong>1 completada</strong><small>SP5→SP6 en plantilla SP5</small></div><div class="kpi"><strong>6 pendientes</strong><small>2 ensayos de plantilla + 4 de QA</small></div><div class="kpi"><strong>GeoPOS</strong><small>Validación funcional pendiente</small></div></div></div><div class="wrap"><section class="main-section" id="s0"><div class="section-head"><div class="section-num">01</div><h2>Resumen ejecutivo de validaciones</h2></div>
+<p class="lede">Este documento recopila la experiencia de laboratorio y el plan de QA: <strong>pruebas realizadas, resultados, incidentes observados, decisiones aplicadas y condiciones todavía pendientes</strong>. Es el historial de evidencias del proyecto; no reemplaza la definición funcional de Arquitectura ni las instrucciones de AWX.</p>
+<div class="kpi-grid"><div class="kpi"><strong>1 finalizada</strong><small>SP5→SP6 en plantilla SLES 15 SP5</small></div><div class="kpi"><strong>2 pendientes</strong><small>SP6→SP7 y FULL en plantilla</small></div><div class="kpi"><strong>QA pendiente</strong><small>4 rutas más validación de GeoPOS</small></div></div>
+<div class="callout risk"><span class="label">Interpretación de los resultados</span>La prueba exitosa sobre plantilla <strong>no equivale</strong> a una aprobación de GeoPOS ni a una validación del entorno QA o de producción. Marcar una prueba requiere evidencia de la ejecución y verificación posterior.</div>
+<p>Los incidentes históricos que anteriormente aparecían dispersos en Arquitectura se consolidan más adelante como fichas consultables, manteniendo las observaciones originales cuando tienen valor diagnóstico.</p>
+</section><section class="main-section" id="s1"><div class="section-head"><div class="section-num">02</div><h2>Matriz de pruebas y seguimiento</h2></div>
+<p>Las casillas pendientes se pueden marcar directamente en el navegador cuando exista evidencia. Su estado y el campo de referencia se guardan <strong>localmente en ese navegador</strong> (no en SharePoint ni en AWX), por lo que son un apoyo de seguimiento y no sustituyen los reportes de ejecución.</p>
+<h3>Bloque A · Plantilla de SLES 15</h3>
+<table class="clean test-matrix"><thead><tr><th>✓</th><th>Escenario</th><th>Estado inicial</th><th>Referencia de evidencia</th></tr></thead><tbody>
+<tr class="passed"><td><input aria-label="Prueba finalizada" checked="" class="result-check" disabled="" type="checkbox"/></td><td><strong>SP5 → SP6</strong><br/><span class="small-note">Plantilla SUSE Linux Enterprise 15 SP5</span></td><td><span class="pill done">COMPLETADA</span></td><td>Prueba de laboratorio completada; vincular el Job/reporte real</td></tr><tr class="pending"><td><input aria-label="Marcar prueba SP6 → SP7" class="result-check" id="test-template-67" type="checkbox"/></td><td><strong>SP6 → SP7</strong><br/><span class="small-note">Misma plantilla luego de completar SP5→SP6</span></td><td><span class="pill pending">PENDIENTE</span></td><td><input aria-label="Evidencia SP6 → SP7" class="evidence-field" data-proof="1" id="proof-test-template-67" placeholder="Job AWX / informe / fecha" type="text"/></td></tr><tr class="pending"><td><input aria-label="Marcar prueba FULL: SP5 → SP6 → SP7" class="result-check" id="test-template-full" type="checkbox"/></td><td><strong>FULL: SP5 → SP6 → SP7</strong><br/><span class="small-note">Reiniciar desde plantilla base SP5; dos transiciones secuenciales</span></td><td><span class="pill pending">PENDIENTE</span></td><td><input aria-label="Evidencia FULL: SP5 → SP6 → SP7" class="evidence-field" data-proof="1" id="proof-test-template-full" placeholder="Job AWX / informe / fecha" type="text"/></td></tr></tbody></table>
+<h3>Bloque B · Ambiente real QA</h3>
+<table class="clean test-matrix"><thead><tr><th>✓</th><th>Escenario</th><th>Estado inicial</th><th>Referencia de evidencia</th></tr></thead><tbody>
+<tr class="pending"><td><input aria-label="Marcar prueba SP4 → SP5" class="result-check" id="test-qa-45" type="checkbox"/></td><td><strong>SP4 → SP5</strong><br/><span class="small-note">Servidor QA que parta de SP4</span></td><td><span class="pill pending">PENDIENTE</span></td><td><input aria-label="Evidencia SP4 → SP5" class="evidence-field" data-proof="1" id="proof-test-qa-45" placeholder="Job AWX / informe / fecha" type="text"/></td></tr><tr class="pending"><td><input aria-label="Marcar prueba SP5 → SP6" class="result-check" id="test-qa-56" type="checkbox"/></td><td><strong>SP5 → SP6</strong><br/><span class="small-note">Servidor QA que parta de SP5</span></td><td><span class="pill pending">PENDIENTE</span></td><td><input aria-label="Evidencia SP5 → SP6" class="evidence-field" data-proof="1" id="proof-test-qa-56" placeholder="Job AWX / informe / fecha" type="text"/></td></tr><tr class="pending"><td><input aria-label="Marcar prueba SP6 → SP7" class="result-check" id="test-qa-67" type="checkbox"/></td><td><strong>SP6 → SP7</strong><br/><span class="small-note">Servidor QA que parta de SP6</span></td><td><span class="pill pending">PENDIENTE</span></td><td><input aria-label="Evidencia SP6 → SP7" class="evidence-field" data-proof="1" id="proof-test-qa-67" placeholder="Job AWX / informe / fecha" type="text"/></td></tr><tr class="pending"><td><input aria-label="Marcar prueba FULL: SP5 → SP6 → SP7" class="result-check" id="test-qa-full" type="checkbox"/></td><td><strong>FULL: SP5 → SP6 → SP7</strong><br/><span class="small-note">QA con confirmación de la etapa SP6 antes de SP7</span></td><td><span class="pill pending">PENDIENTE</span></td><td><input aria-label="Evidencia FULL: SP5 → SP6 → SP7" class="evidence-field" data-proof="1" id="proof-test-qa-full" placeholder="Job AWX / informe / fecha" type="text"/></td></tr></tbody></table>
+<h3>Bloque C · Verificación funcional</h3>
+<table class="clean test-matrix"><thead><tr><th>✓</th><th>Actividad</th><th>Alcance</th><th>Referencia de evidencia</th></tr></thead><tbody>
+<tr class="pending"><td><input aria-label="Marcar prueba Incorporar y validar GeoPOS" class="result-check" id="test-geopos" type="checkbox"/></td><td><strong>Incorporar y validar GeoPOS</strong><br/><span class="small-note">Servicios, procesos Java, puertos y health checks definidos por servidor</span></td><td><span class="pill pending">PENDIENTE</span></td><td><input aria-label="Evidencia Incorporar y validar GeoPOS" class="evidence-field" data-proof="1" id="proof-test-geopos" placeholder="Job AWX / informe / fecha" type="text"/></td></tr></tbody></table>
+<div class="callout decision"><span class="label">Criterio de aprobación</span>Registrar el Job de AWX o informe HTML, SP detectado antes y después, confirmación del reinicio y controles funcionales que se hayan ejecutado. Una marca en esta página es una ayuda visual, no una prueba independiente de éxito.</div>
+</section><section class="main-section" id="s2"><div class="section-head"><div class="section-num">03</div><h2>Preparación y condiciones de laboratorio</h2></div><p>Estos son los controles operativos que deben verificarse antes de una prueba real. No confundir un requisito documentado con una validación ya realizada.</p>
+<ul class="checklist">
+<li><input id="c0-1" type="checkbox"/><label for="c0-1">Confirmar explícitamente con el responsable del ambiente <strong>qué host(s) de laboratorio</strong> están autorizados para esta prueba (nunca asumir "cualquier host disponible").</label></li>
+<li><input id="c0-2" type="checkbox"/><label for="c0-2">Confirmar que el/los host(s) de laboratorio <strong>no son productivos</strong> o, si lo son, que existe autorización explícita y ventana de cambio.</label></li>
+<li><input id="c0-3" type="checkbox"/><label for="c0-3">Confirmar que existe un mecanismo de recuperación real antes de aplicar un cambio real (ver Arquitectura, «Controles preventivos y límites operativos»).</label></li>
+<li><input id="c0-4" type="checkbox"/><label for="c0-4">Verificar primero las condiciones iniciales en <strong>PRECHECK</strong>. Preparar los repositorios en el Workflow y revisar el resultado antes de autorizar <strong>APLICAR</strong>; esta etapa incluye una simulación obligatoria (<code>zypper dup -D</code>) antes del cambio real.</label></li>
+</ul>
+<ul class="checklist">
+<li><input id="c1-1" type="checkbox"/><label for="c1-1">Conectividad SSH desde el nodo de control (o Execution Environment de AWX) hacia el/los host(s) de laboratorio.</label></li>
+<li><input id="c1-2" type="checkbox"/><label for="c1-2">Usuario y método de <code>become</code> con privilegios suficientes para: <code>zypper</code>, lectura/escritura en <code>/etc/zypp/repos.d</code>, <code>systemctl</code>, reinicio del host.</label></li>
+<li><input id="c1-3" type="checkbox"/><label for="c1-3">El host de laboratorio puede alcanzar por red los repositorios Foreman/Katello reales (HTTP/HTTPS) — no solo que Foreman esté "up", sino que <strong>ese host concreto</strong> tenga la ruta de red habilitada.</label></li>
+<li><input id="c1-4" type="checkbox"/><label for="c1-4"><strong>GPG:</strong> ya resuelto, no requiere ninguna acción — pero es una decisión explícita que conviene conocer antes de ejecutar. Confirmado con evidencia real el 2026-10-06 que este Foreman tenía <strong>0 Content Credentials</strong> (ninguna GPG key asociada a ningún Product/Repository), por lo que Zypper rechazaba toda la metadata como no firmada (<code>rc=4</code>). Decisión explícita del usuario para este ambiente: se omite la verificación de firma GPG (<code>zypper addrepo --no-gpgcheck</code>, por repositorio, nunca el flag global) para los repos Foreman que esta automatización agrega — ver README sección 5 y <code>CLAUDE.md</code>. Esto <strong>no</strong> afecta la verificación TLS/CA, que sigue siendo real y obligatoria.</label></li>
+<li><input id="c1-7" type="checkbox"/><label for="c1-7">El host de laboratorio soporta el mecanismo estándar de confianza de SLES (<code>/etc/pki/trust/anchors/</code> + <code>update-ca-certificates</code>) — verificación rápida: <code>which update-ca-certificates</code>.</label></li>
+</ul>
+<div class="callout note">
+<span class="label">Automatizado — nada que instalar a mano</span>
+    La CA interna real ("CAColdecom", válida hasta 2027-12-20) está versionada en
+    <code>playbooks/roles/repo_management/files/coldecom-ca.crt</code> y se instala
+    <strong>automáticamente</strong> en <code>/etc/pki/trust/anchors/coldecom-ca.crt</code>
+    de cada host (vía <code>playbooks/roles/repo_management/tasks/ensure_ca_trusted.yml</code>),
+    justo antes de que se agregue o use cualquier repo Foreman real — tanto en
+    <code>la verificación previa</code> como en los modos reales de <code>UPGRADE</code>. Operación
+    idempotente, no afecta servicios. Si <code>update-ca-certificates</code> no existe
+    en el host, esa tarea fallará explícitamente en ese punto.
+  </div>
+<ul class="checklist">
+<li><input id="c1-5" type="checkbox"/><label for="c1-5">Si la raíz es Btrfs: confirmar que hay snapshots habilitados (<code>snapper list</code>) — cuando está disponible, es una opción de recuperación documentada; consultar Arquitectura para sus límites.</label></li>
+<li><input id="c1-6" type="checkbox"/><label for="c1-6">Si la raíz es Btrfs: espacio libre disponible ≥ espacio actualmente usado (chequeo ya automatizado por <code>precheck_btrfs_double_space_check</code>, pero conviene confirmarlo manualmente antes de la primera corrida).</label></li>
+</ul>
+</section><section class="main-section" id="s3"><div class="section-head"><div class="section-num">04</div><h2>Parámetros y configuraciones verificables</h2></div><p>Concentrado de variables necesarias, ajustes implementados en el entorno y elementos cuya parametrización real sigue pendiente. Las rutas y valores aquí indicados proceden de los documentos técnicos existentes.</p>
+<p>Todo vive en <strong><code>playbooks/group_vars/all.yml</code></strong> (valores comunes) y,
+  cuando un host necesite diferir, en un archivo nuevo
+  <strong><code>playbooks/host_vars/&lt;inventory_hostname_real&gt;.yml</code></strong> (copiar la
+  plantilla <code>playbooks/host_vars/CHANGE_ME_HOSTNAME_1.yml.example</code>). Nunca
+  dupliques el mismo valor en ambos: solo declara en <code>host_vars</code> lo que
+  realmente difiere del <code>group_vars</code>.</p>
+<h3>2.1 Foreman/Katello — obligatorio para cualquier modo que no sea <code>precheck</code></h3>
+<table class="clean">
+<tr><th>Variable</th><th>Archivo</th><th>Estado</th></tr>
+<tr><td><code>katello.base_url</code></td><td><code>group_vars/all.yml</code></td><td><span class="ok-tag">✓ completado</span> (<code>ansibleforeman.coldecom.com</code>)</td></tr>
+<tr><td><code>katello.ca_certificate_path</code></td><td><code>group_vars/all.yml</code></td><td><span class="ok-tag">✓ completado</span> (<code>/etc/pki/trust/anchors/coldecom-ca.crt</code>; instalación automática, no requiere acción manual)</td></tr>
+<tr><td><code>katello.sp4_repositories</code></td><td><code>group_vars/all.yml</code></td><td><span class="ok-tag">✓ completado y verificado</span> (10 repos, sincronizados)</td></tr>
+<tr><td><code>katello.sp5_repositories</code></td><td><code>group_vars/all.yml</code></td><td><span class="ok-tag">✓ completado y verificado</span></td></tr>
+<tr><td><code>katello.sp6_repositories</code></td><td><code>group_vars/all.yml</code></td><td><span class="ok-tag">✓ completado y verificado</span></td></tr>
+<tr><td><code>katello.sp7_repositories</code></td><td><code>group_vars/all.yml</code></td><td><span class="ok-tag">✓ completado y verificado</span></td></tr>
+</table>
+<div class="callout note">
+<span class="label">Nota</span>
+    Cada lista trae 10 repos (SUSE Linux Enterprise Server, Basesystem Module,
+    Server Applications Module, Desktop Applications Module y Python 3 Module,
+    Pool + Updates cada uno), verificados por API contra Foreman/Katello
+    (solo lectura) el 2026-10-01, todos sincronizados sin errores. Si en algún
+    momento alguna de estas listas quedara vacía, el proyecto se detiene
+    explícitamente en PRECHECK (<code>repos_foreman_configurados_origen</code>/
+    <code>_destino</code>) antes de tocar nada — es el comportamiento esperado,
+    no un error.
+  </div>
+<h3>2.2 GeoPOS — recomendado completar antes de la primera corrida real</h3>
+<table class="clean">
+<tr><th>Variable</th><th>Qué conseguir</th></tr>
+<tr><td><code>geopos_validation.services.items[].name</code></td><td>Nombre(s) real(es) de unidad systemd de GeoPOS</td></tr>
+<tr><td><code>geopos_validation.java_processes.items[].match</code></td><td>Patrón específico del proceso Java de GeoPOS (nunca solo <code>"java"</code>)</td></tr>
+<tr><td><code>geopos_validation.tcp_ports.items[].port</code></td><td>Puerto(s) TCP real(es) que expone GeoPOS</td></tr>
+<tr><td><code>geopos_validation.health_checks.items[].url</code></td><td>URL(s) de health check HTTP/HTTPS, si existen (puede quedar deshabilitado si no hay)</td></tr>
+<tr><td><code>critical: true/false</code> por ítem</td><td>Confirmar con el dueño de la aplicación cuáles son realmente críticos (bloquean el precheck si fallan)</td></tr>
+</table>
+<div class="callout risk"><span class="label">Control funcional antes de producción</span> Si los servicios, procesos, puertos o URLs de GeoPOS no se parametrizan, sus comprobaciones quedarán como <code>NOT_CHECKED</code>, no como aprobadas. Para ejecutar en QA y posteriormente en producción, definir los valores reales con el equipo aplicativo.</div>
+<h3>2.3 Sistema</h3>
+<table class="clean">
+<tr><th>Variable</th><th>Qué conseguir</th></tr>
+<tr><td><code>critical_services</code></td><td>Lista real de servicios systemd base que deben seguir activos (vacía por defecto deliberadamente — no usar <code>sshd</code>/<code>chronyd</code> como ejemplo copiado literal)</td></tr>
+<tr><td><code>precheck_disk_checks[].min_free_mb</code></td><td>Umbral real de espacio libre por filesystem relevante (<code>/</code>, <code>/var</code>, etc.) — no hay valor universal inventado</td></tr>
+</table>
+<h3>2.4 Reportes</h3>
+<table class="clean">
+<tr><th>Variable</th><th>Estado</th></tr>
+<tr><td><code>report_destination</code></td><td><span class="ok-tag">✓ completado</span> (<code>/data/work/Salida_Upgrade</code>) — ver verificación pendiente abajo</td></tr>
+<tr><td><code>report_local_dir</code></td><td>Valor por defecto (<code>{{ playbook_dir }}/../reports</code>), sin cambios necesarios</td></tr>
+</table>
+<div class="callout risk">
+<span class="label">A confirmar en el AWX real (no verificable desde el desarrollo)</span>
+    1) Que <code>/data/work/Salida_Upgrade</code> exista con permisos de escritura
+    para el usuario del Job en el Execution Environment. 2) Que sea
+    <strong>realmente persistente</strong>: si ese Execution Environment es un
+    contenedor que se destruye al terminar el Job, esta ruta debe estar montada
+    desde fuera de él — si es solo una carpeta dentro del contenedor efímero, no
+    cumple su propósito. Confirmar revisando el bloque "Persistencia del reporte"
+    del primer reporte HTML real generado.
+  </div>
+<h3>2.5 AWX (si se ejecuta desde AWX)</h3>
+<table class="clean">
+<tr><th>Objeto</th><th>Estado</th></tr>
+<tr><td>Project</td><td><span class="ok-tag">✓ creado y probado</span> en AWX de pruebas (<code>awxtest.coldecom.com</code>)</td></tr>
+<tr><td>Inventory</td><td><span class="ok-tag">✓ creado y probado</span> — dinámico, vía plugin <code>excel_inventory</code> contra SharePoint</td></tr>
+<tr><td>Credential (SSH + <code>become</code>)</td><td><span class="ok-tag">✓ creada y probada</span></td></tr>
+<tr><td>Workflow Job Template (por defecto)</td><td><span class="ok-tag">✓ creado y probado end-to-end</span> — 5 Job Templates encadenados (Precheck → Preparar repos → Aplicar → Reporting → Sincronizar SharePoint); ver <code>docs/AWX_SETUP.html</code> sección 7. Ciclo completo Precheck→Preparar→Aplicar confirmado exitoso en laboratorio (SP5→SP6 real, incluido <code>dup</code>, reinicio y validación GeoPOS post-migración)</td></tr>
+<tr><td>Survey</td><td><span class="ok-tag">✓ creado y probado</span>: <code>upgrade_mode</code>, <code>confirm_production_upgrade</code>, <code>upgrade_crq</code>/<code>upgrade_lote</code>/<code>upgrade_ambiente</code> (ver README §13)</td></tr>
+<tr><td>Selección de host (CRQ/Lote/Ambiente)</td><td><span class="ok-tag">✓ probado</span> — coincide exactamente contra el inventario dinámico; ya no se usa <code>Limit</code></td></tr>
+<tr><td>Sincronización a SharePoint (Nodo 5)</td><td>Pendiente de confirmar que el App Registration de Azure AD tenga permiso de <strong>escritura</strong> (Sites.ReadWrite.All), no solo lectura — ver README sección 11.2</td></tr>
+</table>
+<div class="callout note">
+<span class="label">Si el AWX de producción es una instancia distinta de <code>awxtest.coldecom.com</code></span>
+    Todo lo anterior está confirmado en el AWX de <strong>pruebas</strong>. Si el AWX
+    de producción es una instancia separada, estos mismos objetos deben
+    recrearse ahí siguiendo <code>docs/AWX_SETUP.html</code> — no se puede asumir
+    que ya existen solo porque se probaron en el de pruebas.
+  </div>
+<h3>2.6 Parámetros técnicos con default razonable pero no medido</h3>
+<table class="clean">
+<tr><th>Variable</th><th>Default actual</th><th>Qué confirmar en laboratorio</th></tr>
+<tr><td><code>sp_migration_reboot_timeout</code></td><td>1800s</td><td><span class="ok-tag">Parcialmente confirmado</span> — el <code>dup</code> real y la validación post-reinicio se completaron exitosamente en laboratorio (SP5→SP6). También se confirmó un riesgo real distinto: el arranque puede colgarse <strong>indefinidamente</strong> por un servicio roto (ver sección 2.7, <code>postfix</code>) — ya mitigado para ese caso específico, pero conviene seguir atento a otros posibles colgados.</td></tr>
+<tr><td><code>sp_migration_reboot_connect_timeout</code></td><td>30s</td><td>Tiempo real de disponibilidad de SSH tras un arranque normal (sin colgarse) — pendiente de medir con precisión</td></tr>
+<tr><td><code>sp_migration_updatestack_retries</code> / <code>_delay</code></td><td>5 / 5s <span class="muted">(subido de 3/2s: confirmado con evidencia real en laboratorio el 2026-10-06, job AWX #9224, que 3 intentos/2s NO fueron suficientes ante el lock de PackageKit — ver sección 2.7)</span></td><td><span class="ok-tag">✓ confirmado suficiente</span> en corridas posteriores</td></tr>
+<tr><td><code>precheck_repo_reachability_timeout</code></td><td>30s <span class="muted">(subido de 10s: confirmado con evidencia real en laboratorio el 2026-10-06 que 10s era insuficiente para algunos de los 20 repos)</span></td><td><span class="ok-tag">✓ confirmado suficiente</span> en corridas posteriores</td></tr>
+<tr><td><code>precheck_repo_reachability_retries</code> / <code>_retry_delay</code></td><td>2 / 5s <span class="muted">(agregado el 2026-10-06: con evidencia real de que un repo individual puede seguir dando timeout incluso con 30s, de forma intermitente, y responder bien al reintentar)</span></td><td><span class="ok-tag">✓ confirmado suficiente</span> en corridas posteriores</td></tr>
+<tr><td><code>repo_management_backup_base_dir</code></td><td><code>/var/backup/ansible-sles-upgrade</code></td><td>Que exista espacio y permisos ahí en el host real</td></tr>
+<tr><td><code>zypper_lock_retries</code> / <code>_delay</code> <span class="muted">(renombrada: antes <code>repo_management_zypper_lock_retries</code>, movida a <code>group_vars/all.yml</code> porque <code>sp_migration</code> también la necesita — ver sección 2.7)</span></td><td>5 / 5s <span class="muted">(confirmado tras evidencia real en laboratorio el 2026-10-06/07: <code>addrepo</code>, el gate <code>dup -D</code> y el <code>dup</code> real fallaron más de una vez con <code>rc=7</code>/<code>ZYPP_LOCKED</code> por PackageKit)</span></td><td><span class="ok-tag">✓ confirmado suficiente</span> en combinación con la mitigación de agentes de seguridad (sección 2.7) — sin esa mitigación, puede no ser suficiente por sí solo</td></tr>
+</table>
+<h3>2.7 Mitigaciones agregadas por evidencia real en laboratorio (2026-10-06/07/08)</h3>
+<p>Estos NO eran parte del diseño original — se agregaron porque las pruebas reales en
+  <code>sles15-sp5-sp7</code> (<code>10.181.8.36</code>) revelaron problemas concretos. Ya están
+  implementados y confirmados; se listan aquí para que quien opere el proyecto entienda
+  <strong>por qué</strong> existen estos mecanismos.</p>
+<table class="clean">
+<tr><th>Problema real encontrado</th><th>Mitigación implementada</th></tr>
+<tr><td>Lock intermitente de PackageKit (<code>rc=7</code>) causado por dos agentes de seguridad corporativos (<strong>Trend Micro Deep Security Agent</strong> / <code>ds_agent</code>, <strong>Nessus Agent</strong> / <code>nessusagent</code>) escaneando el host — confirmado que ni siquiera <code>root</code> puede matar los procesos huérfanos de <code>ds_agent</code> (auto-protección del agente)</td><td>Precheck los detiene (lo que sí se puede detener) <strong>una sola vez</strong> y espera a que <code>packagekitd</code> se libere; Preparar/Aplicar solo verifican/esperan (nunca vuelven a detener nada); al terminar la migración real se asegura que vuelvan a estar activos. Ver README sección 8.4, <code>zypper_lock_competing_services</code>.</td></tr>
+<tr><td><code>postfix.service</code> puede colgar <strong>indefinidamente</strong> el arranque tras un upgrade de Service Pack (<code>inet_interfaces = localhost</code> intentando resolver IPv6 en un host sin IPv6)</td><td>Se deshabilita <strong>permanentemente</strong> (<code>systemctl disable</code> + <code>stop</code>, nunca se reinicia después) justo antes de cualquier reinicio obligatorio. Decisión explícita del usuario aplicable a todos los hosts — confirmado que ningún servidor GeoPOS depende de <code>postfix</code>. Ver README sección 8.5, <code>reboot_disable_services</code>.</td></tr>
+<tr><td>Bug real: cuando el host queda <code>UNREACHABLE</code> (no solo <code>FAILED</code>) tras un reinicio colgado, Ansible salta <strong>todo</strong> lo que queda de la etapa — incluida la generación del reporte — sin que ningún <code>rescue</code> lo atrape</td><td>Se calcula <code>_host_presumiblemente_inalcanzable</code> (dup aplicado pero reinicio nunca completó) y, a partir de ahí, ningún paso vuelve a intentar conectarse al host; el reporte se genera siempre, con lo que sí se alcanzó a capturar. Ver <code>playbooks/tasks/run_stage.yml</code>.</td></tr>
+<tr><td>0 Content Credentials (GPG keys) en este Foreman — Zypper rechazaba toda la metadata como no firmada</td><td>Se omite la verificación de firma GPG por repositorio (<code>--no-gpgcheck</code>), decisión explícita del usuario — ver sección 1 arriba (c1-4).</td></tr>
+<tr><td>Un <code>upgrade_mode</code> mal elegido en el Survey (ej. <code>sp4_to_sp5</code> en un host que ya está en SP5, o <code>sp6_to_sp7</code> saltando SP6) no se detectaba hasta la etapa real</td><td>Nuevo check en Precheck, <code>upgrade_mode_coincide_con_sp_real</code>: bloquea (<code>FAILED</code>) de inmediato si no coincide (excepto <code>full</code>, que autodetecta). Ver README sección 8.1.</td></tr>
+</table>
+</section><section class="main-section" id="s4"><div class="section-head"><div class="section-num">05</div><h2>Hallazgos, causa y acciones correctivas</h2></div><p class="lede">Las fichas siguientes trasladan los incidentes históricos desde Arquitectura. Cada una distingue el <strong>problema observado</strong> de la <strong>solución o decisión adoptada</strong>. Expande «registro técnico original» para consultar detalles diagnósticos.</p><div class="callout note"><span class="label">INCIDENTE 01 · Control aplicado</span><h3>Certificado interno y confianza TLS</h3><p><strong>Hallazgo:</strong> Las comprobaciones HTTPS podían fallar cuando SLES no confiaba en la CA interna de Foreman/Katello.</p><p><strong>Tratamiento documentado:</strong> La automatización utiliza <code>ensure_ca_trusted.yml</code> para instalar la CA de forma idempotente si falta. Esto mantiene la verificación TLS activa.</p></div><div class="callout note"><span class="label">INCIDENTE 02 · Mitigación implementada; dependencia con Seguridad</span><h3>Bloqueos de Zypper por PackageKit y agentes</h3><p><strong>Hallazgo:</strong> Los agentes Trend Micro Deep Security y Nessus podían competir por el bloqueo de paquetes durante los escaneos.</p><p><strong>Tratamiento documentado:</strong> Se incorporaron pausas configuradas y espera a que PackageKit libere el gestor de paquetes. La autoprotección de ciertos procesos del agente impide asegurar su detención completa desde el host; requiere coordinación con Seguridad.</p><details class="finding"><summary>Consultar registro técnico original y antecedentes</summary><div class="finding-body"><div class="callout risk">
+<span class="label">Segunda excepción documentada: pausar agentes de seguridad corporativos</span>
+    Confirmado con evidencia real en laboratorio (SSH de solo lectura,
+    2026-10-06/07): <strong>Trend Micro Deep Security Agent</strong>
+    (<code>ds_agent.service</code>) y <strong>Nessus Agent</strong>
+    (<code>nessusagent.service</code>) toman intermitentemente el lock de
+    libzypp vía PackageKit (D-Bus) durante sus escaneos rutinarios de
+    vulnerabilidades/parches, haciendo fallar operaciones reales de Zypper
+    incluso con los reintentos agotados. No es un bug de este proyecto.
+    <p style="margin-top:8px"><code>roles/precheck/tasks/pause_competing_services.yml</code>
+    detiene temporalmente (nunca deshabilita ni desinstala) los agentes
+    configurados en <code>zypper_lock_competing_services</code> que estén
+    presentes y activos, y espera (<code>roles/repo_management/tasks/
+    wait_packagekitd_clear.yml</code>) a que no quede ningún
+    <code>packagekitd</code> corriendo, decisión explícita del usuario
+    para este ambiente (2026-10-07) para que ya esté resuelto antes de que
+    arranque "Preparar repos" (Nodo 2, un Job de AWX separado). Se
+    descartó hacerlo en esa etapa en vez de en PRECHECK: confirmado con
+    evidencia real (job AWX #9257) que detener un agente no mata una
+    transacción de PackageKit ya en curso en ese instante — sigue
+    corriendo por su cuenta (D-Bus, no es un proceso hijo) hasta terminar,
+    y hacerlo justo antes de la primera operación de Zypper deja muy poco
+    margen. <code>wait_packagekitd_clear.yml</code> quedó extraído como
+    archivo propio precisamente para poder reutilizarse también, más
+    liviano (solo espera, nunca detiene nada), en Preparar/Aplicar.</p>
+<p style="margin-top:8px"><strong>Hallazgo más profundo (mismo día):</strong>
+    ni <code>systemctl stop</code> ni <code>kill</code>/<code>pkill</code>
+    como <code>root</code> logran terminar los procesos reales de
+    <code>ds_agent</code> (<code>netagent</code>, <code>ds_am</code>,
+    <code>dsa-connect</code>) — quedan vivos indefinidamente (confirmado:
+    43+ horas sin cambios) y <code>pkill -TERM</code> devuelve
+    "Operation not permitted" incluso como <code>root</code>: es
+    auto-protección real del agente a nivel kernel. No hay ningún comando
+    desde el propio host que la evite. Por eso <code>nessusagent</code>
+    (que sí se detiene limpio, 0 procesos confirmados) es el que de verdad
+    aporta la mitigación; el resto depende de que los reintentos por
+    comando absorban el timing de <code>ds_agent</code>. La solución de
+    raíz real —coordinar con el equipo de seguridad un stop completo
+    oficial (p. ej. <code>dsa_control</code>) o una exclusión de escaneo
+    para la ventana de mantenimiento— queda fuera del alcance de esta
+    automatización.</p>
+<p style="margin-top:8px"><strong>Por qué <code>resume_security_agents.yml</code>
+    ya no depende de "qué detuvo esta misma ejecución":</strong> la
+    primera versión guardaba en un hecho de Ansible (<code>security_agents_paused</code>)
+    cuáles había pausado, para reiniciar solo esos. Pero PRECHECK y
+    "Aplicar" son Jobs de AWX <strong>separados</strong> — un hecho de
+    Ansible de un Job no sobrevive al siguiente. Se rediseñó para que
+    reiniciar dependa directamente de la lista configurada
+    (<code>zypper_lock_competing_services</code>), usando
+    <code>state: started</code> (idempotente: no hace nada si ya estaba
+    activo) en vez de "solo lo que yo mismo pausé".</p>
+</div><p class="source-note">Fuente: documento técnico original del proyecto. Se conserva para trazabilidad histórica; el flujo operativo vigente se define en Arquitectura.</p></div></details></div><div class="callout note"><span class="label">INCIDENTE 03 · Decisión de seguridad documentada</span><h3>Repositorios sin firmas GPG en Foreman</h3><p><strong>Hallazgo:</strong> Zypper rechazó metadatos de repositorios sin firma durante la ejecución no interactiva.</p><p><strong>Tratamiento documentado:</strong> El proyecto utiliza <code>--no-gpgcheck</code> por repositorio temporal según la decisión documentada. Esta excepción debe revisarse con Seguridad; TLS/CA permanece habilitado.</p><details class="finding"><summary>Consultar registro técnico original y antecedentes</summary><div class="finding-body"><div class="callout risk">
+<span class="label">Causa raíz confirmada por API, no solo "es interno"</span>
+    Al 2026-10-06, una consulta de solo lectura a la API de Foreman confirmó
+    <code>0</code> Content Credentials (GPG keys) en toda la organización — ningún repositorio Foreman de
+    este ambiente tenía una clave asociada. Zypper, en <code>--non-interactive</code>, rechaza
+    metadata sin firma con <code>rc=4</code> ("unsigned, continue? no"), de forma consistente para los
+    10/10 repos de cada fase. Se validó después la clave real de SUSE para SLE 15
+    (<code>SUSE-Linux-Enterprise-15-GPG-KEY</code>, fingerprint confirmado contra
+    <code>suse.com/support/security/keys</code>), pero el usuario decidió, para este ambiente —los
+    repos corren exclusivamente en red interna, nunca públicos—, omitir la verificación de firma en
+    vez de asociar esa key a los ~20 Products/40 Repositories de Foreman involucrados.
+  </div><p class="source-note">Fuente: documento técnico original del proyecto. Se conserva para trazabilidad histórica; el flujo operativo vigente se define en Arquitectura.</p></div></details></div><div class="callout note"><span class="label">INCIDENTE 04 · Corrección de implementación</span><h3>Orden de argumentos al crear repositorios</h3><p><strong>Hallazgo:</strong> En una versión inicial, la ubicación de un parámetro afectaba la interpretación del comando de repositorio.</p><p><strong>Tratamiento documentado:</strong> Se corrigió la construcción de los argumentos de Zypper y quedó documentado el caso.</p><details class="finding"><summary>Consultar registro técnico original y antecedentes</summary><div class="finding-body"><div class="callout lesson">
+<span class="label">Bug real encontrado al implementarlo (orden de argumentos)</span>
+    La primera versión colocó <code>--no-gpgcheck</code> entre <code>-n</code> (<code>--name</code>) y
+    el nombre real del repo — <code>-n</code> consume el <strong>siguiente token</strong> como su valor,
+    así que Zypper interpretó <code>--no-gpgcheck</code> como el nombre y sobró un argumento
+    posicional ("Too many arguments"). Corrección: <code>--no-gpgcheck</code> siempre antes de
+    <code>-n</code> (es un flag booleano, no interfiere con el parseo de <code>-n</code>). Confirmado
+    con evidencia real en laboratorio y reproducido con <code>shlex.split()</code> antes de aplicar el fix.
+  </div><p class="source-note">Fuente: documento técnico original del proyecto. Se conserva para trazabilidad histórica; el flujo operativo vigente se define en Arquitectura.</p></div></details></div><div class="callout note"><span class="label">INCIDENTE 05 · Mitigación específica documentada</span><h3>Servicio Postfix y reinicio del sistema</h3><p><strong>Hallazgo:</strong> En laboratorio se detectó que <code>postfix.service</code> podía bloquear el arranque de un host bajo determinada configuración de red/IPv6.</p><p><strong>Tratamiento documentado:</strong> Se incorporó una mitigación previa al reinicio para los servicios identificados. La decisión de deshabilitar servicios debe revisarse por host y coordinarse con su responsable.</p><details class="finding"><summary>Consultar registro técnico original y antecedentes</summary><div class="finding-body"><div class="callout decision">
+<span class="label">Por qué es PERMANENTE, a diferencia de los agentes de seguridad (sección 1)</span>
+    Los agentes de seguridad se <strong>pausan</strong> porque el problema es transitorio (un escaneo que
+    eventualmente termina). <code>postfix</code> es distinto: el problema es una <strong>configuración rota del
+    host</strong>, no algo que se resuelva solo con tiempo — deshabilitarlo temporalmente y volver a habilitarlo
+    solo reproduciría el mismo colgado en el siguiente reinicio. <code>playbooks/group_vars/all.yml</code> define
+    <code>reboot_disable_services</code> (lista vacía válida, actualmente <code>[postfix]</code>);
+    <code>roles/repo_management/tasks/disable_boot_blocking_services.yml</code> los deshabilita
+    (<code>systemctl disable</code> + <code>stop</code>, nunca se reinician después) justo antes de
+    <strong>cualquier</strong> reinicio obligatorio (<code>roles/sp_migration/tasks/main.yml</code>). Decisión
+    explícita del usuario, aplicable a <strong>todos</strong> los hosts que gestiona este proyecto — confirmado
+    explícitamente por el usuario que ningún servidor GeoPOS depende de estos servicios antes de aplicarlo a toda
+    la flota.
+  </div><p class="source-note">Fuente: documento técnico original del proyecto. Se conserva para trazabilidad histórica; el flujo operativo vigente se define en Arquitectura.</p></div></details></div><div class="callout note"><span class="label">INCIDENTE 06 · Manejo de fallo ajustado</span><h3>Estado incompleto después del reinicio</h3><p><strong>Hallazgo:</strong> La interrupción de conectividad posterior al reinicio podía impedir completar tareas de cierre y evidencias.</p><p><strong>Tratamiento documentado:</strong> El modelo separa aplicación, reinicio y reconexión; el manejo local de errores busca conservar el resultado parcial en el reporte.</p><details class="finding"><summary>Consultar registro técnico original y antecedentes</summary><div class="finding-body"><div class="callout lesson">
+<span class="label">Lección de diseño — <code>UNREACHABLE</code> no es lo mismo que <code>FAILED</code></span>
+    Confirmado con evidencia real (2026-10-07, job AWX #9299): cuando el reinicio obligatorio nunca completa
+    (host colgado en el arranque — ver sección 5.2) y Ansible intenta reconectarse en una tarea
+    <strong>posterior</strong> (por ejemplo, para reiniciar los agentes de seguridad), ese intento se marca
+    <code>UNREACHABLE</code>, no <code>FAILED</code>. La diferencia es crítica: un <code>rescue:</code> captura
+    <code>FAILED</code>, pero <strong>nunca</strong> <code>UNREACHABLE</code> — y <code>UNREACHABLE</code> hace
+    que Ansible salte <strong>todas</strong> las tareas restantes de la etapa para ese host, incluida la
+    generación del reporte. Resultado observado: el host quedó <code>FAILED</code> correctamente, pero
+    <strong>no se generó ningún reporte</strong> — justo lo que CLAUDE.md exige que nunca pase.
+    <p style="margin-top:8px"><strong>Corrección</strong>: <code>playbooks/tasks/run_stage.yml</code> calcula un
+    hecho explícito, <code>_host_presumiblemente_inalcanzable</code> (<code>dup_applied AND NOT
+    reboot_completed</code>), inmediatamente después de saber que el reinicio no completó. A partir de ahí,
+    ningún paso vuelve a intentar conectarse al host (ni reiniciar agentes de seguridad, ni inventariar
+    repositorios al final) — quedan registrados como <code>NOT_CHECKED</code> con el motivo explícito, y el
+    reporte sí se genera, con toda la evidencia capturada antes de que el host se colgara.</p>
+</div><p class="source-note">Fuente: documento técnico original del proyecto. Se conserva para trazabilidad histórica; el flujo operativo vigente se define en Arquitectura.</p></div></details></div><div class="callout note"><span class="label">INCIDENTE 07 · Corrección de lógica</span><h3>Condiciones heredadas en bloques de tareas</h3><p><strong>Hallazgo:</strong> Una condición aplicada a un bloque podía afectar tareas de cierre que debían ejecutarse bajo estados distintos.</p><p><strong>Tratamiento documentado:</strong> Se ajustó el control de condiciones y conservación de repositorios ante fallos.</p><details class="finding"><summary>Consultar registro técnico original y antecedentes</summary><div class="finding-body"><div class="callout lesson">
+<span class="label">Lección de diseño — el <code>when</code> de un <code>block:</code> se hereda por tarea</span>
+    Se encontró un defecto real: tareas de cierre ("conservar repos tras fallo", "inventariar al final") vivían
+    dentro de un <code>block:</code> con <code>when: stage_status != 'FAILED'</code> heredado. Ansible aplica ese
+    <code>when</code> a <strong>cada tarea interna</strong> y lo <strong>reevalúa en el momento exacto</strong> en
+    que se ejecuta — no una sola vez al entrar al bloque. Como el bloque cambiaba <code>stage_status</code> a
+    <code>FAILED</code> en su propio interior, esas tareas se saltaban en silencio aunque su condición propia pidiera
+    lo contrario. Resultado observable: <code>repos_enabled_after</code> quedaba vacío aunque hubiera un repo
+    temporal sin retirar. <strong>Corrección</strong>: esas tareas se movieron a nivel superior, fuera del bloque,
+    con su propia condición explícita. <strong>Regla general</strong>: una tarea que reacciona a que algo salió mal
+    dentro de un bloque no debe vivir dentro de ese mismo bloque si el bloque tiene su propio <code>when</code>.
+  </div><p class="source-note">Fuente: documento técnico original del proyecto. Se conserva para trazabilidad histórica; el flujo operativo vigente se define en Arquitectura.</p></div></details></div><div class="callout note"><span class="label">INCIDENTE 08 · Regla corregida</span><h3>Doble evidencia de versión del Service Pack</h3><p><strong>Hallazgo:</strong> Una comparación de fuentes que inicialmente se trataba como informativa no era suficiente para garantizar el estado final.</p><p><strong>Tratamiento documentado:</strong> La verificación final del SP se consolidó como condición para aprobar la etapa y permitir la continuidad del flujo.</p><details class="finding"><summary>Consultar registro técnico original y antecedentes</summary><div class="finding-body"><div class="callout lesson">
+<span class="label">Comportamiento anterior (corregido)</span>
+    Una revisión anterior trataba la comparación entre ambas fuentes solo como <strong>informativa</strong> (una
+    advertencia si no coincidían, sin afectar el resultado real). Eso permitía, en teoría, que SP7 comenzara
+    únicamente porque <code>os-release</code> dijera SP6, sin que la segunda fuente lo hubiera confirmado —
+    precisamente lo que este proyecto necesita evitar.
+  </div><p class="source-note">Fuente: documento técnico original del proyecto. Se conserva para trazabilidad histórica; el flujo operativo vigente se define en Arquitectura.</p></div></details></div><div class="callout note"><span class="label">INCIDENTE 09 · Diseño ajustado</span><h3>Separación de variables e inventario de AWX</h3><p><strong>Hallazgo:</strong> La ubicación inicial de <code>group_vars</code> dependía del inventario empleado y podía no funcionar con el Inventory Source de AWX.</p><p><strong>Tratamiento documentado:</strong> Se organizaron las variables del proyecto junto al playbook, separadas de los datos dinámicos de hosts.</p></div><div class="callout note"><span class="label">INCIDENTE 10 · Diseño revisado</span><h3>Reporte consolidado y persistencia</h3><p><strong>Hallazgo:</strong> Una versión previa del consolidado dependía del espacio de trabajo efímero del Job, lo que dificultaba construir evidencia entre etapas.</p><p><strong>Tratamiento documentado:</strong> Se separaron los directorios transitorios, el destino configurado y la etapa opcional de sincronización, manteniendo la necesidad de comprobar la persistencia real.</p><details class="finding"><summary>Consultar registro técnico original y antecedentes</summary><div class="finding-body"><div class="callout lesson">
+<span class="label">Rediseño real del reporte consolidado — mismo problema de fondo que SharePoint</span>
+    La primera versión del consolidado (<code>resumen.html</code>) leía <code>run_summary.jsonl</code> desde
+    <code>report_local_dir</code> — el mismo error de fondo que ya se había identificado para SharePoint, pero no
+    se había aplicado aquí todavía. Como cada Nodo del Workflow es un Job de AWX separado, el Nodo "Reporting"
+    nunca podía ver lo que habían escrito los Nodos anteriores: el consolidado mostraba estados incompletos o
+    directamente mostraba <code>OK</code> para una etapa que en realidad había fallado en un Nodo posterior.
+    <strong>Corrección</strong>: <code>run_summary.jsonl</code> ahora se escribe también en
+    <code>report_destination</code> (no solo en <code>report_local_dir</code>), y
+    <code>playbooks/report_consolidado.yml</code> (renombrado desde <code>report_summary.yml</code>) siempre lee
+    de ahí cuando ya está configurado. Cada línea ahora incluye <code>crq</code>/<code>lote</code>/<code>ambiente</code>/
+    <code>phase</code> explícitos (antes no los tenía), para poder filtrar exactamente por el Lote de la
+    ejecución y mostrar <strong>cada fase real</strong> de cada host — no solo "el último estado conocido" (que
+    colapsaba <code>prepare</code> y <code>apply</code> del mismo Service Pack en una sola fila, ocultando cuál de
+    las dos había fallado). El archivo resultante vive en <code>&lt;CRQ&gt;/consolidado_&lt;LOTE&gt;.html</code>,
+    e incluye los hosts del inventario que pertenecen a ese Lote aunque todavía no tengan ninguna ejecución
+    registrada (<code>NOT_CHECKED</code>, nunca se inventa un <code>OK</code>). El estado final de cada host es
+    <code>OK</code> únicamente si <strong>todas</strong> sus fases registradas están <code>OK</code>.
+  </div><p class="source-note">Fuente: documento técnico original del proyecto. Se conserva para trazabilidad histórica; el flujo operativo vigente se define en Arquitectura.</p></div></details></div><div class="callout note"><span class="label">INCIDENTE 11 · Corrección de variables</span><h3>Captura de estados antes y después</h3><p><strong>Hallazgo:</strong> El uso de una variable temporal para estados podía sobrescribir la evidencia previa en el reporte.</p><p><strong>Tratamiento documentado:</strong> Se diferenciaron <code>system_state_snapshot_before</code> y <code>system_state_snapshot_after</code> y su transferencia al reporte.</p><details class="finding"><summary>Consultar registro técnico original y antecedentes</summary><div class="finding-body"><div class="callout note">
+<span class="label">Nota de implementación</span>
+<code>system_state_snapshot_before</code> y <code>_after</code> son hechos distintos y explícitos. La tarea que
+    captura el estado siempre escribe en una variable de trabajo (<code>system_state_snapshot</code>); quien la
+    invoca debe copiar el resultado de inmediato al nombre correspondiente. Hubo un defecto real de este tipo
+    (la variable de trabajo se sobrescribía y el reporte mostraba el mismo valor para "antes" y "después");
+    quedó corregido con nombres explícitos en todo el código.
+  </div><p class="source-note">Fuente: documento técnico original del proyecto. Se conserva para trazabilidad histórica; el flujo operativo vigente se define en Arquitectura.</p></div></details></div><div class="callout note"><span class="label">INCIDENTE 12 · Mejora de observabilidad</span><h3>Diagnóstico al detectar bloqueo del gestor de paquetes</h3><p><strong>Hallazgo:</strong> Los fallos de los comandos de Zypper requerían contexto para distinguir el bloqueo por procesos externos.</p><p><strong>Tratamiento documentado:</strong> Se registra diagnóstico de procesos y bloqueos en el momento del fallo, para respaldar la revisión de evidencias.</p><details class="finding"><summary>Consultar registro técnico original y antecedentes</summary><div class="finding-body"><div class="callout note">
+<span class="label">Diagnóstico automático de qué bloquea a Zypper, capturado en el momento del fallo</span>
+    Los mensajes de fallo de cada comando real de Zypper (<code>addrepo</code>, <code>refresh</code>, el
+    <code>modifyrepo --disable</code> de repos preexistentes, <code>removerepo</code>, <code>updatestack</code>,
+    el gate <code>dup -D</code> y el <code>dup</code> real) ahora incluyen al final la salida real de
+    <code>systemctl status packagekit.service</code> y de <code>ps -ef | grep -Ei
+    'packagekit|dnf|yum|rpm'</code>, capturada justo en ese instante
+    (<code>roles/repo_management/tasks/diagnosticar_packagekit.yml</code>, de solo lectura, nunca falla por sí
+    mismo) — decisión explícita del usuario (2026-10-07) para que el operador sepa qué lo está bloqueando sin
+    tener que conectarse por SSH.
+  </div><p class="source-note">Fuente: documento técnico original del proyecto. Se conserva para trazabilidad histórica; el flujo operativo vigente se define en Arquitectura.</p></div></details></div></section><section class="main-section" id="s5"><div class="section-head"><div class="section-num">06</div><h2>Notas de ejecución y diagnóstico de AWX</h2></div><p>Notas prácticas observadas en la configuración y ejecución de AWX. Estas aclaraciones se conservan como antecedentes, mientras que la secuencia configurativa vigente está en <a href="AWX_SETUP.html">la guía de AWX</a>.</p><details class="finding"><summary><strong>Confirmado contra un AWX real: el Survey del Workflow SIEMPRE le gana al valor guardado en el Job Template</strong></summary><div class="finding-body"><div class="callout risk">
+<span class="label">Confirmado contra un AWX real: el Survey del Workflow SIEMPRE le gana al valor guardado en el Job Template</span>
+    El diseño original (sección 7.2, versión anterior) intentaba fijar
+    <code>upgrade_mode: precheck</code> en el Nodo 1 vía "Prompt on Launch" + un
+    override de nodo. Se probó en un AWX real y <strong>no funcionó</strong>: el Job
+    del Nodo 1 corrió con <code>upgrade_mode: sp5_to_sp6</code> (el valor del Survey,
+    pensado para los Nodos 2/3), no con <code>precheck</code>. En AWX, cuando
+    "Prompt on Launch" está activado, cualquier valor que llegue desde afuera
+    (Survey, API) <strong>siempre reemplaza</strong> lo guardado en el Job Template
+    — ese es justamente el propósito de esa casilla. Por eso el Nodo 1 ahora usa un
+    playbook dedicado (<code>playbooks/precheck_only.yml</code>) que ni siquiera lee
+    <code>upgrade_mode</code>: no hay variable que pueda colisionar. Los Nodos 2 y 3
+    no tuvieron este problema porque su valor fijo (<code>upgrade_phase</code>) no
+    coincide con el nombre de ninguna pregunta del Survey.
+  </div></div></details><details class="finding"><summary><strong>Nuevo check: upgrade_mode_coincide_con_sp_real</strong></summary><div class="finding-body"><div class="callout note">
+<span class="label">Nuevo check: <code>upgrade_mode_coincide_con_sp_real</code></span>
+    Este nodo SÍ lee <code>upgrade_mode</code> (a diferencia del resto del playbook) para
+    esta única validación informativa: si el modo elegido en el Survey no corresponde al
+    Service Pack real detectado (ej. <code>sp4_to_sp5</code> en un host que ya está en SP5,
+    o <code>sp6_to_sp7</code> en un host todavía en SP5), este check queda <code>FAILED</code>
+    — fallando lo antes posible, aquí, en vez de que el Nodo 2 descubra la inconsistencia a
+    mitad de camino. <code>full</code> es la excepción: válido para un host en SP5, SP6 o
+    SP7 (autodetecta el salto correcto), <code>FAILED</code> solo si está en SP4.
+  </div></div></details><details class="finding"><summary><strong>Este nodo NUNCA vuelve a detener agentes de seguridad</strong></summary><div class="finding-body"><div class="callout note">
+<span class="label">Este nodo NUNCA vuelve a detener agentes de seguridad</span>
+    El Nodo 1 (Precheck) ya detuvo lo que se pudo detener (<code>ds_agent</code>/
+    <code>nessusagent</code>, si estaban activos). Este nodo, antes de tocar cualquier
+    repositorio, solo <strong>verifica/espera</strong> (de solo lectura, vía
+    <code>pgrep</code>) que no quede ningún <code>packagekitd</code> corriendo — si
+    sigue activo, espera un poco y continúa igual; los reintentos de cada comando de
+    Zypper son el respaldo final. Confirmado con evidencia real en laboratorio que
+    volver a llamar <code>systemctl stop</code> aquí no serviría: una transacción de
+    PackageKit ya en curso no muere solo porque se detenga el agente que la disparó.
+  </div></div></details><details class="finding"><summary><strong>Servicios deshabilitados PERMANENTEMENTE antes del reinicio obligatorio</strong></summary><div class="finding-body"><div class="callout risk">
+<span class="label">Servicios deshabilitados PERMANENTEMENTE antes del reinicio obligatorio</span>
+    Justo antes de reiniciar (tras el <code>dup</code> real), este nodo deshabilita de
+    forma permanente (<code>systemctl disable</code> + <code>stop</code>, nunca se
+    vuelven a reiniciar) los servicios configurados en <code>reboot_disable_services</code>
+    (<code>playbooks/group_vars/all.yml</code>; actualmente <code>postfix</code>).
+    Confirmado con evidencia real en laboratorio: <code>postfix</code> puede colgar
+    <strong>indefinidamente</strong> el arranque tras un upgrade de Service Pack
+    (<code>inet_interfaces = localhost</code> intentando resolver IPv6 en un host sin
+    IPv6), obligando a un reinicio forzado desde el hipervisor. Decisión explícita del
+    usuario, aplicable a todos los hosts — confirmado que ningún servidor GeoPOS
+    depende de estos servicios.
+  </div></div></details><details class="finding"><summary><strong>Por qué sincroniza desde report_destination, no desde report_local_dir</strong></summary><div class="finding-body"><div class="callout note">
+<span class="label">Por qué sincroniza desde report_destination, no desde report_local_dir</span>
+<code>report_local_dir</code> es el área de trabajo efímera de CADA Job por
+    separado — un nodo del Workflow no puede ver los archivos que escribió otro nodo ahí,
+    porque cada nodo es un Job de AWX independiente. <code>report_destination</code> (el
+    destino persistente real, sección 11 del README) sí es compartido entre nodos, así
+    que es la única fuente confiable para sincronizar.
+  </div></div></details><p>El registro de cada prueba debe incluir fecha, Job ID, inventario sincronizado, Survey aplicado y archivos de reporte asociados. No se rellenan identificadores o resultados que no estén acreditados en el material disponible.</p></section><section class="main-section" id="s6"><div class="section-head"><div class="section-num">07</div><h2>Comprobaciones y riesgos pendientes</h2></div><p>Los controles que deben seguirse en el laboratorio y QA se presentan como asuntos abiertos, sin convertirlos en errores ya corregidos.</p>
+<p>Estos NO son defectos: son los puntos del diseño que dependen de un Zypper
+  real y que el proyecto está preparado para fallar de forma explícita
+  (<code>FAILED</code>/<code>NOT_CHECKED</code> con evidencia) si no coinciden con lo
+  esperado, en vez de continuar a ciegas.</p>
+<ul class="checklist">
+<li><input checked="" disabled="" id="c3-1" type="checkbox"/><label for="c3-1"><strong>Formato real de <code>zypper --xmlout --non-interactive products -i</code></strong><span class="tag" style="background:var(--ok-green);">✓ confirmado real</span><br/>
+      Confirmado en laboratorio: la doble evidencia de Service Pack (<code>service_pack_doble_evidencia</code>) pasó <code>OK</code> en una migración SP5→SP6 real completa. Si en otro host/versión el formato no coincidiera, la etapa quedaría <code>FAILED</code> con causa <code>service_pack_sin_evidencia_zypper</code> o <code>service_pack_evidencia_inconsistente</code> — la salida real queda en <code>zypper_products_xml_evidence</code> del reporte para ajustar el regex en <code>capture_state.yml</code> si hiciera falta.</label></li>
+<li><input checked="" disabled="" id="c3-3" type="checkbox"/><label for="c3-3"><strong>Comportamiento y return codes reales de <code>zypper patch --updatestack-only</code></strong><span class="tag" style="background:var(--ok-green);">✓ confirmado real</span><br/>
+      Confirmado en laboratorio (jobs AWX #9224 y posteriores): se completó exitosamente contra los repos Foreman de origen reales. También reveló el lock intermitente de PackageKit (ver sección 2.7), ya mitigado.</label></li>
+<li><input checked="" disabled="" id="c3-4" type="checkbox"/><label for="c3-4"><strong>Tiempos reales de <code>dup</code>, reinicio y reconexión</strong><span class="tag" style="background:var(--ok-green);">✓ confirmado real (con hallazgo)</span><br/>
+      El <code>dup</code> real tomó ~11-12 minutos en instalar ~1330 paquetes (SP5→SP6) — dentro de lo esperado. El reinicio reveló un riesgo real distinto: el arranque puede colgarse <strong>indefinidamente</strong> (no solo tardar) por un servicio roto — ver sección 2.7 (<code>postfix</code>), ya mitigado para ese caso específico.</label></li>
+<li><input id="c3-5" type="checkbox"/><label for="c3-5"><strong>Que ningún repositorio preexistente real tenga una configuración atípica</strong><span class="tag">pendiente</span><br/>
+      (por ejemplo, un repo con alias que ya empiece con el prefijo <code>ansible-sles-upgrade-</code> por coincidencia, lo que confundiría la limpieza). Revisar <code>zypper repos -u</code> en cada host real antes de su primera corrida — no verificable de forma genérica para toda la flota.</label></li>
+</ul>
+<div class="callout risk"><span class="label">Ambiente QA</span>Hasta disponer de Jobs y reportes reales de QA, todas las rutas de ese ambiente siguen pendientes. La transición SP6→SP7 y FULL sobre plantilla también se mantienen pendientes según el estado comunicado para este proyecto.</div></section><section class="main-section" id="s7"><div class="section-head"><div class="section-num">08</div><h2>Criterios de aceptación y cierre</h2></div><p>La aprobación para trasladar el procedimiento a producción debe basarse en resultados reproducibles y evidencias verificables:</p><ul class="plain"><li>Las cuatro rutas del alcance QA han sido ejecutadas con registro del origen y destino.</li><li>El modo FULL completó SP6, reinició y comprobó su salud antes de iniciar SP7.</li><li>Los controles GeoPOS contienen los nombres reales de servicios, patrones Java, puertos y URLs aplicables por servidor.</li><li>El reporte por host y lote refleja los resultados reales, incluidos fallos y controles no verificados.</li><li>Los responsables del cambio aceptaron la ventana de mantenimiento y el mecanismo de recuperación de cada plataforma.</li><li>Se revisaron con Seguridad las restricciones de los agentes y la excepción de firma GPG de Foreman.</li></ul>
+<ul class="checklist">
+<li><input id="c6-1" type="checkbox"/><label for="c6-1">Todos los <code>CHANGE_ME</code> de la sección 2 fueron reemplazados por datos reales (o quedan deliberadamente vacíos/<code>false</code>, con el riesgo correspondiente entendido y aceptado).</label></li>
+<li><input id="c6-2" type="checkbox"/><label for="c6-2">Cada escenario de plantilla y QA está validado según el plan, con reporte y resultado revisados por los responsables.</label></li>
+<li><input id="c6-3" type="checkbox"/><label for="c6-3">Está definida la persona o equipo que autoriza pasar de “Preparar” a “Aplicar”, junto con la ventana de mantenimiento.</label></li>
+<li><input id="c6-4" type="checkbox"/><label for="c6-4">Los chequeos críticos de GeoPOS están parametrizados y probados, y se acordó cómo recuperar el servicio si una migración falla.</label></li>
+</ul>
+<div class="doc-crosslinks"><a href="ARQUITECTURA_Y_DISENO_TECNICO.html">→ Cómo está diseñada la solución</a><a href="AWX_SETUP.html">→ Cómo desplegarla y ejecutar el Workflow</a></div></section></div></div></div><footer class="page-footer">ansible-sles-upgrade · Documentación técnica · Octubre de 2026</footer><script>
+(function(){
+ const fileKey='sles-docs-20261008-'+location.pathname.split('/').pop();
+ const checks=[...document.querySelectorAll('.doc-main input[type="checkbox"]')];
+ const writable=checks.filter(x=>!x.disabled);
+ const progressChecks=[...document.querySelectorAll('.test-matrix input[type="checkbox"]')];
+ for(const x of writable){
+  const k=fileKey+':'+x.id;
+  try{const value=localStorage.getItem(k); if(value!==null)x.checked=value==='1'}catch(_){}
+  x.addEventListener('change',()=>{try{localStorage.setItem(k,x.checked?'1':'0')}catch(_){} update()});
+ }
+ function update(){const done=progressChecks.filter(x=>x.checked).length,total=progressChecks.length;const el=document.querySelector('#count-done');if(el)el.textContent=done+' / '+total; const bar=document.querySelector('#progress-fill');if(bar)bar.style.width=(total?done/total*100:0)+'%'}
+ update();
+ const btn=document.querySelector('#reset-checks');if(btn)btn.addEventListener('click',()=>{if(confirm('¿Deseas desmarcar las actividades editables de este documento? No cambia las ya verificadas por el proyecto.')){writable.forEach(x=>{x.checked=false;try{localStorage.removeItem(fileKey+':'+x.id)}catch(_){}});update()}});
+ const proofKey=fileKey+':evidencia:'; document.querySelectorAll('input[data-proof]').forEach(el=>{try{el.value=localStorage.getItem(proofKey+el.id)||''}catch(_){} el.addEventListener('input',()=>{try{localStorage.setItem(proofKey+el.id,el.value)}catch(_){}})});
+ const search=document.querySelector('#doc-search');if(search)search.addEventListener('input',()=>{const q=search.value.trim().toLocaleLowerCase('es');document.querySelectorAll('.doc-main section.main-section').forEach(sec=>{sec.classList.toggle('search-hidden',!!q&&!sec.textContent.toLocaleLowerCase('es').includes(q))})});
+ const anchors=[...document.querySelectorAll('.doc-sidebar nav a')]; if('IntersectionObserver' in window){const observer=new IntersectionObserver(entries=>{entries.forEach(en=>{if(en.isIntersecting){anchors.forEach(a=>a.classList.toggle('active',a.hash==='#'+en.target.id))}})},{rootMargin:'-10% 0px -70% 0px'});document.querySelectorAll('.doc-main section.main-section').forEach(s=>observer.observe(s))}
+ document.querySelectorAll('table.clean').forEach(t=>{if(!t.parentElement.classList.contains('table-scroll')){const wrapper=document.createElement('div');wrapper.className='table-scroll';t.parentNode.insertBefore(wrapper,t);wrapper.appendChild(t)}});
+})();
+</script></body>
+</html>
