@@ -279,28 +279,38 @@ zypper_lock_competing_services:
 
 # Servicios que deben quedar PERMANENTEMENTE deshabilitados (systemctl
 # disable, no solo detenidos) antes de CUALQUIER reinicio obligatorio de
-# este proyecto. Decisión explícita del usuario para este ambiente
-# (2026-10-07), aplicable a todos los hosts que gestiona este proyecto --
-# confirmado por el usuario que ningún servidor GeoPOS depende de
-# postfix para nada.
+# este proyecto. Lista vacía es válida -- es el valor por defecto desde
+# el cambio de política de abajo.
 #
-# Confirmado con evidencia real en laboratorio: "postfix.service" puede
-# colgar INDEFINIDAMENTE el arranque tras un upgrade de Service Pack (se
-# esperó un tiempo arbitrariamente largo, sin avanzar) -- causa raíz:
-# `inet_interfaces = localhost` en /etc/postfix/main.cf intenta resolver
-# "::1" (IPv6), y este host no tiene IPv6 configurado en absoluto. Con el
-# sistema ya arrancado y estable, el mismo error falla rápido (<1s,
-# confirmado vía journalctl); durante el arranque, antes de que la red
-# esté completamente lista, la misma resolución se queda colgada en vez
-# de fallar rápido.
+# HISTORIAL: "postfix" estuvo en esta lista entre 2026-10-07 y 2026-10-09.
+# Causa raíz confirmada con evidencia real en laboratorio:
+# "postfix.service" podía colgar INDEFINIDAMENTE el arranque tras un
+# upgrade de Service Pack -- `inet_interfaces = localhost` en
+# /etc/postfix/main.cf intentaba resolver "::1" (IPv6) en un host sin
+# IPv6 configurado; con el sistema ya arrancado y estable el mismo error
+# fallaba rápido (<1s), pero durante el arranque, antes de que la red
+# estuviera completamente lista, se quedaba colgado en vez de fallar
+# rápido.
+#
+# CAMBIO DE POLÍTICA -- decisión explícita del usuario para este ambiente
+# (2026-10-09): en vez de seguir deshabilitando postfix permanentemente,
+# se corrige la causa raíz directamente en su configuración
+# (`inet_protocols = ipv4`, roles/repo_management/tasks/
+# harden_postfix_ipv6_root_cause.yml -- se ejecuta siempre, sin depender
+# de esta lista) y se reinicia el servicio para que tome el fix de
+# inmediato. Validado con evidencia real (2026-10-08/09, host
+# sles15-sp5-sp7): con el fix puesto, postfix arranca en <1s sin
+# problema. postfix ya NO se agrega aquí -- queda habilitado/activo como
+# cualquier otro servicio del host, confiando en la corrección de su
+# configuración en vez de en deshabilitarlo.
 #
 # A diferencia de zypper_lock_competing_services (que se PAUSAN
 # temporalmente y se reinician después, porque el problema es
-# transitorio): estos se deshabilitan de forma PERMANENTE y nunca se
-# vuelven a reiniciar automáticamente, porque el problema es una
-# configuración rota del host, no algo temporal. Lista vacía es válida.
-reboot_disable_services:
-  - postfix
+# transitorio): un servicio que SÍ se agregue aquí se deshabilita de
+# forma PERMANENTE y nunca se vuelve a reiniciar automáticamente --
+# resérvese para un problema que de verdad sea una configuración rota
+# del host sin corrección conocida, no un parche temporal.
+reboot_disable_services: []
 
 # Conservar evidencia: habilitar almacenamiento persistente de journald
 # (Storage=persistent + /var/log/journal) justo antes de ejecutar la

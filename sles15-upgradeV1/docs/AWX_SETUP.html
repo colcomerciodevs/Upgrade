@@ -432,18 +432,15 @@ ANSIBLE_INVENTORY_PLUGINS: "/runner/project/&lt;CARPETA_DEL_PROJECT&gt;/inventor
     Mismo mecanismo de <code>packagekitd</code> que la Etapa 2, justo antes del gate
     anterior.
   </div>
-<div class="callout risk">
-<span class="label">Servicios deshabilitados PERMANENTEMENTE antes del reinicio obligatorio</span>
-    Justo antes de reiniciar (tras el <code>dup</code> real), este nodo deshabilita de
+<div class="callout note">
+<span class="label">Servicios deshabilitados PERMANENTEMENTE antes del reinicio obligatorio (lista vacía por defecto)</span>
+    Justo antes de reiniciar (tras el <code>dup</code> real), este nodo deshabilitaría de
     forma permanente (<code>systemctl disable</code> + <code>stop</code>, nunca se
-    vuelven a reiniciar) los servicios configurados en <code>reboot_disable_services</code>
-    (<code>playbooks/group_vars/all.yml</code>; actualmente <code>postfix</code>).
-    Confirmado con evidencia real en laboratorio: <code>postfix</code> puede colgar
-    <strong>indefinidamente</strong> el arranque tras un upgrade de Service Pack
-    (<code>inet_interfaces = localhost</code> intentando resolver IPv6 en un host sin
-    IPv6), obligando a un reinicio forzado desde el hipervisor. Decisión explícita del
-    usuario, aplicable a todos los hosts — confirmado que ningún servidor GeoPOS
-    depende de estos servicios.
+    vuelven a reiniciar) cualquier servicio configurado en <code>reboot_disable_services</code>
+    (<code>playbooks/group_vars/all.yml</code>; por defecto <code>[]</code> — reservado para
+    un problema sin corrección conocida). <code>postfix</code> estuvo aquí entre
+    2026-10-07 y 2026-10-09; ver el callout de más abajo para la causa raíz y el cambio
+    de política vigente.
   </div>
 <div class="callout note">
 <span class="label">Al terminar, se reinician los agentes de seguridad</span>
@@ -471,15 +468,18 @@ ANSIBLE_INVENTORY_PLUGINS: "/runner/project/&lt;CARPETA_DEL_PROJECT&gt;/inventor
     Ver README sección 8.6.
   </div>
 <div class="callout note">
-<span class="label">Defensa adicional: causa raíz de postfix corregida en su configuración</span>
-    Junto con deshabilitar postfix permanentemente (arriba), este nodo también agrega
-    <code>inet_protocols = ipv4</code> a <code>/etc/postfix/main.cf</code> (idempotente,
-    solo si postfix está instalado) — el fix oficial de Postfix para hosts sin IPv6, que
-    es la causa raíz confirmada del cuelgue. No vuelve a habilitar ni iniciar postfix: es
-    una segunda capa para que, si alguna vez llegara a iniciar por cualquier motivo, falle
-    rápido en vez de colgar el arranque. Validado con evidencia real (2026-10-08): con el
-    fix puesto, <code>systemctl start postfix</code> arrancó en 0.996&nbsp;s sin problema.
-    Ver README sección 8.5.
+<span class="label">Causa raíz de postfix corregida en su configuración (política vigente desde 2026-10-09)</span>
+    Este nodo siempre agrega <code>inet_protocols = ipv4</code> a
+    <code>/etc/postfix/main.cf</code> (idempotente, solo si postfix está instalado) — el
+    fix oficial de Postfix para hosts sin IPv6, que es la causa raíz confirmada del
+    cuelgue. Si la corrección cambió algo, <strong>reinicia postfix de inmediato</strong>
+    para que tome el fix ya mismo (el propio <code>dup</code> puede resetear
+    <code>main.cf</code> a sus valores por defecto). <code>postfix</code> ya no está en
+    <code>reboot_disable_services</code>: queda habilitado/activo como cualquier otro
+    servicio del host, en vez de deshabilitado permanentemente (política anterior,
+    2026-10-07 a 2026-10-09). Validado con evidencia real (2026-10-08/09): con el fix
+    puesto, <code>postfix</code> arranca/reinicia en menos de 1&nbsp;segundo, <code>active
+    (running)</code>, sin ningún problema. Ver README sección 8.5.
   </div>
 <div class="callout risk">
 <span class="label">Solicitud MOK pendiente (shim/grub2/kernel) — otra causa real de cuelgue indefinido al reiniciar</span>

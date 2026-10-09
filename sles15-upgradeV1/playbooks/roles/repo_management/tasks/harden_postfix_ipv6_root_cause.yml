@@ -1,30 +1,35 @@
 ---
 # roles/repo_management/tasks/harden_postfix_ipv6_root_cause.yml
 #
-# Corrección de la CAUSA RAÍZ real de postfix (ver README sección 8.5 y
-# playbooks/group_vars/all.yml: reboot_disable_services), como defensa
-# adicional a deshabilitarlo permanentemente -- por si en algún momento,
-# por el motivo que sea (error humano, un paquete que lo reactiva, un
-# cambio futuro en reboot_disable_services), postfix llegara a iniciar de
-# todas formas durante un arranque.
+# Corrección de la CAUSA RAÍZ real de postfix (ver README sección 8.5).
+# Decisión explícita del usuario para este ambiente (2026-10-09, aplicable
+# a todos los hosts): en vez de deshabilitar postfix permanentemente
+# (política anterior, 2026-10-07 a 2026-10-09), se corrige directamente
+# su configuración y se confía en eso -- postfix queda habilitado/activo
+# como cualquier otro servicio del host.
 #
 # Causa raíz confirmada: con `inet_interfaces = localhost` en main.cf,
 # postfix intenta resolver `::1` (IPv6) en un host sin IPv6 configurado.
 # Con el sistema ya arrancado y estable, ese mismo error falla en menos de
 # 1 segundo; durante el arranque, antes de que la red esté completamente
 # lista, la misma resolución se cuelga en vez de fallar rápido -- ese es
-# el cuelgue real que se confirmó en laboratorio.
+# el cuelgue real que se confirmó en laboratorio (host sles15-sp5-sp7,
+# 2026-10-08).
 #
 # Fix oficial documentado por Postfix para hosts sin IPv6:
 # `inet_protocols = ipv4` -- evita por completo que postfix intente
 # resolver direcciones IPv6, sin importar qué diga `inet_interfaces`.
+# Validado con evidencia real (2026-10-08/09): con el fix puesto,
+# `systemctl start/restart postfix` arranca en menos de 1 segundo,
+# `active (running)`, sin ningún problema.
 #
-# No vuelve a habilitar ni a iniciar postfix: sigue deshabilitado
-# permanentemente (disable_boot_blocking_services.yml). Esto solo corrige
-# el archivo de configuración en disco, para que, SI alguna vez llegara a
-# iniciar, falle rápido en vez de colgarse. Idempotente y de solo
-# aplicación condicional: no hace nada si postfix no está instalado en
-# este host.
+# Si la corrección cambió algo, se reinicia el servicio de inmediato para
+# que tome el fix ya mismo -- importante porque el propio `dup` puede
+# haber reinstalado el paquete de postfix y reseteado main.cf a sus
+# valores por defecto (con IPv6 de nuevo), dejando una instancia corriendo
+# con la configuración rota hasta el próximo restart/reinicio si no se
+# hace aquí. Idempotente: si no hubo cambios (el fix ya estaba puesto), no
+# reinicia nada. Solo aplica si postfix está instalado en este host.
 
 - name: Verificar si existe la configuración de postfix en este host
   ansible.builtin.stat:
@@ -40,6 +45,15 @@
   become: true
   register: _postfix_ipv6_fix_result
   when: _postfix_main_cf.stat.exists
+
+- name: "Reiniciar postfix para que tome el fix de inmediato (solo si la corrección cambió algo)"
+  ansible.builtin.systemd:
+    name: postfix
+    state: restarted
+  become: true
+  when:
+    - _postfix_main_cf.stat.exists
+    - _postfix_ipv6_fix_result.changed | default(false)
 
 - name: "Registrar si se corrigió la causa raíz de postfix en esta corrida (para el reporte)"
   ansible.builtin.set_fact:

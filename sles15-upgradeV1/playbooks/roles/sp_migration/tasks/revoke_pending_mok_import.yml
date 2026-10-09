@@ -22,7 +22,13 @@
 # Idempotente: si no hay ninguna solicitud pendiente, no hace nada.
 
 - name: "Verificar si el binario mokutil existe en este host"
-  ansible.builtin.command: command -v mokutil
+  # "command -v" es un builtin de la shell (bash/sh), no un binario real --
+  # ansible.builtin.command ejecuta directamente sin pasar por una shell,
+  # así que buscaría un programa literal llamado "command" y fallaría
+  # siempre (confirmado con evidencia real: /usr/bin/command no existe en
+  # SLES 15), dejando esta protección completa en "skipping" sin que nadie
+  # lo notara. shell sí interpreta el builtin correctamente.
+  ansible.builtin.shell: command -v mokutil  # noqa command-instead-of-shell
   register: _mokutil_present
   changed_when: false
   failed_when: false

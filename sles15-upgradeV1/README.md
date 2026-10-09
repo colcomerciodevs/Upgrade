@@ -735,14 +735,22 @@ más, junto a los demás). El reporte de la etapa que finalmente los
 reinicia incluye la verificación de `packagekitd` al empezar y qué
 agentes se reiniciaron al terminar (sección 11).
 
-### 8.5 Servicios que pueden colgar el arranque — deshabilitado permanente
+### 8.5 Servicios que pueden colgar el arranque — causa raíz corregida en su configuración
 
-Decisión explícita del usuario para este ambiente (2026-10-07), aplicable
-a **todos** los hosts que gestiona este proyecto: confirmado con evidencia
-real en laboratorio que `postfix.service` puede colgar **indefinidamente**
-el arranque de un host tras un upgrade de Service Pack (se esperó un
-tiempo arbitrariamente largo, sin avanzar — no es un simple retraso).
-Causa raíz confirmada: `inet_interfaces = localhost` en
+`playbooks/group_vars/all.yml` define `reboot_disable_services` (lista
+vacía válida; **por defecto `[]`** desde el cambio de política de abajo).
+Un servicio que se agregue ahí queda deshabilitado **permanentemente**
+(`systemctl disable` + `stop`, nunca se reinicia después — a diferencia
+de los agentes de seguridad de la sección 8.4, que se pausan
+temporalmente) justo antes de **cualquier** reinicio obligatorio de este
+proyecto, vía `roles/repo_management/tasks/disable_boot_blocking_services.yml`.
+Resérvese para un problema sin corrección conocida.
+
+**Caso `postfix` — histórico y decisión vigente.** Confirmado con
+evidencia real en laboratorio que `postfix.service` puede colgar
+**indefinidamente** el arranque de un host tras un upgrade de Service
+Pack (se esperó un tiempo arbitrariamente largo, sin avanzar — no es un
+simple retraso). Causa raíz confirmada: `inet_interfaces = localhost` en
 `/etc/postfix/main.cf` intenta resolver `::1` (IPv6) en un host que no
 tiene IPv6 configurado en absoluto. Con el sistema ya arrancado y
 estable, el mismo error falla rápido (menos de 1 segundo, confirmado vía
@@ -750,38 +758,29 @@ estable, el mismo error falla rápido (menos de 1 segundo, confirmado vía
 completamente lista, la misma resolución se cuelga en vez de fallar
 rápido.
 
-A diferencia de los agentes de seguridad (sección 8.4), que se **pausan**
-temporalmente porque el problema es transitorio: `playbooks/group_vars/all.yml`
-define `reboot_disable_services` (lista vacía válida; actualmente
-`[postfix]`), y `roles/repo_management/tasks/disable_boot_blocking_services.yml`
-los deshabilita **permanentemente** (`systemctl disable` + `stop`, nunca
-se vuelven a reiniciar automáticamente) justo antes de **cualquier**
-reinicio obligatorio de este proyecto (`roles/sp_migration/tasks/main.yml`)
-— porque el problema es una configuración rota del host, no algo
-temporal. Confirmado explícitamente por el usuario que ningún servidor
-GeoPOS depende de `postfix` para nada antes de aplicar esto a todos los
-hosts. Solo actúa sobre los servicios configurados que estén realmente
-presentes en cada host; queda registrado en el reporte, sección "Reinicio"
-(sección 11).
+Entre 2026-10-07 y 2026-10-09 se manejó deshabilitando `postfix`
+permanentemente vía el mecanismo de arriba (`reboot_disable_services:
+[postfix]`). **Cambio de política — decisión explícita del usuario para
+este ambiente (2026-10-09), aplicable a todos los hosts**: en vez de
+deshabilitarlo, se corrige la causa raíz directamente en su
+configuración y se confía en eso. `postfix` ya **no** está en
+`reboot_disable_services`: queda habilitado/activo como cualquier otro
+servicio del host.
 
-**Defensa adicional — causa raíz de postfix corregida en el archivo de
-configuración** (`roles/repo_management/tasks/harden_postfix_ipv6_root_cause.yml`,
-se ejecuta junto con lo anterior). Causa raíz confirmada: con
-`inet_interfaces = localhost` y `inet_protocols` incluyendo IPv6, postfix
-intenta resolver `::1` en un host sin IPv6 configurado; con el sistema ya
-arrancado y estable ese mismo error falla en menos de 1 segundo, pero
-durante el arranque se cuelga en vez de fallar rápido. Esta tarea agrega
+**`roles/repo_management/tasks/harden_postfix_ipv6_root_cause.yml`**
+(se ejecuta siempre, independiente de `reboot_disable_services`) agrega
 `inet_protocols = ipv4` a `/etc/postfix/main.cf` (idempotente, solo si
 postfix está instalado) — el fix oficial documentado por Postfix para
-hosts sin IPv6. **No vuelve a habilitar ni a iniciar postfix**: sigue
-deshabilitado permanentemente como arriba; esto es una segunda capa, para
-que, si alguna vez llegara a iniciar por cualquier motivo (error humano,
-un cambio futuro en `reboot_disable_services`), falle rápido en vez de
-colgar el arranque. Validado con evidencia real en laboratorio
-(2026-10-08, host `sles15-sp5-sp7`): con el fix puesto, `systemctl start
-postfix` arrancó en 0.996 s, `active (running)`, escuchando en
-`127.0.0.1:25` sin ningún problema — se detuvo de nuevo después de
-confirmarlo, conforme a la decisión de mantenerlo deshabilitado. Queda
+hosts sin IPv6, que evita por completo el intento de resolución IPv6 sin
+importar qué diga `inet_interfaces`. Si la corrección cambió algo,
+**reinicia postfix de inmediato** para que tome el fix ya mismo —
+importante porque el propio `dup` puede reinstalar el paquete de postfix
+y resetear `main.cf` a sus valores por defecto (con IPv6 de nuevo),
+dejando una instancia corriendo con la configuración rota hasta el
+próximo restart/reinicio si no se hiciera aquí. Validado con evidencia
+real en laboratorio (2026-10-08/09, host `sles15-sp5-sp7`): con el fix
+puesto, `postfix` arranca/reinicia en menos de 1 segundo, `active
+(running)`, escuchando en `127.0.0.1:25`, sin ningún problema. Queda
 registrado en el reporte, sección "Reinicio" (sección 11).
 
 ### 8.6 Trazabilidad del reinicio y conservación de evidencia
