@@ -150,6 +150,18 @@
   ansible.builtin.set_fact:
     sp_migration_dup_applied: true
 
+- name: "Refrescar systemd tras el dup (daemon-reload) antes de tocar cualquier servicio"
+  # El dup puede haber reemplazado archivos de unidad de systemd (de
+  # postfix o de cualquier otro paquete). La mayoría de paquetes SUSE
+  # disparan esto solos vía macros %service_add_post en su %posttrans,
+  # pero no es universal -- barato, idempotente y de solo lectura del
+  # lado de systemd (no inicia/detiene nada por sí solo), así que se
+  # ejecuta siempre como defensa adicional antes de decidir nada sobre
+  # servicios puntuales (deshabilitar, corregir, reiniciar).
+  ansible.builtin.systemd:
+    daemon_reload: true
+  become: true
+
 - name: Verificar paquetes huérfanos/no necesarios tras la migración (informativo)
   ansible.builtin.command:
     cmd: zypper --non-interactive packages --orphaned --unneeded

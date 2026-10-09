@@ -783,7 +783,44 @@ puesto, `postfix` arranca/reinicia en menos de 1 segundo, `active
 (running)`, escuchando en `127.0.0.1:25`, sin ningún problema. Queda
 registrado en el reporte, sección "Reinicio" (sección 11).
 
+**Defensa adicional contra la ventana de carrera real** (2026-10-09):
+`postfix.service` en este proyecto depende de `network.target`
+(confirmado vía `systemctl show`), que solo garantiza que las interfaces
+están "configuradas", **no** que la red ya tiene conectividad real/DNS
+funcionando — esa ventana, durante el arranque, es donde una resolución
+(IPv6 u otra causa futura no identificada) puede demorar o colgarse. La
+misma tarea agrega un *drop-in* de systemd
+(`/etc/systemd/system/postfix.service.d/boot-safety.conf`) con
+`After=network-online.target` + `Wants=network-online.target` (espera a
+que la red esté realmente lista antes de intentar arrancar) y un
+`TimeoutStartSec=30` explícito (systemd ya limita por defecto a 90s, pero
+fijarlo explícito y más corto es más estricto y documentado, en vez de
+depender de un default que podría cambiar). Recarga `systemd`
+(`daemon-reload`) si el *drop-in* cambió, y reinicia postfix si cambió
+cualquiera de los dos fixes.
+
+**Refresco de `systemd` tras el `dup`**: justo después de marcar el `dup`
+como aplicado y antes de tocar cualquier servicio, se ejecuta
+`systemctl daemon-reload` siempre (barato, idempotente, de solo lectura
+del lado de systemd) — el `dup` puede haber reemplazado archivos de
+unidad de systemd de cualquier paquete, y aunque la mayoría de paquetes
+SUSE disparan esto solos (macros `%service_add_post`), no es universal.
+
 ### 8.6 Trazabilidad del reinicio y conservación de evidencia
+
+**Límite de espera del reinicio** (`sp_migration_reboot_timeout`,
+`roles/sp_migration/defaults/main.yml`): decisión explícita del usuario
+para este ambiente (2026-10-09), bajado de 1800s (30min) a **1200s
+(20min)**, un punto medio — ya corregidas las causas reales confirmadas
+de cuelgue indefinido (postfix/IPv6 y el drop-in de red, sección 8.5; MOK
+pendiente, sección 8.7), así que no se necesita tanto margen "por si
+acaso". Se dejó en 20min y no menos porque la mayoría del parque son
+servidores físicos, con tiempos de POST/inicialización de firmware y
+controladora RAID más largos que una VM. No garantiza que un reinicio
+nunca tarde más por una causa nueva todavía no identificada (el peor caso
+real visto en laboratorio, antes de estos fixes, fue ~22min) — lo que sí
+garantiza es que, si pasa, la etapa falla explícito a los 20min en vez de
+seguir esperando en silencio hasta 30min.
 
 Motivadas por un caso real (upgrade a SP7 exitoso, pero con el arranque
 posterior aparentemente colgado un tiempo, sin más información visible en

@@ -481,6 +481,28 @@ ANSIBLE_INVENTORY_PLUGINS: "/runner/project/&lt;CARPETA_DEL_PROJECT&gt;/inventor
     puesto, <code>postfix</code> arranca/reinicia en menos de 1&nbsp;segundo, <code>active
     (running)</code>, sin ningún problema. Ver README sección 8.5.
   </div>
+<div class="callout note">
+<span class="label">Defensas adicionales: daemon-reload y ventana de carrera con la red</span>
+    Justo después del <code>dup</code>, siempre se ejecuta <code>systemctl daemon-reload</code>
+    (barato, idempotente) antes de tocar cualquier servicio, por si el <code>dup</code>
+    reemplazó algún archivo de unidad. Además, <code>postfix.service</code> en este
+    proyecto dependía solo de <code>network.target</code> (interfaces configuradas, no
+    conectividad real) — esa es la ventana de carrera real detrás del cuelgue, más allá
+    de IPv6 específicamente. Un <em>drop-in</em> de systemd agrega
+    <code>After=network-online.target</code> + <code>Wants=network-online.target</code>
+    (espera a que la red esté realmente lista) y <code>TimeoutStartSec=30</code> explícito
+    (systemd ya limita a 90s por defecto, esto es más estricto y documentado). Recarga
+    systemd y reinicia postfix si algo de esto cambió. Ver README sección 8.5.
+  </div>
+<div class="callout note">
+<span class="label">Límite de espera del reinicio: 20 minutos</span>
+    <code>sp_migration_reboot_timeout</code> está en 1200&nbsp;s (20&nbsp;min) — bajado de
+    1800&nbsp;s el 2026-10-09, un punto medio pensado para la mayoría del parque
+    (servidores físicos, con POST/firmware/RAID más lentos que una VM). No garantiza que
+    un reinicio nunca tarde más por una causa nueva no identificada, pero si pasa, la
+    etapa falla explícito a los 20&nbsp;min en vez de esperar en silencio hasta 30.
+    Ver README sección 8.6.
+  </div>
 <div class="callout risk">
 <span class="label">Solicitud MOK pendiente (shim/grub2/kernel) — otra causa real de cuelgue indefinido al reiniciar</span>
     Confirmado con evidencia real en laboratorio (2026-10-08, SP6→SP7): al actualizar
