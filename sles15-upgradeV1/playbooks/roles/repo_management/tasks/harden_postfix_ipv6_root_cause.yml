@@ -1,55 +1,45 @@
 ---
 # roles/repo_management/tasks/harden_postfix_ipv6_root_cause.yml
 #
-# Corrección de la CAUSA RAÍZ real de postfix (ver README sección 8.5).
-# Decisión explícita del usuario para este ambiente (2026-10-09, aplicable
-# a todos los hosts): en vez de deshabilitar postfix permanentemente
-# (política anterior, 2026-10-07 a 2026-10-09), se corrige directamente
-# su configuración y se confía en eso -- postfix queda habilitado/activo
-# como cualquier otro servicio del host.
+# Manejo completo de postfix antes de cualquier reinicio obligatorio (ver
+# README sección 8.5). Decisión explícita del usuario para este ambiente
+# (2026-10-09, revisada el mismo día): se probó primero solo corrigiendo
+# la causa raíz en su configuración y dejándolo habilitado -- volvió a
+# fallar en laboratorio de la misma forma. Estrategia vigente, más
+# conservadora: corregir la configuración IGUAL (defensa en profundidad,
+# por si algo lo reinicia manualmente más adelante), pero además
+# deshabilitarlo, detenerlo y forzar la terminación de cualquier proceso
+# que pudiera quedar colgado -- no se vuelve a confiar únicamente en el
+# fix de configuración para garantizar que nunca intente arrancar.
 #
-# Causa raíz confirmada: con `inet_interfaces = localhost` en main.cf,
-# postfix intenta resolver `::1` (IPv6) en un host sin IPv6 configurado.
-# Con el sistema ya arrancado y estable, ese mismo error falla en menos de
-# 1 segundo; durante el arranque, antes de que la red esté completamente
-# lista, la misma resolución se cuelga en vez de fallar rápido -- ese es
-# el cuelgue real que se confirmó en laboratorio (host sles15-sp5-sp7,
-# 2026-10-08).
+# Causa raíz original confirmada: con `inet_interfaces = localhost` en
+# main.cf, postfix intenta resolver `::1` (IPv6) en un host sin IPv6
+# configurado; durante el arranque, antes de que la red esté completamente
+# lista, esa resolución se cuelga en vez de fallar rápido. El fix de
+# `inet_protocols = ipv4` corrige eso, pero la evidencia real en
+# laboratorio (2026-10-09) mostró que el cuelgue puede repetirse de todas
+# formas -- por eso ya no se confía solo en la corrección: se deshabilita
+# y se detiene de forma activa, con terminación forzada como respaldo
+# final.
 #
-# Fix 1 -- oficial documentado por Postfix para hosts sin IPv6:
-# `inet_protocols = ipv4` -- evita por completo que postfix intente
-# resolver direcciones IPv6, sin importar qué diga `inet_interfaces`.
-# Validado con evidencia real (2026-10-08/09): con el fix puesto,
-# `systemctl start/restart postfix` arranca en menos de 1 segundo,
-# `active (running)`, sin ningún problema.
+# Decisión explícita del usuario para este ambiente (2026-10-09): NO se
+# modifica la unidad de systemd de postfix (ni con un drop-in) -- se
+# probó agregar un drop-in (After=network-online.target +
+# TimeoutStartSec=30) como defensa adicional, pero se descartó: la unidad
+# original de postfix.service queda exactamente como viene del paquete.
+# Solo se le corrige su propio archivo de configuración (main.cf, que no
+# es la unidad de systemd) y se gestiona vía systemctl + kill, nunca
+# modificando el service file ni agregando overrides.
 #
-# Fix 2 -- defensa adicional contra la ventana de carrera real detrás del
-# cuelgue (2026-10-09): `postfix.service` en este proyecto depende de
-# `network.target` (confirmado vía `systemctl show`), que solo garantiza
-# que las interfaces están "configuradas", NO que la red ya tiene
-# conectividad real/DNS funcionando -- esa ventana, durante el arranque,
-# es donde una resolución (IPv6 u otra causa futura no identificada)
-# puede demorar o colgarse. Un *drop-in* de systemd agrega
-# `After=network-online.target` + `Wants=network-online.target` (espera
-# a que la red esté realmente lista antes de intentar arrancar) y un
-# `TimeoutStartSec` explícito y corto (systemd ya limita por defecto a
-# 90s, pero fijarlo explícito a 30s es más estricto y documentado, en vez
-# de depender de un default que podría cambiar).
-#
-# Si algo de lo anterior cambió, se reinicia el servicio de inmediato para
-# que tome el fix ya mismo -- importante porque el propio `dup` puede
-# haber reinstalado el paquete de postfix y reseteado main.cf a sus
-# valores por defecto (con IPv6 de nuevo), dejando una instancia corriendo
-# con la configuración rota hasta el próximo restart/reinicio si no se
-# hace aquí. Idempotente: si no hubo cambios, no reinicia nada. Solo
-# aplica si postfix está instalado en este host.
+# Idempotente: no falla si postfix no está instalado, si ya estaba
+# deshabilitado/detenido, o si no quedaba ningún proceso por terminar.
 
 - name: Verificar si existe la configuración de postfix en este host
   ansible.builtin.stat:
     path: /etc/postfix/main.cf
   register: _postfix_main_cf
 
-- name: "Corregir causa raíz de postfix (inet_protocols = ipv4, evita el cuelgue por resolución IPv6) si está instalado"
+- name: "Corregir causa raíz de postfix (inet_protocols = ipv4, defensa en profundidad) si está instalado"
   ansible.builtin.lineinfile:
     path: /etc/postfix/main.cf
     regexp: '^#?\s*inet_protocols\s*='
@@ -59,53 +49,75 @@
   register: _postfix_ipv6_fix_result
   when: _postfix_main_cf.stat.exists
 
-- name: "Crear el directorio de drop-in de systemd para postfix.service, si está instalado"
+- name: "Quitar cualquier drop-in de systemd para postfix.service que haya quedado de una corrida anterior"
+  # Este proyecto llegó a agregar un drop-in (After=network-online.target
+  # + TimeoutStartSec=30) como defensa adicional; se descartó por decisión
+  # explícita del usuario (2026-10-09): no modificar la unidad de postfix,
+  # dejarla exactamente como viene por defecto. Esto converge cualquier
+  # host donde ya se hubiera aplicado de vuelta a ese estado, sin importar
+  # el historial de corridas anteriores.
   ansible.builtin.file:
     path: /etc/systemd/system/postfix.service.d
-    state: directory
-    mode: "0755"
+    state: absent
   become: true
+  register: _postfix_dropin_removed
   when: _postfix_main_cf.stat.exists
 
-- name: "Agregar drop-in: esperar red realmente lista y limitar el tiempo de arranque, si está instalado"
-  ansible.builtin.copy:
-    dest: /etc/systemd/system/postfix.service.d/boot-safety.conf
-    content: |
-      # Agregado por ansible-sles-upgrade (ver README sección 8.5).
-      # Espera a que la red tenga conectividad real (no solo interfaces
-      # configuradas) antes de intentar arrancar, y limita explícitamente
-      # el tiempo de arranque -- defensa adicional contra un cuelgue de
-      # resolución durante el arranque, más allá del fix de
-      # inet_protocols = ipv4 en main.cf.
-      [Unit]
-      After=network-online.target
-      Wants=network-online.target
-
-      [Service]
-      TimeoutStartSec=30
-    mode: "0644"
-  become: true
-  register: _postfix_dropin_result
-  when: _postfix_main_cf.stat.exists
-
-- name: "Recargar systemd si el drop-in cambió"
+- name: "Recargar systemd si se quitó el drop-in"
   ansible.builtin.systemd:
     daemon_reload: true
   become: true
   when:
     - _postfix_main_cf.stat.exists
-    - _postfix_dropin_result.changed | default(false)
+    - _postfix_dropin_removed.changed | default(false)
 
-- name: "Reiniciar postfix para que tome los fixes de inmediato (solo si algo cambió)"
+- name: "Deshabilitar y detener postfix (ya no se confía solo en la corrección de configuración)"
   ansible.builtin.systemd:
     name: postfix
-    state: restarted
+    enabled: false
+    state: stopped
   become: true
-  when:
-    - _postfix_main_cf.stat.exists
-    - (_postfix_ipv6_fix_result.changed | default(false)) or (_postfix_dropin_result.changed | default(false))
+  when: _postfix_main_cf.stat.exists
+
+- name: "Forzar la terminación de los procesos principales de postfix (master, pickup, qmgr)"
+  # "systemctl stop" de la tarea anterior debería bastar, pero la
+  # evidencia real (2026-10-09) es que el cuelgue volvió a pasar -- este
+  # es el respaldo final explícito que pidió el usuario. "master" es un
+  # nombre de proceso genérico: en teoría podría coincidir con un proceso
+  # no relacionado que se llame igual en este host (poco probable, pero
+  # no verificado).
+  ansible.builtin.command: killall -9 master pickup qmgr
+  become: true
+  changed_when: false
+  failed_when: false
+  when: _postfix_main_cf.stat.exists
+
+- name: "Barrido final: terminar CUALQUIER proceso de postfix por ruta de su binario (smtpd, cleanup, trivial-rewrite, bounce, anvil, proxymap, tlsmgr, local, smtp, etc.)"
+  # "master" (recién eliminado con -9, sin oportunidad de limpiar) puede
+  # dejar huérfanos a sus procesos hijo activos en ese momento -- no solo
+  # pickup/qmgr, también smtpd/cleanup/trivial-rewrite/bounce/anvil/
+  # proxymap/tlsmgr/local/smtp/lmtp según qué estuviera procesando postfix
+  # justo entonces. Un huérfano se reasigna a PID 1 y sigue corriendo
+  # igual. "pkill -f" empareja por la línea de comando completa (ruta del
+  # binario, que en SLES siempre es bajo /usr/lib/postfix/), así que
+  # atrapa a todos sin depender de conocer cada nombre de antemano.
+  ansible.builtin.command: pkill -9 -f /usr/lib/postfix
+  become: true
+  changed_when: false
+  failed_when: false
+  when: _postfix_main_cf.stat.exists
+
+- name: "Verificar que no quedó ningún proceso de postfix corriendo (para el reporte)"
+  ansible.builtin.command: pgrep -af /usr/lib/postfix
+  become: true
+  register: _postfix_leftover_processes
+  changed_when: false
+  failed_when: false
+  when: _postfix_main_cf.stat.exists
 
 - name: "Registrar si se corrigió la causa raíz de postfix en esta corrida (para el reporte)"
   ansible.builtin.set_fact:
-    postfix_ipv6_root_cause_fixed: "{{ (_postfix_ipv6_fix_result.changed | default(false)) or (_postfix_dropin_result.changed | default(false)) }}"
+    postfix_ipv6_root_cause_fixed: "{{ _postfix_ipv6_fix_result.changed | default(false) }}"
+    postfix_disabled_and_killed: true
+    postfix_leftover_processes: "{{ _postfix_leftover_processes.stdout | default('') | trim }}"
   when: _postfix_main_cf.stat.exists

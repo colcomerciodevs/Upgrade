@@ -165,7 +165,21 @@
   <tr><th>Reconexión exitosa</th><td>{{ stage_report.reboot.reconnected | default(false) }}</td></tr>
   <tr><th>Servicios deshabilitados permanentemente antes de reiniciar</th><td>{{ (stage_report.reboot.boot_blocking_services_disabled | default([])) | join(', ') or 'ninguno' }}</td></tr>
   {% if stage_report.reboot.postfix_ipv6_root_cause_fixed is defined %}
-  <tr><th>Causa raíz de postfix corregida (<code>inet_protocols = ipv4</code>)</th><td>{{ stage_report.reboot.postfix_ipv6_root_cause_fixed }} <span class="muted">— defensa adicional: postfix sigue deshabilitado; esto es solo para que, si alguna vez llegara a iniciar, falle rápido en vez de colgar el arranque</span></td></tr>
+  <tr><th>Causa raíz de postfix corregida (<code>inet_protocols = ipv4</code> en su configuración)</th><td>{{ stage_report.reboot.postfix_ipv6_root_cause_fixed | default(false) }} <span class="muted">— defensa en profundidad, aunque postfix quede deshabilitado abajo; la unidad de systemd no se modifica, queda como viene por defecto</span></td></tr>
+  {% if stage_report.reboot.postfix_disabled_and_killed is defined %}
+  <tr><th>postfix deshabilitado, detenido y procesos terminados a la fuerza</th><td>{{ stage_report.reboot.postfix_disabled_and_killed }} <span class="muted">(<code>systemctl disable+stop</code> + <code>killall -9 master pickup qmgr</code> + barrido final <code>pkill -9 -f /usr/lib/postfix</code>)</span></td></tr>
+  {% endif %}
+  {% if stage_report.reboot.postfix_leftover_processes is defined %}
+  <tr><th>Procesos de postfix que quedaron corriendo tras el barrido</th>
+      <td>
+        {% if (stage_report.reboot.postfix_leftover_processes | trim) | length > 0 %}
+          <span class="badge badge-WARNING">quedaron procesos</span>
+          <pre>{{ stage_report.reboot.postfix_leftover_processes }}</pre>
+        {% else %}
+          <span class="badge badge-OK">ninguno</span>
+        {% endif %}
+      </td></tr>
+  {% endif %}
   {% endif %}
   {% set _mok = stage_report.reboot.mok_pending_import | default({}) %}
   {% if _mok %}
@@ -177,6 +191,16 @@
           — <span class="badge badge-OK">revocada automáticamente</span> (Secure Boot deshabilitado; evita que "shim" intercepte el próximo arranque pidiendo confirmación manual en consola)
         {% elif _mok.habia_solicitud_pendiente and _mok.secure_boot_state != 'disabled' %}
           — <span class="badge badge-WARNING">NO revocada (Secure Boot habilitado)</span>: el próximo reinicio puede mostrar la pantalla de MokManager esperando confirmación manual en la consola física/del hipervisor
+        {% endif %}
+      </td></tr>
+  {% endif %}
+  {% set _grub_debug = stage_report.reboot.grub_debug_boot | default({}) %}
+  {% if _grub_debug %}
+  <tr><th>Arranque de depuración de GRUB (<code>grub_debug_boot_enabled</code>)</th>
+      <td>
+        habilitado: {{ _grub_debug.habilitado | default(false) }}
+        {% if _grub_debug.se_aplico_ahora %}
+          — <span class="badge badge-WARNING">aplicado en esta corrida</span> (GRUB en texto plano, sin splash, systemd en modo detallado — ver la consola del hipervisor en el próximo arranque)
         {% endif %}
       </td></tr>
   {% endif %}

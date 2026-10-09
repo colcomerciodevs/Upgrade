@@ -312,6 +312,36 @@ zypper_lock_competing_services:
 # del host sin corrección conocida, no un parche temporal.
 reboot_disable_services: []
 
+# Arranque de depuración (GRUB en texto plano + sin pantalla de carga +
+# systemd en modo detallado) -- deshabilitado por defecto, actívese por
+# host/corrida puntual (host_vars, o -e en el Job de AWX) cuando se
+# necesite ver en la consola del hipervisor qué está haciendo el arranque
+# paso a paso. Decisión explícita del usuario para este ambiente
+# (2026-10-09): motivado por un cuelgue real sin ningún rastro en
+# journald (SP6->SP7, pantalla casi en negro con un guion titilando) --
+# SLES usa GRUB_TERMINAL="gfxterm" con un tema gráfico
+# (GRUB_THEME/GRUB_BACKGROUND) y splash=silent/quiet en el kernel; si ese
+# renderizado gráfico falla en la tarjeta de video virtual del
+# hipervisor (ya confirmado que pasa con el adaptador SVGA de esta VM en
+# el propio sistema operativo -- Mesa/Gallium3D), el arranque puede estar
+# funcionando bien por debajo de una pantalla que simplemente no dibuja
+# nada. Validado con evidencia real (2026-10-09, host sles15-sp5-sp7,
+# sin reiniciar): grub2-mkconfig genera correctamente terminal_input
+# console y la línea de kernel sin splash/quiet, con systemd.log_level=
+# debug + systemd.show_status=1, preservando mitigations/security/
+# crashkernel del host real. Ver
+# roles/repo_management/tasks/configure_grub_debug_boot.yml.
+#
+# Cuando está en true: GRUB_TERMINAL pasa a "console" (texto plano, sin
+# tema gráfico) y se agregan systemd.log_level=debug +
+# systemd.show_status=1 al cmdline, quitando splash=silent/quiet -- vía
+# un bloque delimitado agregado al FINAL de /etc/default/grub (nunca se
+# tocan ni se borran las líneas originales: como el archivo se interpreta
+# como shell, la última asignación de cada variable gana).
+# Cuando está en false (por defecto): el bloque se retira si existía --
+# el host vuelve exactamente a su configuración original de GRUB.
+grub_debug_boot_enabled: false
+
 # Conservar evidencia: habilitar almacenamiento persistente de journald
 # (Storage=persistent + /var/log/journal) justo antes de ejecutar la
 # migración real, para que los logs estructurados de la migración y del

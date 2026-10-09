@@ -1,0 +1,84 @@
+---
+# roles/repo_management/tasks/configure_grub_debug_boot.yml
+#
+# Arranque de depuración opcional, controlado por grub_debug_boot_enabled
+# (playbooks/group_vars/all.yml; false por defecto). Ver ahí la
+# motivación completa (cuelgue real sin ningún rastro en journald,
+# SP6->SP7, 2026-10-09) y la validación hecha en laboratorio sin
+# reiniciar (host sles15-sp5-sp7).
+#
+# Cuando está habilitado: GRUB_TERMINAL pasa a "console" (texto plano,
+# sin el tema gráfico SLE que podría estar fallando en el adaptador de
+# video virtual del hipervisor) y se agrega systemd.log_level=debug +
+# systemd.show_status=1 al cmdline del kernel, quitando splash=silent y
+# quiet -- para poder ver en la consola del hipervisor, paso a paso, qué
+# unidad de systemd se está iniciando (o esperando) durante el arranque.
+#
+# Mecanismo: un bloque delimitado (ansible.builtin.blockinfile) agregado
+# al FINAL de /etc/default/grub. Nunca se tocan ni se borran las líneas
+# originales -- como el archivo se interpreta como shell al generar
+# grub.cfg, la última asignación de cada variable gana, así que el bloque
+# sobrescribe sin necesidad de parsear/reemplazar nada arriba. Cuando
+# grub_debug_boot_enabled es false (por defecto), el bloque simplemente
+# no existe -- el host queda con su configuración de GRUB exactamente
+# como viene por defecto, igual que la decisión ya tomada para la unidad
+# de systemd de postfix (sección 8.5).
+#
+# Conserva los demás parámetros del cmdline original del host
+# (mitigations, security=apparmor, crashkernel, etc.) -- no los
+# hardcodea: los lee de la línea real de GRUB_CMDLINE_LINUX_DEFAULT de
+# este host antes de construir la versión de depuración.
+#
+# Idempotente en ambos sentidos: activar y desactivar reconvergen al
+# estado declarado. Solo aplica si /etc/default/grub existe en este host.
+
+- name: Verificar si existe /etc/default/grub en este host
+  ansible.builtin.stat:
+    path: /etc/default/grub
+  register: _grub_default_file
+
+- name: "Bloque de arranque de depuración de GRUB, solo si /etc/default/grub existe"
+  when: _grub_default_file.stat.exists
+  block:
+    - name: "Leer la línea ORIGINAL de GRUB_CMDLINE_LINUX_DEFAULT (la primera del archivo, nunca una que este bloque hubiera agregado antes)"
+      ansible.builtin.shell: set -o pipefail && grep -m1 '^GRUB_CMDLINE_LINUX_DEFAULT=' /etc/default/grub | cut -d'"' -f2  # noqa command-instead-of-shell
+      args:
+        executable: /bin/bash
+      register: _grub_cmdline_original
+      changed_when: false
+      failed_when: false
+
+    - name: "Calcular el cmdline de depuración (igual al original, sin splash=X ni quiet, con los parámetros de depuración)"
+      ansible.builtin.set_fact:
+        _grub_debug_cmdline: >-
+          {{
+            (
+              (_grub_cmdline_original.stdout | default(''))
+              | regex_replace('\s*splash=\S+', '')
+              | regex_replace('(^|\s)quiet(\s|$)', ' ')
+              | trim
+            ) ~ ' systemd.log_level=debug systemd.show_status=1'
+          }}
+
+    - name: "Gestionar el bloque de arranque de depuración al final de /etc/default/grub"
+      ansible.builtin.blockinfile:
+        path: /etc/default/grub
+        marker: "# {mark} ANSIBLE MANAGED BLOCK -- arranque de depuración (ansible-sles-upgrade, ver README sección 8.6)"
+        block: |
+          GRUB_TERMINAL="console"
+          GRUB_CMDLINE_LINUX_DEFAULT="{{ _grub_debug_cmdline }}"
+        state: "{{ 'present' if (grub_debug_boot_enabled | default(false)) else 'absent' }}"
+      become: true
+      register: _grub_debug_block_result
+
+    - name: "Regenerar grub.cfg (siempre -- idempotente y barato, evita condicionar un comando a .changed de la tarea anterior)"
+      ansible.builtin.command: grub2-mkconfig -o /boot/grub2/grub.cfg
+      become: true
+      changed_when: false
+      when: _grub_debug_block_result.changed | default(false)  # noqa no-handler
+
+    - name: "Registrar el estado del arranque de depuración en esta corrida (para el reporte)"
+      ansible.builtin.set_fact:
+        grub_debug_boot_result:
+          habilitado: "{{ grub_debug_boot_enabled | default(false) }}"
+          se_aplico_ahora: "{{ _grub_debug_block_result.changed | default(false) }}"

@@ -187,6 +187,11 @@
 - name: "Evitar cuelgue de arranque por solicitud MOK pendiente (shim/grub2/kernel), antes del reinicio obligatorio"
   ansible.builtin.include_tasks: revoke_pending_mok_import.yml
 
+- name: "Configurar arranque de depuración de GRUB si está habilitado (grub_debug_boot_enabled)"
+  ansible.builtin.include_role:
+    name: repo_management
+    tasks_from: configure_grub_debug_boot.yml
+
 - name: "Trazabilidad del reinicio: leer boot_id y hora de inicio ANTES de reiniciar"
   # boot_id (/proc/sys/kernel/random/boot_id) es un UUID que el kernel
   # genera de nuevo en cada arranque -- comparar el de antes/después es

@@ -735,7 +735,7 @@ más, junto a los demás). El reporte de la etapa que finalmente los
 reinicia incluye la verificación de `packagekitd` al empezar y qué
 agentes se reiniciaron al terminar (sección 11).
 
-### 8.5 Servicios que pueden colgar el arranque — causa raíz corregida en su configuración
+### 8.5 Servicios que pueden colgar el arranque
 
 `playbooks/group_vars/all.yml` define `reboot_disable_services` (lista
 vacía válida; **por defecto `[]`** desde el cambio de política de abajo).
@@ -758,46 +758,62 @@ estable, el mismo error falla rápido (menos de 1 segundo, confirmado vía
 completamente lista, la misma resolución se cuelga en vez de fallar
 rápido.
 
-Entre 2026-10-07 y 2026-10-09 se manejó deshabilitando `postfix`
-permanentemente vía el mecanismo de arriba (`reboot_disable_services:
-[postfix]`). **Cambio de política — decisión explícita del usuario para
-este ambiente (2026-10-09), aplicable a todos los hosts**: en vez de
-deshabilitarlo, se corrige la causa raíz directamente en su
-configuración y se confía en eso. `postfix` ya **no** está en
-`reboot_disable_services`: queda habilitado/activo como cualquier otro
-servicio del host.
+**Historial de la política** (el motivo del cambio, no solo la decisión
+final): entre 2026-10-07 y 2026-10-09 se manejó deshabilitando `postfix`
+permanentemente. El 2026-10-09 se probó la alternativa de solo corregir
+la causa raíz en su configuración y dejarlo habilitado — **volvió a
+fallar en laboratorio de la misma forma el mismo día**. Decisión
+explícita del usuario para este ambiente, revisada el mismo 2026-10-09:
+ya no se confía únicamente en el fix de configuración; se combinan ambas
+estrategias.
 
-**`roles/repo_management/tasks/harden_postfix_ipv6_root_cause.yml`**
-(se ejecuta siempre, independiente de `reboot_disable_services`) agrega
-`inet_protocols = ipv4` a `/etc/postfix/main.cf` (idempotente, solo si
-postfix está instalado) — el fix oficial documentado por Postfix para
-hosts sin IPv6, que evita por completo el intento de resolución IPv6 sin
-importar qué diga `inet_interfaces`. Si la corrección cambió algo,
-**reinicia postfix de inmediato** para que tome el fix ya mismo —
-importante porque el propio `dup` puede reinstalar el paquete de postfix
-y resetear `main.cf` a sus valores por defecto (con IPv6 de nuevo),
-dejando una instancia corriendo con la configuración rota hasta el
-próximo restart/reinicio si no se hiciera aquí. Validado con evidencia
-real en laboratorio (2026-10-08/09, host `sles15-sp5-sp7`): con el fix
-puesto, `postfix` arranca/reinicia en menos de 1 segundo, `active
-(running)`, escuchando en `127.0.0.1:25`, sin ningún problema. Queda
-registrado en el reporte, sección "Reinicio" (sección 11).
+**Estrategia vigente — `roles/repo_management/tasks/harden_postfix_ipv6_root_cause.yml`**
+(se ejecuta siempre, independiente de `reboot_disable_services`), en este
+orden:
 
-**Defensa adicional contra la ventana de carrera real** (2026-10-09):
-`postfix.service` en este proyecto depende de `network.target`
-(confirmado vía `systemctl show`), que solo garantiza que las interfaces
-están "configuradas", **no** que la red ya tiene conectividad real/DNS
-funcionando — esa ventana, durante el arranque, es donde una resolución
-(IPv6 u otra causa futura no identificada) puede demorar o colgarse. La
-misma tarea agrega un *drop-in* de systemd
-(`/etc/systemd/system/postfix.service.d/boot-safety.conf`) con
-`After=network-online.target` + `Wants=network-online.target` (espera a
-que la red esté realmente lista antes de intentar arrancar) y un
-`TimeoutStartSec=30` explícito (systemd ya limita por defecto a 90s, pero
-fijarlo explícito y más corto es más estricto y documentado, en vez de
-depender de un default que podría cambiar). Recarga `systemd`
-(`daemon-reload`) si el *drop-in* cambió, y reinicia postfix si cambió
-cualquiera de los dos fixes.
+1. **Corregir la configuración de todas formas** (defensa en
+   profundidad): agrega `inet_protocols = ipv4` a `/etc/postfix/main.cf`
+   (idempotente, solo si postfix está instalado) — el fix oficial
+   documentado por Postfix para hosts sin IPv6. Útil por si algo
+   reiniciara postfix manualmente más adelante.
+2. **No modificar la unidad de systemd de postfix** — decisión explícita
+   del usuario para este ambiente (2026-10-09): se llegó a probar un
+   *drop-in* de systemd (`After=network-online.target` +
+   `TimeoutStartSec=30`, contra la ventana de carrera real de que
+   `postfix.service` dependía solo de `network.target` — interfaces
+   configuradas, no conectividad real) como defensa adicional, pero se
+   descartó: `postfix.service` queda exactamente como viene del paquete,
+   sin overrides. Esta tarea además **quita cualquier drop-in que haya
+   quedado de una corrida anterior** (`/etc/systemd/system/postfix.service.d`),
+   para converger cualquier host ya tocado de vuelta a ese estado.
+3. **Deshabilitar y detener** (`systemctl disable` + `stop`) — ya no se
+   confía solo en el fix de configuración para garantizar que nunca
+   intente arrancar.
+4. **Terminación forzada de respaldo**: `killall -9 master pickup qmgr`
+   — por si `systemctl stop` no bastara (la evidencia real del
+   2026-10-09 es que el cuelgue volvió a pasar). `failed_when: false`
+   (no es error si no había ningún proceso corriendo).
+   ⚠️ `master` es un nombre de proceso genérico — en teoría podría
+   coincidir con un proceso no relacionado que se llame igual en algún
+   host (no verificado en este proyecto).
+5. **Barrido final por ruta del binario**: `pkill -9 -f /usr/lib/postfix`
+   — `master` recién terminado con `-9` (sin oportunidad de limpiar)
+   puede dejar huérfanos a sus procesos hijo que estuvieran activos en
+   ese momento (no solo `pickup`/`qmgr`: también `smtpd`, `cleanup`,
+   `trivial-rewrite`, `bounce`, `anvil`, `proxymap`, `tlsmgr`, `local`,
+   `smtp`, según qué estuviera procesando postfix justo entonces) — un
+   huérfano se reasigna a PID 1 y sigue corriendo igual. `pkill -f`
+   empareja por la línea de comando completa (ruta del binario, siempre
+   bajo `/usr/lib/postfix/` en SLES), así que los atrapa a todos sin
+   depender de conocer cada nombre de antemano.
+6. **Verificación explícita**: `pgrep -af /usr/lib/postfix` después del
+   barrido, de solo lectura — si queda algún proceso, se registra tal
+   cual en el reporte (sección "Reinicio") como advertencia, en vez de
+   asumir silenciosamente que quedó todo limpio.
+
+Todo queda registrado en el reporte, sección "Reinicio" (sección 11):
+si se corrigió la configuración, y si postfix quedó deshabilitado/
+detenido/con procesos terminados a la fuerza.
 
 **Refresco de `systemd` tras el `dup`**: justo después de marcar el `dup`
 como aplicado y antes de tocar cualquier servicio, se ejecuta
@@ -812,9 +828,8 @@ SUSE disparan esto solos (macros `%service_add_post`), no es universal.
 `roles/sp_migration/defaults/main.yml`): decisión explícita del usuario
 para este ambiente (2026-10-09), bajado de 1800s (30min) a **1200s
 (20min)**, un punto medio — ya corregidas las causas reales confirmadas
-de cuelgue indefinido (postfix/IPv6 y el drop-in de red, sección 8.5; MOK
-pendiente, sección 8.7), así que no se necesita tanto margen "por si
-acaso". Se dejó en 20min y no menos porque la mayoría del parque son
+de cuelgue indefinido (postfix/IPv6, sección 8.5; MOK pendiente, sección
+8.7), así que no se necesita tanto margen "por si acaso". Se dejó en 20min y no menos porque la mayoría del parque son
 servidores físicos, con tiempos de POST/inicialización de firmware y
 controladora RAID más largos que una VM. No garantiza que un reinicio
 nunca tarde más por una causa nueva todavía no identificada (el peor caso
@@ -902,6 +917,53 @@ confirmación manual en la consola física/del hipervisor. Idempotente: si
 no hay ninguna solicitud pendiente, no hace nada. Si el host no tiene
 `mokutil` instalado (no es UEFI/no aplica), se omite sin error. Queda
 registrado en el reporte, sección "Reinicio" (sección 11).
+
+### 8.8 Arranque de depuración de GRUB (opcional, apagado por defecto)
+
+Herramienta de diagnóstico para cuando un reinicio se cuelga **sin
+ningún rastro** en journald (ej. el caso de MOK de la sección 8.7, o
+cualquier causa todavía no identificada) — motivada por un caso real
+(2026-10-09, SP6→SP7): pantalla casi en negro con solo un guion
+titilando, nada más. SLES usa `GRUB_TERMINAL="gfxterm"` con un tema
+gráfico (`GRUB_THEME`/`GRUB_BACKGROUND`) y `splash=silent`/`quiet` en el
+kernel — si ese renderizado gráfico falla en el adaptador de video
+virtual del hipervisor (confirmado que esto pasa en el propio sistema
+operativo de este host de pruebas: errores de Mesa/Gallium3D/Zink), el
+arranque puede estar funcionando bien **por debajo** de una pantalla que
+simplemente no dibuja nada.
+
+Controlado por `grub_debug_boot_enabled` (`playbooks/group_vars/all.yml`;
+**`false` por defecto**) — actívese por host puntual (`host_vars`) o para
+una corrida específica (`-e` en el Job de AWX) cuando se necesite ver el
+arranque paso a paso en la consola del hipervisor, nunca como
+configuración permanente de toda la flota. Cuando está en `true`:
+
+- `GRUB_TERMINAL` pasa a `"console"` (texto plano, sin el tema gráfico).
+- Se agrega `systemd.log_level=debug` + `systemd.show_status=1` al
+  cmdline del kernel, quitando `splash=*` y `quiet` — conserva el resto
+  de parámetros reales del host (`mitigations`, `security=apparmor`,
+  `crashkernel`, etc.; no los inventa, los lee de la configuración
+  existente de `/etc/default/grub`).
+
+Mecanismo (`roles/repo_management/tasks/configure_grub_debug_boot.yml`):
+un bloque delimitado agregado al **final** de `/etc/default/grub`
+(`ansible.builtin.blockinfile`). Nunca se tocan ni se borran las líneas
+originales — como el archivo se interpreta como shell al generar
+`grub.cfg`, la última asignación de cada variable gana, así que el
+bloque sobrescribe sin necesidad de parsear ni reemplazar nada arriba.
+Cuando `grub_debug_boot_enabled` es `false` (por defecto), el bloque
+simplemente no existe — el host queda con su configuración de GRUB
+exactamente como viene por defecto, mismo principio que la decisión ya
+tomada para la unidad de systemd de postfix (sección 8.5). Regenera
+`grub.cfg` (`grub2-mkconfig`) solo cuando el bloque cambió, en cualquiera
+de los dos sentidos (activar o desactivar).
+
+Validado con evidencia real en laboratorio (2026-10-09, host
+`sles15-sp5-sp7`, sin reiniciar): con el bloque activo, `grub.cfg`
+generado muestra `terminal_output console` y la línea del kernel sin
+`splash`/`quiet`, con los parámetros de depuración — y al desactivarlo,
+vuelve exactamente a la línea original. Queda registrado en el reporte,
+sección "Reinicio" (sección 11).
 
 ---
 
@@ -1059,6 +1121,9 @@ supone que solo prepara.
   kernel) y si se revocó automáticamente (solo cuando Secure Boot está
   deshabilitado) — previene el cuelgue indefinido de `MokManager` al
   reiniciar.
+- **Arranque de depuración de GRUB** (sección 8.8): si
+  `grub_debug_boot_enabled` está activo y si se aplicó en esta corrida —
+  herramienta de diagnóstico opcional, apagada por defecto.
 - **Salida completa del `dup` real, sin recortar** (`.dup_full.log`, junto al
   HTML/JSON de la etapa, mismo nombre): el HTML/JSON recorta la salida del
   `dup` a 20.000 caracteres para seguir siendo legible, lo cual en una

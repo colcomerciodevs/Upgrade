@@ -467,32 +467,31 @@ ANSIBLE_INVENTORY_PLUGINS: "/runner/project/&lt;CARPETA_DEL_PROJECT&gt;/inventor
     servidor — es información de diagnóstico, nunca decide el resultado de la etapa.
     Ver README sección 8.6.
   </div>
-<div class="callout note">
-<span class="label">Causa raíz de postfix corregida en su configuración (política vigente desde 2026-10-09)</span>
-    Este nodo siempre agrega <code>inet_protocols = ipv4</code> a
-    <code>/etc/postfix/main.cf</code> (idempotente, solo si postfix está instalado) — el
-    fix oficial de Postfix para hosts sin IPv6, que es la causa raíz confirmada del
-    cuelgue. Si la corrección cambió algo, <strong>reinicia postfix de inmediato</strong>
-    para que tome el fix ya mismo (el propio <code>dup</code> puede resetear
-    <code>main.cf</code> a sus valores por defecto). <code>postfix</code> ya no está en
-    <code>reboot_disable_services</code>: queda habilitado/activo como cualquier otro
-    servicio del host, en vez de deshabilitado permanentemente (política anterior,
-    2026-10-07 a 2026-10-09). Validado con evidencia real (2026-10-08/09): con el fix
-    puesto, <code>postfix</code> arranca/reinicia en menos de 1&nbsp;segundo, <code>active
-    (running)</code>, sin ningún problema. Ver README sección 8.5.
+<div class="callout risk">
+<span class="label">postfix: corregido, deshabilitado, detenido Y terminado a la fuerza (estrategia vigente desde 2026-10-09)</span>
+    Causa raíz confirmada: <code>inet_interfaces = localhost</code> intentando resolver
+    IPv6 en un host sin IPv6, durante el arranque. Se probó primero solo corrigiendo la
+    configuración (<code>inet_protocols = ipv4</code>) y dejándolo habilitado —
+    <strong>volvió a fallar en laboratorio de la misma forma el mismo día</strong>. Este
+    nodo ya no confía solo en eso: (1) corrige la configuración igual (defensa en
+    profundidad), (2) <strong>deshabilita y detiene</strong> postfix
+    (<code>systemctl disable</code> + <code>stop</code>), y (3) como respaldo final,
+    <strong>fuerza la terminación de cualquier proceso que quedara colgado</strong>
+    (<code>killall -9 master pickup qmgr</code>, seguido de <code>pkill -9 -f
+    /usr/lib/postfix</code> para hijos huérfanos y <code>pgrep -af</code> de
+    verificación). <strong>No se modifica la unidad de systemd de postfix</strong> —
+    se probó un <em>drop-in</em> (<code>After=network-online.target</code> +
+    <code>TimeoutStartSec=30</code>) como defensa adicional, pero se descartó por
+    decisión explícita del usuario: <code>postfix.service</code> queda exactamente
+    como viene del paquete, y esta tarea quita cualquier drop-in que haya quedado de
+    una corrida anterior. Ver README sección 8.5 (incluye la advertencia sobre
+    <code>master</code> como nombre de proceso genérico).
   </div>
 <div class="callout note">
-<span class="label">Defensas adicionales: daemon-reload y ventana de carrera con la red</span>
+<span class="label">Defensa adicional: daemon-reload tras el dup</span>
     Justo después del <code>dup</code>, siempre se ejecuta <code>systemctl daemon-reload</code>
     (barato, idempotente) antes de tocar cualquier servicio, por si el <code>dup</code>
-    reemplazó algún archivo de unidad. Además, <code>postfix.service</code> en este
-    proyecto dependía solo de <code>network.target</code> (interfaces configuradas, no
-    conectividad real) — esa es la ventana de carrera real detrás del cuelgue, más allá
-    de IPv6 específicamente. Un <em>drop-in</em> de systemd agrega
-    <code>After=network-online.target</code> + <code>Wants=network-online.target</code>
-    (espera a que la red esté realmente lista) y <code>TimeoutStartSec=30</code> explícito
-    (systemd ya limita a 90s por defecto, esto es más estricto y documentado). Recarga
-    systemd y reinicia postfix si algo de esto cambió. Ver README sección 8.5.
+    reemplazó algún archivo de unidad. Ver README sección 8.5.
   </div>
 <div class="callout note">
 <span class="label">Límite de espera del reinicio: 20 minutos</span>
@@ -502,6 +501,20 @@ ANSIBLE_INVENTORY_PLUGINS: "/runner/project/&lt;CARPETA_DEL_PROJECT&gt;/inventor
     un reinicio nunca tarde más por una causa nueva no identificada, pero si pasa, la
     etapa falla explícito a los 20&nbsp;min en vez de esperar en silencio hasta 30.
     Ver README sección 8.6.
+  </div>
+<div class="callout note">
+<span class="label">Arranque de depuración de GRUB (opcional, apagado por defecto)</span>
+    <code>grub_debug_boot_enabled</code> (<code>false</code> por defecto, activar por host
+    puntual) — para cuando un reinicio se cuelga sin ningún rastro en journald. SLES usa
+    un tema gráfico de GRUB que puede fallar en renderizar en el adaptador de video
+    virtual del hipervisor (confirmado en este proyecto: errores de Mesa/Gallium3D en el
+    propio sistema operativo), dejando una pantalla negra con solo un guion titilando
+    aunque el arranque esté funcionando bien por debajo. Activado, pone
+    <code>GRUB_TERMINAL="console"</code> (texto plano) y agrega
+    <code>systemd.log_level=debug</code> + <code>systemd.show_status=1</code>, quitando
+    <code>splash</code>/<code>quiet</code> — vía un bloque al final de
+    <code>/etc/default/grub</code>, sin tocar las líneas originales. Ver README
+    sección 8.8.
   </div>
 <div class="callout risk">
 <span class="label">Solicitud MOK pendiente (shim/grub2/kernel) — otra causa real de cuelgue indefinido al reiniciar</span>

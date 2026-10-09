@@ -56,9 +56,87 @@ header.top .wrap{max-width:1280px;padding:0 40px}header.top .kicker,.cover .kick
 </section><section class="main-section" id="s2"><div class="section-head"><div class="section-num">03</div><h2>Orquestación del Workflow de AWX</h2></div>
 <div class="phase-strip"><div><span>01</span><strong>PRECHECK</strong><small>Versión, espacio, conectividad y salud</small></div><div><span>02</span><strong>PREPARAR</strong><small>Repositorios de origen y destino</small></div><div><span>03</span><strong>APLICAR</strong><small>Simulación, migración, reinicio y validación</small></div><div><span>04</span><strong>REPORTAR</strong><small>Evidencia individual y consolidada</small></div><div><span>05</span><strong>SINCRONIZAR</strong><small>Copia opcional a SharePoint</small></div></div>
 <p>El Workflow de cinco nodos permite controlar cada fase y añadir una <strong>aprobación humana opcional entre Preparar y Aplicar</strong>. La ejecución es secuencial por defecto: <code>serial_batch_size: 1</code>. Si un servidor del lote falla, se registra su estado sin presumir que los demás también fallaron o tuvieron éxito.</p>
+<p class="lede">Paso a paso real de cada nodo (lo que ejecuta el código, en orden — ver <code>playbooks/tasks/run_stage.yml</code> y README secciones 8-9 para el detalle completo en prosa):</p>
+
+<div class="step-title"><span class="stepnum">1</span><h3>Nodo 1 — Precheck (<code>playbooks/precheck_only.yml</code>, de solo lectura salvo 2 excepciones)</h3></div>
+<ol class="steps">
+<li>Determinar el Service Pack actual y la etapa objetivo efectiva (autodetectada si no se especifica una).</li>
+<li>Inventariar los repositorios actuales del host (informativo).</li>
+<li><strong>Excepción 1:</strong> instalar la autoridad certificadora interna si falta (idempotente, necesaria para conectar a Foreman/Katello).</li>
+<li><strong>Excepción 2:</strong> pausar temporalmente los agentes de seguridad configurados (<code>zypper_lock_competing_services</code>) si están activos, y esperar a que no quede ningún <code>packagekitd</code> corriendo.</li>
+<li>Verificar servicios críticos del sistema (estado "antes").</li>
+<li>Validar GeoPOS (estado "antes") según las categorías habilitadas.</li>
+<li>Verificar <code>upgrade_mode_coincide_con_sp_real</code>: si el modo elegido no corresponde al Service Pack real detectado, falla aquí mismo, antes de que cualquier otro nodo toque el host.</li>
+<li>Ensamblar y generar el reporte de precheck.</li>
+</ol>
+
+<div class="step-title"><span class="stepnum">2</span><h3>Nodo 2 — Preparar (<code>playbooks/upgrade.yml</code>, <code>upgrade_phase: prepare</code>)</h3></div>
+<ol class="steps">
+<li>Precheck ligero de la etapa (solo Service Pack actual vs. esperado para este salto exacto).</li>
+<li>Verificar <code>confirm_production_upgrade: true</code> (assert obligatorio, antes de tocar cualquier repositorio).</li>
+<li>Verificar/esperar a que no quede ningún <code>packagekitd</code> corriendo (de solo lectura — el Nodo 1 ya detuvo lo que había que detener).</li>
+<li>Inventariar y respaldar <code>/etc/zypp/repos.d</code> completo.</li>
+<li>Deshabilitar únicamente los repositorios preexistentes que estaban habilitados (nunca se borra ninguno).</li>
+<li>Agregar los repos Foreman de <strong>origen</strong> (alias <code>-src-</code>), refrescar.</li>
+<li>Actualizar la pila de gestión de paquetes: <code>zypper patch --updatestack-only</code>, usando exclusivamente esos repos de origen (paso 2 de la guía oficial de SUSE, sección 04).</li>
+<li>Retirar los repos de origen.</li>
+<li>Agregar los repos Foreman de <strong>destino</strong> (alias <code>-dst-</code>), refrescar, y confirmar con un gate de seguridad que es exactamente lo que quedó habilitado.</li>
+<li>Se detiene aquí: sin <code>dup -D</code>, sin <code>dup</code> real, sin reinicio. El sistema SÍ queda modificado (repos cambiados, pila de paquetes actualizada).</li>
+</ol>
+<div class="callout note"><span class="label">Aprobación humana opcional</span>Puede insertarse un Approval Node de AWX entre Preparar y Aplicar, para exigir confirmación antes del cambio irreversible.</div>
+
+<div class="step-title"><span class="stepnum">3</span><h3>Nodo 3 — Aplicar (<code>playbooks/upgrade.yml</code>, <code>upgrade_phase: apply</code> o <code>both</code>)</h3></div>
+<ol class="steps">
+<li>Gate de seguridad: confirmar que los repos de destino de un Preparar previo siguen exactamente habilitados (si no, falla pidiendo ejecutar primero el Nodo 2).</li>
+<li>Verificar/esperar <code>packagekitd</code> (de solo lectura, igual que el Nodo 2).</li>
+<li>Habilitar journald persistente antes de la migración real (sección 06).</li>
+<li><strong>Gate obligatorio</strong> <code>dup -D --no-allow-vendor-change --no-recommends</code> (simulación), inmediatamente antes del <code>dup</code> real. Si falla, la etapa se detiene — sin cambio real, sin reinicio.</li>
+<li><code>dup</code> real. Inmediatamente después, se marca <code>dup_applied: true</code> — esta evidencia no se pierde aunque el reinicio falle después.</li>
+<li>Revisar paquetes huérfanos/no necesarios (informativo).</li>
+<li><code>systemctl daemon-reload</code> (siempre, por si el <code>dup</code> reemplazó algún archivo de unidad).</li>
+<li>Corregir la causa raíz de postfix en su configuración, deshabilitarlo, detenerlo y terminar a la fuerza cualquier proceso que quedara colgado (sección 04, defensa en 4 capas).</li>
+<li>Revocar cualquier solicitud MOK pendiente de <code>shim</code>/<code>grub2</code>/kernel, solo si Secure Boot está deshabilitado (sección 06).</li>
+<li>Configurar el arranque de depuración de GRUB, solo si <code>grub_debug_boot_enabled</code> está activo (herramienta opcional, sección 06).</li>
+<li>Leer <code>boot_id</code> y hora de inicio, <strong>antes</strong> de reiniciar.</li>
+<li><strong>Reinicio obligatorio</strong> (<code>ansible.builtin.reboot</code>) — no existe opción para omitirlo. Límite de espera: 1200s (20&nbsp;min).</li>
+<li>Leer <code>boot_id</code> después de reconectar; calcular si cambió, duración de Ansible y tiempo de reconexión ("doble evidencia").</li>
+<li>Esperar de forma acotada (hasta 120s, nunca bloquea) a que <code>systemd</code> salga de <code>starting</code>.</li>
+<li>Capturar fotografía del sistema post-migración; verificar servicios críticos y GeoPOS (estado "después").</li>
+<li>Verificar el Service Pack alcanzado por <strong>doble evidencia</strong> (<code>/etc/os-release</code> + <code>zypper products</code>) — nunca basta con una sola fuente.</li>
+<li>Calcular <code>stage_validated</code> (gate real hacia el siguiente salto en modo <code>full</code>).</li>
+<li>Si la etapa fue exitosa: retirar los repos de destino, reiniciar los agentes de seguridad (excepto en medio de un <code>full</code> encadenado). Si falló: conservar todo para diagnóstico.</li>
+<li>Inventariar los repositorios habilitados al final; ensamblar y generar el reporte de la etapa.</li>
+</ol>
+
+<div class="step-title"><span class="stepnum">4</span><h3>Nodo 4 — Reportar (<code>playbooks/report_consolidado.yml</code>)</h3></div>
+<ol class="steps">
+<li>Leer el historial completo (<code>run_summary.jsonl</code>) desde <code>report_destination</code> (no <code>report_local_dir</code>, que no sobrevive entre los Jobs separados del Workflow).</li>
+<li>Filtrar al CRQ+Lote exactos de esta ejecución.</li>
+<li>Calcular, por host, todas las fases que corrieron realmente y su estado final real.</li>
+<li>Calcular el estado global del Lote (<code>OK</code> únicamente si todos los hosts están <code>OK</code>).</li>
+<li>Generar el reporte consolidado (<code>consolidado_&lt;LOTE&gt;.html</code>/<code>.json</code>).</li>
+</ol>
+
+<div class="step-title"><span class="stepnum">5</span><h3>Nodo 5 — Sincronizar (<code>playbooks/sync_sharepoint.yml</code>, opcional)</h3></div>
+<ol class="steps">
+<li>Copiar el árbol completo de <code>report_destination</code> para este CRQ hacia la carpeta configurada de SharePoint (<code>sharepoint_sync</code>).</li>
+<li>Requiere la credencial de SharePoint con permiso de <strong>escritura</strong> (<code>Sites.ReadWrite.All</code>) — no la credencial de máquina SSH, este nodo nunca se conecta al servidor SLES.</li>
+</ol>
+
 <div class="callout note"><span class="label">Prevención antes del cambio real</span>La simulación <code>zypper dup -D</code> se realiza <strong>dentro de Aplicar</strong>, justo antes de modificar paquetes. No existe un modo independiente para ejecutarla desde el Survey.</div>
 </section><section class="main-section" id="s3"><div class="section-head"><div class="section-num">04</div><h2>Gestión de repositorios y contenidos</h2></div>
 <p>La migración utiliza <strong>repositorios internos Foreman/Katello</strong> por cada Service Pack. Antes de intervenir, inventaría los repositorios existentes, deshabilita los activos y conserva registro de su estado original; los repositorios temporales de la automatización se retiran tras una etapa satisfactoria.</p>
+<p>El procedimiento técnico sigue, paso a paso, la guía oficial de SUSE (<em>SLES Upgrade Guide</em>, sección "Upgrading with plain Zypper" -- documentada para sistemas sin registro, con acceso a repositorios de actualización adecuados; este proyecto la usa contra Foreman/Katello independientemente del estado de registro real del host, decisión de arquitectura explicada en README sección 2.2):</p>
+<table class="clean"><thead><tr><th>#</th><th>Paso oficial de SUSE</th><th>Implementación en este proyecto</th></tr></thead><tbody>
+<tr><td>1</td><td>Consola de texto (no sesión gráfica)</td><td>N/A (automatización vía SSH, no interactiva)</td></tr>
+<tr><td>2</td><td>Actualizar las herramientas de gestión de paquetes</td><td><code>zypper patch --updatestack-only</code>, usando <strong>exclusivamente</strong> los repos Foreman del SP de <strong>origen</strong> (<code>roles/sp_migration/tasks/updatestack.yml</code>)</td></tr>
+<tr><td>3-4</td><td>Repos con <code>$releasever</code>; verificar que estén bien configurados</td><td>Gestión de repos temporales con alias <code>-src-</code>/<code>-dst-</code>; gates de seguridad que confirman exactamente lo esperado habilitado antes de continuar</td></tr>
+<tr><td>5</td><td>Cambiar y refrescar repos al SP destino</td><td>Se retiran los repos de origen, se agregan los repos Foreman de <strong>destino</strong></td></tr>
+<tr><td>6</td><td>Probar la migración (<code>dup -D</code>)</td><td>Gate obligatorio <code>dup -D --no-allow-vendor-change --no-recommends</code> inmediatamente antes del <code>dup</code> real -- nunca omitible</td></tr>
+<tr><td>7</td><td>Ejecutar la actualización completa (<code>dup</code>)</td><td><code>dup --no-allow-vendor-change --no-recommends</code> real, con <code>--releasever</code> solo en el salto SP6→SP7 (única guía que lo menciona -- sección 2.3 del README)</td></tr>
+<tr><td>8</td><td>Reiniciar</td><td>Reinicio obligatorio, sin excepción, con toda la trazabilidad de la sección 06</td></tr>
+</tbody></table>
+<div class="callout note"><span class="label">¿Hace falta un "parchado completo" antes del dup?</span>La guía oficial, en esta sección puntual, <strong>no</strong> exige un <code>zypper patch</code> completo del SP actual antes de cambiar de repos -- solo exige actualizar la pila de gestión de paquetes (paso 2, ya implementado). Un parchado completo del sistema es higiene general mencionada en otra sección de la guía (prerrequisitos), no un paso de este procedimiento específico.</div>
 <table class="clean"><thead><tr><th>Momento</th><th>Acción</th><th>Razón de diseño</th></tr></thead><tbody>
 <tr><td>Precheck</td><td>Comprueba repositorios de origen y destino, conectividad y configuración.</td><td>Detectar requisitos faltantes antes de modificar repositorios.</td></tr>
 <tr><td>Preparar</td><td>Usa repositorios temporales de origen para actualizar la pila de paquetes; los retira y deja listos los de destino.</td><td>Evitar mezcla de versiones y separar preparación de migración.</td></tr>
@@ -76,7 +154,7 @@ header.top .wrap{max-width:1280px;padding:0 40px}header.top .kicker,.cover .kick
 <div class="callout decision"><span class="label">Fallo controlado</span>Cuando una condición crítica no se cumple, se registra como fallo o no verificado según corresponda. El error no se transforma en una aprobación y se conserva información útil para el diagnóstico.</div>
 <p>La comprobación de <code>reboot_completed</code>/<code>reconnected</code> se complementa con evidencia adicional pensada para diagnóstico post-incidente: <code>boot_id</code> (de <code>/proc/sys/kernel/random/boot_id</code>) antes y después del reinicio -- confirma que ocurrió un reinicio real a nivel de kernel, no solo una reconexión de Ansible tras un corte de red transitorio --, hora de inicio/fin, la duración que devuelve <code>ansible.builtin.reboot</code> y un cálculo independiente del tiempo de reconexión ("doble evidencia", el mismo patrón ya usado para confirmar el Service Pack). Inmediatamente después del reinicio, una espera acotada y no bloqueante (<code>systemd_settle_retries</code>/<code>systemd_settle_delay</code>, 120&nbsp;s por defecto) deja que <code>systemctl is-system-running</code> salga de <code>starting</code> antes de fijar el estado final (<code>running</code>/<code>degraded</code>/agotado sin tiempo).</p>
 <div class="callout note"><span class="label">Conservar evidencia: journald persistente</span>Antes de ejecutar la migración real se habilita <code>Storage=persistent</code> en journald (<code>journald_enable_persistent</code>, idempotente) — mecanismo documentado por SUSE para que los registros estructurados por arranque sobrevivan al reinicio obligatorio, en vez de perderse si journald seguía en modo volátil. Toda esta trazabilidad del reinicio es informativa y queda en el reporte HTML por servidor: nunca decide el resultado de la etapa. Ver README sección 8.6.</div>
-<p>Dos causas raíz reales de cuelgue indefinido al reiniciar, confirmadas en laboratorio y corregidas por esta automatización: (1) <code>postfix</code> intentando resolver IPv6 en un host sin IPv6 (causa raíz corregida en su configuración con <code>inet_protocols = ipv4</code>, con reinicio inmediato del servicio si corrigió algo; desde 2026-10-09 ya no se deshabilita permanentemente — sección 8.5 del README); (2) una solicitud de inscripción de llave MOK pendiente tras actualizar <code>shim</code>/<code>grub2</code>/el kernel, que hace que <code>shim</code> intercepte el arranque siguiente con su pantalla de MokManager esperando una tecla en la consola física/del hipervisor -- por debajo del sistema operativo, invisible para Ansible/journald. Se revoca automáticamente solo cuando Secure Boot está realmente deshabilitado (sección 8.7 del README); si está habilitado, nunca se toca y queda advertido en el reporte. Defensas adicionales (2026-10-09): <code>systemctl daemon-reload</code> siempre después del <code>dup</code>, antes de tocar cualquier servicio; un <em>drop-in</em> de systemd para <code>postfix.service</code> (<code>After=network-online.target</code> + <code>Wants=network-online.target</code> + <code>TimeoutStartSec=30</code>), porque dependía solo de <code>network.target</code> (interfaces configuradas, no conectividad real) -- esa es la ventana de carrera real detrás del cuelgue, más allá de IPv6 específicamente. El límite de espera del reinicio (<code>sp_migration_reboot_timeout</code>) bajó de 1800s a 1200s (20&nbsp;min), un punto medio pensado para servidores físicos.</p>
+<p>Dos causas raíz reales de cuelgue indefinido al reiniciar, confirmadas en laboratorio y corregidas por esta automatización: (1) <code>postfix</code> intentando resolver IPv6 en un host sin IPv6 -- se probó primero solo corrigiendo la configuración (<code>inet_protocols = ipv4</code>) y dejándolo habilitado, pero volvió a fallar en laboratorio el mismo día; la estrategia vigente combina corregir la configuración, deshabilitarlo/detenerlo Y terminar a la fuerza cualquier proceso que quede colgado (<code>killall -9 master pickup qmgr</code>, seguido de <code>pkill -9 -f /usr/lib/postfix</code> y verificación) -- sin modificar la unidad de systemd de postfix, que queda exactamente como viene por defecto (se probó un drop-in y se descartó) -- sección 8.5 del README; (2) una solicitud de inscripción de llave MOK pendiente tras actualizar <code>shim</code>/<code>grub2</code>/el kernel, que hace que <code>shim</code> intercepte el arranque siguiente con su pantalla de MokManager esperando una tecla en la consola física/del hipervisor -- por debajo del sistema operativo, invisible para Ansible/journald. Se revoca automáticamente solo cuando Secure Boot está realmente deshabilitado (sección 8.7 del README); si está habilitado, nunca se toca y queda advertido en el reporte. Defensa adicional (2026-10-09): <code>systemctl daemon-reload</code> siempre después del <code>dup</code>, antes de tocar cualquier servicio. El límite de espera del reinicio (<code>sp_migration_reboot_timeout</code>) bajó de 1800s a 1200s (20&nbsp;min), un punto medio pensado para servidores físicos. Herramienta de diagnóstico opcional, apagada por defecto (<code>grub_debug_boot_enabled</code>): si un reinicio se cuelga sin ningún rastro en journald (pantalla negra con un guion titilando), activa <code>GRUB_TERMINAL="console"</code> (sin el tema gráfico SLE, que se confirmó con problemas de renderizado en este mismo hipervisor) y <code>systemd.log_level=debug</code> + <code>systemd.show_status=1</code>, para ver el arranque paso a paso en la consola -- sección 8.8 del README.</p>
 </section><section class="main-section" id="s6"><div class="section-head"><div class="section-num">07</div><h2>Validación de GeoPOS y salud del sistema</h2></div>
 <p>El modelo permite configurar, por servidor, controles de <strong>servicios systemd, procesos Java, puertos TCP y URLs de salud opcionales</strong>. La validación puede activarse por categoría y admite uno o varios elementos por servidor.</p>
 <table class="clean"><thead><tr><th>Dimensión</th><th>Qué verifica</th><th>Consideración</th></tr></thead><tbody><tr><td>Servicios</td><td>Unidades systemd definidas como críticas.</td><td>Nombres reales por servidor.</td></tr><tr><td>Procesos Java</td><td>Patrones identificables del proceso de GeoPOS.</td><td>No usar simplemente <code>java</code> como único patrón.</td></tr><tr><td>Red</td><td>Puertos TCP y URLs de health check si existen.</td><td>Configurar los endpoints aplicables.</td></tr></tbody></table>
