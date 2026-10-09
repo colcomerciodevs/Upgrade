@@ -36,6 +36,21 @@
   ansible.builtin.include_tasks: ensure_journald_persistent.yml
   when: journald_enable_persistent | default(true)
 
+- name: "Configurar arranque de depuración de GRUB si está habilitado (grub_debug_boot_enabled)"
+  ansible.builtin.include_role:
+    name: repo_management
+    tasks_from: configure_grub_debug_boot.yml
+
+- name: "Armar el arranque de depuración con un reinicio adicional ANTES del dup (solo si grub_debug_boot_enabled; ver arm_grub_debug_boot.yml)"
+  # Debe ir ANTES del dup, no después: lo que se quiere ver con debug es
+  # el apagado de ESTA sesión cuando llegue el reinicio obligatorio
+  # posterior al dup -- si se arma después del dup, ese reinicio de
+  # armado ya bootearía el kernel nuevo instalado por el dup, y el
+  # reinicio obligatorio siguiente sería un segundo reinicio redundante
+  # del mismo kernel ya armado, en vez de uno solo.
+  ansible.builtin.include_tasks: arm_grub_debug_boot.yml
+  when: grub_debug_boot_enabled | default(false)
+
 - name: Ejecutar dup -D como gate obligatorio inmediatamente antes del dup real
   # failed_when: false -- se guarda la salida completa de Zypper en la
   # tarea siguiente antes de decidir fallar explícito.
@@ -155,15 +170,6 @@
 
 - name: "Evitar cuelgue de arranque por solicitud MOK pendiente (shim/grub2/kernel), antes del reinicio obligatorio"
   ansible.builtin.include_tasks: revoke_pending_mok_import.yml
-
-- name: "Configurar arranque de depuración de GRUB si está habilitado (grub_debug_boot_enabled)"
-  ansible.builtin.include_role:
-    name: repo_management
-    tasks_from: configure_grub_debug_boot.yml
-
-- name: "Armar el arranque de depuración con un reinicio adicional ANTES del reinicio real (solo si grub_debug_boot_enabled; ver arm_grub_debug_boot.yml)"
-  ansible.builtin.include_tasks: arm_grub_debug_boot.yml
-  when: grub_debug_boot_enabled | default(false)
 
 - name: "Trazabilidad del reinicio: leer boot_id y hora de inicio ANTES de reiniciar"
   # boot_id es un UUID que el kernel genera en cada arranque -- comparar

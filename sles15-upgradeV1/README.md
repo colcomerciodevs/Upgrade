@@ -889,42 +889,41 @@ generado muestra `terminal_output console` y la línea del kernel sin
 vuelve exactamente a la línea original. Queda registrado en el reporte,
 sección "Reinicio" (sección 11).
 
-**Reinicio adicional de "armado" (motivado por evidencia real,
-2026-10-09)**: en una prueba real con `grub_debug_boot_enabled: true` se
-confirmó que el host sí terminó el upgrade (SP6 confirmado por SSH tras el
-reinicio, `postfix` quedó `disabled`/`inactive`, el `cmdline` real del
-nuevo arranque ya traía `systemd.log_level=debug systemd.show_status=1`),
-pero el operador reportó una ventana con aspecto de error de postfix
-**a los pocos segundos de enviar el reinicio, antes de llegar a GRUB** —
-es decir, durante el **apagado** de la sesión que ya estaba corriendo
-(systemd deteniendo servicios), no durante el arranque nuevo.
-`GRUB_CMDLINE_LINUX_DEFAULT` solo afecta al *próximo* arranque: el kernel
-que ya está corriendo conserva los parámetros con los que arrancó, así
-que ese apagado seguía siendo ciego aunque el bloque de depuración ya
-estuviera escrito en `/etc/default/grub`.
+**Reinicio adicional de "armado", ANTES del `dup` (no después)**: en una
+prueba real con `grub_debug_boot_enabled: true` el operador reportó una
+ventana con aspecto de error de postfix a los pocos segundos de enviar el
+reinicio obligatorio posterior al `dup`, **antes de llegar a GRUB** — es
+decir, durante el **apagado** de la sesión que hizo el `dup`, no durante
+el arranque nuevo. `GRUB_CMDLINE_LINUX_DEFAULT` solo afecta al *próximo*
+arranque: el kernel que ya está corriendo conserva los parámetros con los
+que arrancó, así que ese apagado sigue siendo ciego a menos que esa misma
+sesión ya haya arrancado con los parámetros de depuración activos.
 
 Por eso, `roles/sp_migration/tasks/arm_grub_debug_boot.yml` agrega un
 **reinicio adicional**, incluido justo después de
-`configure_grub_debug_boot.yml` y **antes** del reinicio real de la
-migración, **solo cuando `grub_debug_boot_enabled` es `true`**: su único
-propósito es dejar el kernel en ejecución ya "armado" con los parámetros
-de depuración, para que cuando ocurra el reinicio real de la migración,
-su propio apagado (la ventana "antes de GRUB") también quede visible en
-la consola del hipervisor, además del arranque posterior. Como esa misma
-prueba dejó la duda de si lo visto era realmente `plymouth` tomando la
-consola (quitar `splash`/`quiet` no lo garantiza, sus unidades no están
-necesariamente condicionadas a ese parámetro en SLES), también se agregó
-`plymouth.enable=0` al cmdline de depuración (ver arriba) como seguro
-adicional. Es idempotente:
-si el kernel que ya está corriendo ya tiene `systemd.log_level=debug` en
-su `/proc/cmdline` (por ejemplo, porque esta etapa ya se había ejecutado
-antes con el flag en `true`), no se reinicia una segunda vez. Si este
-reinicio de armado no logra reconectar, la etapa falla explícitamente ahí
-mismo — no se continúa al reinicio real de la migración sin confirmar que
-el host volvió. Cuando `grub_debug_boot_enabled` es `false` (por
-defecto), esta tarea no se incluye y no hay ningún reinicio adicional.
-Queda registrado en el reporte junto con el resto de esta sección
-(`armado_con_reinicio_adicional`).
+`configure_grub_debug_boot.yml` y **antes del gate `dup -D`/`dup` real**
+(nunca después), **solo cuando `grub_debug_boot_enabled` es `true`**: deja
+el kernel en ejecución ya "armado" con los parámetros de depuración antes
+de que el `dup` corra, para que cuando ese `dup` dispare el reinicio
+obligatorio, su propio apagado (la ventana "antes de GRUB") también quede
+visible en la consola del hipervisor, además del arranque posterior.
+Armarlo *después* del `dup` sería incorrecto: ese reinicio de armado ya
+arrancaría el kernel nuevo que el `dup` instaló, y el reinicio obligatorio
+siguiente sería un segundo reinicio redundante del mismo kernel ya armado,
+en vez de uno solo.
+
+`plymouth.enable=0` se agregó al cmdline de depuración (ver arriba) como
+seguro adicional, porque quitar `splash`/`quiet` no garantiza por sí solo
+que `plymouth` no tome la consola igual.
+
+Es idempotente: si el kernel que ya está corriendo ya tiene
+`systemd.log_level=debug` en su `/proc/cmdline`, no se reinicia una
+segunda vez. Si este reinicio de armado no logra reconectar, la etapa
+falla explícitamente ahí mismo — no se continúa al `dup` ni al reinicio
+real sin confirmar que el host volvió. Cuando `grub_debug_boot_enabled`
+es `false` (por defecto), esta tarea no se incluye y no hay ningún
+reinicio adicional. Queda registrado en el reporte junto con el resto de
+esta sección (`armado_con_reinicio_adicional`).
 
 ---
 

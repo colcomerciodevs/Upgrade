@@ -2,16 +2,18 @@
 # roles/sp_migration/tasks/arm_grub_debug_boot.yml
 #
 # Reinicio ADICIONAL, solo cuando grub_debug_boot_enabled es true, incluido
-# justo después de configure_grub_debug_boot.yml y antes del reinicio real
-# de la migración (roles/sp_migration/tasks/main.yml).
+# justo después de configure_grub_debug_boot.yml y ANTES del dup (nunca
+# después): lo que se quiere ver con debug es el apagado de la sesión que
+# hace el dup, cuando llegue el reinicio obligatorio posterior a él. Si
+# este armado se hiciera después del dup, su propio reinicio ya booteraría
+# el kernel nuevo instalado por el dup, y el reinicio obligatorio
+# siguiente sería un segundo reinicio redundante del mismo kernel ya
+# armado -- en vez de uno solo.
 #
 # GRUB_CMDLINE_LINUX_DEFAULT solo afecta al PRÓXIMO arranque -- el kernel
-# que ya está corriendo conserva los parámetros con los que arrancó. Sin
-# este reinicio de "armado", el apagado de la sesión que hace el dup
-# seguiría sin mostrar los parámetros de depuración, porque ocurre antes
-# de que el kernel nuevo (ya con debug) llegue a arrancar. Este reinicio
-# deja el kernel en ejecución ya armado, para que el reinicio real de la
-# migración muestre tanto su apagado como su arranque en la consola.
+# que ya está corriendo conserva los parámetros con los que arrancó. Este
+# reinicio deja el kernel en ejecución ya armado, para que cuando el dup
+# corra y dispare su reinicio obligatorio, ese apagado también sea visible.
 #
 # Idempotente: si el kernel en ejecución ya tiene systemd.log_level=debug
 # en su /proc/cmdline, no se reinicia de nuevo.
@@ -25,7 +27,7 @@
   ansible.builtin.set_fact:
     _grub_debug_already_armed: "{{ 'systemd.log_level=debug' in (_current_running_cmdline_raw.content | b64decode) }}"
 
-- name: "Reiniciar para armar el modo de depuración ANTES del reinicio real de la migración (solo si aún no está armado)"
+- name: "Reiniciar para armar el modo de depuración ANTES del dup y del reinicio real de la migración (solo si aún no está armado)"
   when: not _grub_debug_already_armed
   block:
     - name: "Reiniciar (armado de depuración) y esperar reconexión"
@@ -33,7 +35,7 @@
         reboot_timeout: "{{ sp_migration_reboot_timeout }}"
         connect_timeout: "{{ sp_migration_reboot_connect_timeout }}"
         pre_reboot_delay: "{{ sp_migration_reboot_pre_reboot_delay }}"
-        msg: "Reinicio de armado de depuración (ansible-sles-upgrade, grub_debug_boot_enabled) previo al reinicio real de la migración"
+        msg: "Reinicio de armado de depuración (ansible-sles-upgrade, grub_debug_boot_enabled) previo al dup y al reinicio real de la migración"
       become: true
       register: _grub_debug_arming_reboot_result
 
@@ -41,14 +43,14 @@
       ansible.builtin.set_fact:
         grub_debug_boot_armed_with_extra_reboot: true
   rescue:
-    - name: "Fallar explícitamente si el reinicio de armado no se completó -- no continuar al reinicio real de la migración sin confirmar que el host volvió"
+    - name: "Fallar explícitamente si el reinicio de armado no se completó -- no continuar al dup sin confirmar que el host volvió"
       ansible.builtin.fail:
         msg: >-
           El reinicio adicional para armar el arranque de depuración de GRUB
           (grub_debug_boot_enabled) no se completó o no se pudo reconectar
-          tras él. No se continúa con el reinicio real de la migración sin
-          confirmar primero que el host volvió correctamente de este
-          reinicio previo.
+          tras él. No se continúa con el dup ni con el reinicio real de la
+          migración sin confirmar primero que el host volvió correctamente
+          de este reinicio previo.
 
 - name: "Registrar que el armado de depuración ya estaba activo (sin necesidad de reinicio adicional)"
   ansible.builtin.set_fact:

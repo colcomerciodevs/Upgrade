@@ -514,16 +514,16 @@ ANSIBLE_INVENTORY_PLUGINS: "/runner/project/&lt;CARPETA_DEL_PROJECT&gt;/inventor
     <code>systemd.log_level=debug</code> + <code>systemd.show_status=1</code> +
     <code>plymouth.enable=0</code>, quitando <code>splash</code> (con o sin valor) y
     <code>quiet</code> — vía un bloque al final de <code>/etc/default/grub</code>, sin
-    tocar las líneas originales. Validado con una prueba real completa (2026-10-09): el
-    host llegó a SP6 con el <code>cmdline</code> de depuración activo, pero apareció una
-    ventana de error (parecida a postfix) a los pocos segundos de enviar el reinicio,
-    <strong>antes</strong> de llegar a GRUB —es decir, durante el apagado de la sesión
-    anterior, que el flag no cubría porque <code>GRUB_CMDLINE_LINUX_DEFAULT</code> solo
-    afecta al próximo arranque. Por eso se agregó un <strong>reinicio adicional de
-    "armado"</strong> (<code>roles/sp_migration/tasks/arm_grub_debug_boot.yml</code>), solo
-    cuando el flag está en <code>true</code> y antes del reinicio real de la migración,
-    para que el apagado de ese reinicio real también quede visible en consola.
-    <code>plymouth.enable=0</code> se agregó por la misma evidencia: quitar
+    tocar las líneas originales. Lo que interesa ver es el apagado de la sesión que hace
+    el <code>dup</code>, no un arranque nuevo —y <code>GRUB_CMDLINE_LINUX_DEFAULT</code>
+    solo afecta al próximo arranque—, así que se agregó un <strong>reinicio adicional de
+    "armado"</strong> (<code>roles/sp_migration/tasks/arm_grub_debug_boot.yml</code>),
+    solo cuando el flag está en <code>true</code> y <strong>antes del gate
+    <code>dup -D</code>/<code>dup</code> real</strong> (nunca después): deja el kernel ya
+    corriendo con los parámetros de depuración antes de que el <code>dup</code> corra,
+    para que su apagado posterior también quede visible en consola. Armarlo después del
+    <code>dup</code> sería un segundo reinicio redundante del mismo kernel ya armado, en
+    vez de uno solo. <code>plymouth.enable=0</code> se agregó como seguro adicional: quitar
     <code>splash</code>/<code>quiet</code> no garantiza que <code>plymouth</code> no tome
     la consola igual. Ver README sección 8.7.
   </div>
