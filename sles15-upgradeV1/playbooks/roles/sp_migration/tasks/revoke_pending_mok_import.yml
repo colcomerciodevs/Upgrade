@@ -1,33 +1,23 @@
 ---
 # roles/sp_migration/tasks/revoke_pending_mok_import.yml
 #
-# Evitar un cuelgue REAL confirmado en laboratorio (2026-10-08, host
-# sles15-sp5-sp7, SP6->SP7): al actualizar shim/grub2/kernel, sus propios
+# Evita un cuelgue real de arranque: al actualizar shim/grub2/kernel, sus
 # scripts de instalación pueden dejar en cola una solicitud de inscripción
-# de llave MOK (Machine Owner Key, "mokutil --list-new"). En el siguiente
-# arranque, shim intercepta el proceso con su pantalla de MokManager para
-# confirmar/rechazar esa llave -- ANTES de que GRUB o el kernel carguen,
-# sin timeout, esperando una tecla en la consola física/del hipervisor.
-# Eso es invisible para SSH, journald y Ansible: se ve como un cuelgue
-# indefinido justo al reiniciar, sin ningún rastro en los logs del
-# sistema operativo (confirmado: el SO se había apagado limpio antes).
+# de llave MOK (Machine Owner Key). En el siguiente arranque, shim
+# intercepta con su pantalla de MokManager -- antes de GRUB/kernel, sin
+# timeout, esperando una tecla en la consola física/del hipervisor.
+# Invisible para SSH/journald/Ansible: se ve como un cuelgue sin rastro.
 #
-# Solo se actúa cuando Secure Boot está REALMENTE deshabilitado
-# ("mokutil --sb-state"): ahí esa llave pendiente no protege nada y
-# cancelarla es seguro. Si Secure Boot estuviera habilitado, la solicitud
-# podría ser legítima y necesaria -- en ese caso NUNCA se toca, y queda
-# registrado para que el operador la resuelva a propósito (sabiendo que
-# eso exige interacción física en la consola en el próximo reinicio).
+# Solo se actúa si Secure Boot está REALMENTE deshabilitado (ahí la llave
+# pendiente no protege nada); si está habilitado, nunca se toca y queda
+# registrado para que el operador la resuelva.
 #
 # Idempotente: si no hay ninguna solicitud pendiente, no hace nada.
 
 - name: "Verificar si el binario mokutil existe en este host"
-  # "command -v" es un builtin de la shell (bash/sh), no un binario real --
-  # ansible.builtin.command ejecuta directamente sin pasar por una shell,
-  # así que buscaría un programa literal llamado "command" y fallaría
-  # siempre (confirmado con evidencia real: /usr/bin/command no existe en
-  # SLES 15), dejando esta protección completa en "skipping" sin que nadie
-  # lo notara. shell sí interpreta el builtin correctamente.
+  # "command -v" es builtin de shell -- ansible.builtin.command ejecuta
+  # sin shell y fallaría siempre buscando un binario "command" que no
+  # existe, dejando esto en "skipping" sin aviso. shell sí lo interpreta.
   ansible.builtin.shell: command -v mokutil  # noqa command-instead-of-shell
   register: _mokutil_present
   changed_when: false

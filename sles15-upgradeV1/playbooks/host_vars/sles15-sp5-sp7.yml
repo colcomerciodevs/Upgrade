@@ -1,10 +1,8 @@
 ---
 # playbooks/host_vars/sles15-sp5-sp7.yml
 #
-# Servicios GeoPOS reales encontrados en este host de pruebas (confirmado
-# por SSH de solo lectura, 2026-10-08): el journal del arranque posterior
-# al upgrade SP5->SP6 muestra a systemd-sysv-generator generando wrappers
-# de compatibilidad para estos servicios SysV (/etc/init.d/):
+# Servicios GeoPOS reales encontrados en este host de pruebas (SysV,
+# wrappers generados por systemd-sysv-generator):
 #
 #   geopos, geopromotion, geopos-verificador,
 #   tomcat6-conciliacion, tomcat6-consola, tomcat6-salida,

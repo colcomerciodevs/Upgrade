@@ -67,11 +67,8 @@
       }}
 
 - name: "Verificar estado general de systemd (informativo, para que el operador revise si queda algo importante)"
-  # Decisión explícita del usuario para este ambiente (2026-10-07):
-  # informativo únicamente -- NUNCA decide por sí solo el resultado de la
-  # etapa (un "degraded" puede ser completamente irrelevante, como
-  # postfix/correo, o puede ser algo real; el operador es quien debe
-  # revisarlo, ver README sección 11).
+  # Informativo únicamente -- nunca decide por sí solo el resultado de la
+  # etapa; el operador revisa si "degraded" es real o irrelevante.
   ansible.builtin.command:  # noqa command-instead-of-module
     cmd: systemctl is-system-running
   register: _systemd_system_state_raw

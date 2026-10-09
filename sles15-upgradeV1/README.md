@@ -31,7 +31,6 @@ Este proyecto automatiza:
 - **SP6 → SP7**
 - **SP5 → SP6 → SP7** de forma secuencial (modo `full`)
 - Precheck independiente (`precheck`)
-- Preflight real independiente contra Foreman (`validate`)
 
 La ruta operacional es siempre secuencial. **Este proyecto nunca realiza
 saltos directos de etapa** (ni SP4 → SP6, ni SP5 → SP7). Si una etapa no
@@ -93,7 +92,7 @@ Se verificó el texto completo de las tres guías oficiales:
   `dup -D` y `dup`.
 
 Por lo tanto, este proyecto usa `--releasever` únicamente en la etapa
-SP6 → SP7 (tanto en `validate` como en `dup`/`dup -D` de `UPGRADE`), nunca en
+SP6 → SP7 (en `dup`/`dup -D` de `UPGRADE`), nunca en
 SP4 → SP5 ni en SP5 → SP6. Esta asimetría es intencional y está documentada
 aquí, no es un error. Ver el diseño técnico completo en
 `docs/ARQUITECTURA_Y_DISENO_TECNICO.html`.
@@ -235,12 +234,11 @@ real antes de producción (ver también sección 14):
   [`playbooks/roles/repo_management/files/coldecom-ca.crt`](playbooks/roles/repo_management/files/coldecom-ca.crt)
   y **se instala automáticamente** en esa ruta —y se actualiza el almacén
   de confianza del sistema con `update-ca-certificates`— justo antes de
-  que se agregue o use cualquier repo Foreman real, tanto en `validate`
-  (`playbooks/roles/sp_migration/tasks/preflight.yml`) como en los modos reales de
+  que se agregue o use cualquier repo Foreman real en los modos reales de
   `UPGRADE` (`playbooks/roles/repo_management/tasks/add_temp_repos.yml`), vía
   `playbooks/roles/repo_management/tasks/ensure_ca_trusted.yml`. Es la única
-  escritura al sistema operativo que ocurre durante `validate` —decisión
-  explícita para este ambiente, ver `ARQUITECTURA_Y_DISENO_TECNICO.html`,
+  escritura al sistema operativo que hace PRECHECK —decisión explícita
+  para este ambiente, ver `ARQUITECTURA_Y_DISENO_TECNICO.html`,
   sección 1—, idempotente y sin afectar servicios. La verificación de firma
   GPG de estos repos se omite a propósito (`zypper addrepo --no-gpgcheck`,
   por repositorio, nunca el flag global): decisión explícita del usuario
@@ -254,7 +252,8 @@ real antes de producción (ver también sección 14):
   en `Library`/`Default Organization View`, sin promoción).
 - Prueba real de conectividad desde un host SLES hacia esas URLs (el rol
   `precheck` la ejecuta automáticamente cuando hay repos configurados; la
-  validación de que Zypper puede usarlas de verdad ocurre en `validate`).
+  validación de que Zypper puede usarlas de verdad ocurre con el gate
+  obligatorio `dup -D` de la migración real).
 
 ### Ciclo de vida de repositorios en un UPGRADE real
 
@@ -345,8 +344,8 @@ el archivo, extensamente comentado, para el detalle):
   `permanent_repos` es puramente informativo (sección 2.4).
 - **Sistema**: `critical_services` (vacía por defecto — CHANGE_ME real),
   `precheck_disk_checks`, `precheck_btrfs_double_space_check`,
-  `reboot_disable_services` (sección 8.5), `journald_enable_persistent`,
-  `systemd_settle_retries`/`systemd_settle_delay` (sección 8.6).
+  `reboot_disable_services` (sección 8.4), `journald_enable_persistent`,
+  `systemd_settle_retries`/`systemd_settle_delay` (sección 8.5).
 - **GeoPOS**: `geopos_validation.*` (ver sección 7).
 - **Reportes**: `report_enabled`, `report_local_dir`, `report_destination`.
 
@@ -437,25 +436,33 @@ Reglas:
   incondicionalmente (independientemente de `fail_precheck_if_unhealthy`):
   si un componente crítico queda insalubre tras el upgrade, la etapa se
   marca `FAILED` — alcanzar el Service Pack objetivo **no** es, por sí
-  solo, criterio de éxito (ver sección 8.3).
+  solo, criterio de éxito (ver sección 8.2).
 - El patrón de proceso Java (`match`) debe identificar específicamente el
   componente GeoPOS (se usa con `pgrep -f`); un patrón como `java` no es
   válido para este propósito.
 
 ---
 
-## 8. PRECHECK, VALIDATE y UPGRADE — tres cosas distintas
+## 8. PRECHECK y UPGRADE — dos cosas distintas
 
-Este proyecto distingue deliberadamente tres niveles, cada uno con un
+Este proyecto distingue deliberadamente dos niveles, cada uno con un
 propósito propio. No son sinónimos ni pasos intercambiables:
 
-| | **PRECHECK** | **VALIDATE** | **UPGRADE** (`sp5_to_sp6` / `sp6_to_sp7` / `full`) |
-|---|---|---|---|
-| Propósito | Salud y preparación del **servidor** | Simulación **real** del upgrade **contra Foreman** | Ejecución real, **con modificación del servidor** |
-| ¿Toca `/etc/zypp/repos.d`? | No | No (usa un directorio de repos aislado y temporal, ver 8.2) | Sí (backup, deshabilitar, agregar temporales, limpiar) |
-| ¿Contacta los repos Foreman? | Solo conectividad HTTP/HTTPS básica | Sí, con Zypper real (metadata, TLS/CA, solver; GPG omitido a propósito, ver 8.2) | Sí (igual que VALIDATE, pero de forma persistida) |
-| ¿Puede dejar el sistema modificado? | Solo la CA interna, si faltaba (ver 8.1) | Igual que PRECHECK (misma CA, si faltaba) | Sí, además, únicamente si `confirm_production_upgrade: true` |
-| ¿Puede terminar "OK" sin haber comprobado nada realmente? | N/A | **No** — si el preflight no se pudo ejecutar, el resultado es `FAILED` o `NOT_CHECKED`, nunca `OK` | N/A |
+| | **PRECHECK** | **UPGRADE** (`sp5_to_sp6` / `sp6_to_sp7` / `full`) |
+|---|---|---|
+| Propósito | Salud y preparación del **servidor** | Ejecución real, **con modificación del servidor** |
+| ¿Toca `/etc/zypp/repos.d`? | No | Sí (backup, deshabilitar, agregar temporales, limpiar) |
+| ¿Contacta los repos Foreman? | Solo conectividad HTTP/HTTPS básica | Sí, con Zypper real (metadata, TLS/CA, solver; GPG omitido a propósito, vía el gate obligatorio `dup -D`) |
+| ¿Puede dejar el sistema modificado? | Solo la CA interna, si faltaba (ver 8.1) | Sí, además, únicamente si `confirm_production_upgrade: true` |
+
+> **Nota (2026-10-09)**: este proyecto tuvo un tercer nivel, `VALIDATE`
+> (preflight real aislado contra Foreman, sin modificar el servidor,
+> `upgrade_mode: validate`). Decisión explícita del usuario para este
+> ambiente: se quitó por completo — nunca se conectó a ningún Job
+> Template/Survey de AWX y no se usaba. La verificación real contra
+> Foreman (metadata/GPG/TLS/solver) sigue existiendo, pero únicamente
+> dentro de un modo real, vía el gate obligatorio `dup -D` inmediatamente
+> antes del `dup` real (sección 9).
 
 ### 8.1 PRECHECK (rol `precheck`) — no destructivo, con dos excepciones documentadas
 
@@ -464,14 +471,14 @@ llamadas a `addrepo`/`removerepo`/`modifyrepo`, estado de repos
 byte-idéntico antes/después). Las 2 excepciones (instalar la CA interna si
 falta, y detener temporalmente agentes de seguridad que interfieran con
 Zypper — ambas idempotentes/reversibles) se describen más abajo y en la
-sección 8.4.
+sección 8.3.
 
 **Única excepción, decisión explícita del usuario para este ambiente**:
 `repos_reachability.yml` instala la CA interna real ("CAColdecom",
 `playbooks/roles/repo_management/files/coldecom-ca.crt`) en el almacén de
 confianza del sistema, **si todavía no está presente**, antes de probar
 conectividad HTTPS contra Foreman. Sin esto, un host que nunca ejecutó
-`validate`/un upgrade real antes reportaría `FAILED` en esos checks
+un upgrade real antes reportaría `FAILED` en esos checks
 únicamente por falta de confianza TLS, no por un problema real de
 red/Foreman (confirmado en laboratorio: 20 checks `endpoint_alcanzable_*`
 con `CERTIFICATE_VERIFY_FAILED`). Es una operación idempotente y no
@@ -500,9 +507,11 @@ Valida (ver `playbooks/roles/precheck/tasks/`):
   tocar cualquier repositorio preexistente**: que `katello.<sp>_repositories`
   esté configurado (no vacío) tanto para el Service Pack de origen como
   para el de destino, que no contenga valores `CHANGE_ME` sin completar, y
-  que sus URLs sean alcanzables (conectividad + TLS/CA básico, sección
-  8.2 para la validación real). Si falta cualquiera de los dos conjuntos,
-  el precheck **bloquea** (`FAILED`) antes de que `repo_management`
+  que sus URLs sean alcanzables (conectividad + TLS/CA básico; la
+  validación real de metadata/GPG/TLS/solver ocurre con el gate
+  obligatorio `dup -D` de la migración real, sección 9). Si falta
+  cualquiera de los dos conjuntos, el precheck **bloquea** (`FAILED`)
+  antes de que `repo_management`
   deshabilite ningún repositorio preexistente — evita descubrir a mitad de
   camino que falta el repo de origen o de destino.
 - **Service Pack actual = el esperado** para la
@@ -519,9 +528,9 @@ Valida (ver `playbooks/roles/precheck/tasks/`):
   `sp6_to_sp7` en un host que todavía está en SP5 (salto directo, nunca
   permitido). `full` es la única excepción real — válido para un host en
   SP5, SP6 **o** SP7 (autodetecta el salto correcto), pero igual `FAILED`
-  si el host está en SP4 (`full` nunca encadena SP4→SP5). `precheck`,
-  `validate` o sin dato: `NOT_CHECKED` (no tienen un único origen fijo que
-  validar aquí).
+  si el host está en SP4 (`full` nunca encadena SP4→SP5). `precheck` o
+  sin dato: `NOT_CHECKED` (no tienen un único origen fijo que validar
+  aquí).
 - Arquitectura, hostname, kernel, uptime (informativo, para el reporte).
 - Espacio en disco: filesystems configurados en `precheck_disk_checks`
   (0..N, sin umbrales inventados — permanece `NOT_CHECKED` hasta que se
@@ -543,96 +552,7 @@ Valida (ver `playbooks/roles/precheck/tasks/`):
 Una condición insegura para continuar **falla explícitamente** (no se
 oculta con `ignore_errors`).
 
-### 8.2 VALIDATE — preflight REAL de la migración, sin dejar cambios
-
-`validate` va más allá de una prueba de conectividad: ejecuta un
-**preflight real de Zypper contra los repos Foreman de la etapa
-siguiente**, para comprobar de verdad acceso a metadata, TLS/CA,
-resolución de dependencias, y qué paquetes se actualizarían/instalarían/
-degradarían/eliminarían (la verificación de firma GPG se omite a
-propósito, ver más abajo) — **sin modificar `/etc/zypp/repos.d` ni instalar
-nada**.
-
-**Mecanismo — `--reposd-dir` (no `--disable-repositories`/`--plus-repo`):**
-se evaluó usar `--disable-repositories` + `--plus-repo`, pero
-`--disable-repositories` está documentada únicamente como *"Do not read
-meta-data from repositories"* — no hay evidencia documental de que
-garantice que el solver use **exclusivamente** los repos indicados por
-`--plus-repo`. Se optó por el mecanismo inequívoco: la opción global
-`--reposd-dir <dir>` (*"Use alternative repository definition file
-directory"*) hace que Zypper **solo pueda ver** los repos definidos en ese
-directorio, porque es el único lugar donde busca definiciones de
-repositorio. **Alcance exacto**: `--reposd-dir` aísla los archivos `.repo`
-(dónde busca Zypper definiciones de repositorio); no se afirma ni se asume
-que también aísle servicios de Zypper (`services.d`) u otros componentes.
-`playbooks/roles/sp_migration/tasks/preflight.yml`:
-
-1. Verifica con `zypper --help` que el Zypper del host soporta
-   `--reposd-dir`. Si no lo soporta, **no se inventa una alternativa**: el
-   resultado queda `NOT_CHECKED` con el motivo explícito.
-2. Crea un directorio temporal vacío (p. ej.
-   `/var/tmp/ansible-sles-upgrade-validate-sp7-<timestamp>/`), sin ninguna
-   relación con `/etc/zypp/repos.d`.
-3. Agrega allí, con `zypper --reposd-dir <dir> --non-interactive addrepo`,
-   únicamente los repos Foreman de la etapa objetivo, y refresca
-   **exclusivamente esos alias** (nunca `-s`/`--services`, por la misma
-   razón que en UPGRADE: sección 5).
-4. Ejecuta `dup -D --no-allow-vendor-change --no-recommends` contra ese
-   mismo directorio aislado — el chequeo real de metadata + TLS/CA + solver
-   contra el Service Pack de **destino** (GPG omitido a propósito, ver
-   más abajo).
-5. Opcionalmente, si se le indican repos de **origen**
-   (`sp_migration_origin_repositories`), hace lo mismo en un **segundo
-   directorio aislado independiente** pero solo con `refresh` (sin `dup`,
-   ya que verificar que el origen es accesible no requiere calcular una
-   migración): confirma que los repos Foreman del Service Pack de origen
-   también son alcanzables y su metadata es válida, sin mezclarlos nunca
-   con los de destino.
-6. **Siempre** (éxito o fallo) elimina ambos directorios temporales al final.
-
-**Verificación GPG omitida por decisión explícita del usuario (2026-10-06,
-ver `CLAUDE.md`)**: el `addrepo` de este preflight (y el de `add_temp_repos.yml`
-en UPGRADE real) usa `--no-gpgcheck` — flag oficial de Zypper, **por
-repositorio** (nunca el global `--no-gpg-checks`) — únicamente sobre los
-repos Foreman que esta automatización agrega. Motivo confirmado por API el
-2026-10-06: este Foreman no tenía ninguna GPG key asociada a ningún
-Product/Repository, por lo que Zypper rechazaba toda la metadata como no
-firmada; el usuario decidió, para este ambiente (repos exclusivamente en
-red interna, nunca públicos), omitir la verificación de firma en vez de
-asociar la GPG key de SUSE ya creada en Foreman (`SUSE-Linux-Enterprise-15-GPG-KEY`)
-a los ~20 Products/40 Repositories involucrados. Esto **no** afecta la
-verificación TLS/CA contra Foreman, que sigue siendo obligatoria y real en
-este mismo preflight.
-
-**Regla explícita: VALIDATE nunca es "OK" si el preflight no se ejecutó
-realmente — ni siquiera parcialmente.** El resultado global combina origen
-y destino con esta prioridad estricta:
-
-```
-FAILED en origen o en destino          -> global FAILED
-si no, NOT_CHECKED en origen           -> global NOT_CHECKED
-si no (origen OK y destino OK)         -> global OK
-```
-
-Esto significa que **si solo se verificó el destino y falta el origen**
-(por ejemplo, `katello.sp5_repositories` sin configurar todavía para una
-etapa SP5→SP6), el resultado global es `NOT_CHECKED`, **nunca `OK`** —
-aunque el `dup -D` contra el destino haya salido perfecto. Verificar solo
-la mitad del procedimiento real (falta `updatestack` contra el origen) no
-es una validación completa. De la misma forma, si no hay repos Foreman
-configurados en absoluto, o el Zypper del host no soporta `--reposd-dir`,
-o cualquiera de los dos chequeos falla, el resultado queda en `NOT_CHECKED`
-o `FAILED` respectivamente — el Job de AWX se marca como no exitoso para
-que quede visible que la validación no se completó, sin tener que abrir
-el reporte.
-
-`validate` también reutiliza los chequeos básicos de PRECHECK (SO/SP,
-inventario de repos, servicios críticos, GeoPOS) para dar contexto
-completo en un solo reporte, pero **el resultado de VALIDATE nunca
-bloquea ni condiciona una ejecución posterior de UPGRADE**: son modos
-independientes que un operador puede invocar por separado.
-
-### 8.3 Verificación post-reboot en UPGRADE (no basta con `/etc/os-release`)
+### 8.2 Verificación post-reboot en UPGRADE (no basta con `/etc/os-release`)
 
 Después de una migración real aplicada (ver sección 9), se recaptura el
 estado del sistema en un hecho **separado y explícito**
@@ -662,7 +582,7 @@ pasa (`OK` o `WARNING`, nunca `FAILED`) se activa `stage_validated: true`,
 el gate real que permite continuar a la
 siguiente etapa en modo `full` (ver sección 10).
 
-### 8.4 Agentes de seguridad corporativos que interfieren con Zypper
+### 8.3 Agentes de seguridad corporativos que interfieren con Zypper
 
 Decisión explícita del usuario para este ambiente (2026-10-06), tras
 diagnosticar en vivo (SSH de solo lectura, `sles15-sp5-sp7` /
@@ -735,13 +655,13 @@ más, junto a los demás). El reporte de la etapa que finalmente los
 reinicia incluye la verificación de `packagekitd` al empezar y qué
 agentes se reiniciaron al terminar (sección 11).
 
-### 8.5 Servicios que pueden colgar el arranque
+### 8.4 Servicios que pueden colgar el arranque
 
 `playbooks/group_vars/all.yml` define `reboot_disable_services` (lista
 vacía válida; **por defecto `[]`** desde el cambio de política de abajo).
 Un servicio que se agregue ahí queda deshabilitado **permanentemente**
 (`systemctl disable` + `stop`, nunca se reinicia después — a diferencia
-de los agentes de seguridad de la sección 8.4, que se pausan
+de los agentes de seguridad de la sección 8.3, que se pausan
 temporalmente) justo antes de **cualquier** reinicio obligatorio de este
 proyecto, vía `roles/repo_management/tasks/disable_boot_blocking_services.yml`.
 Resérvese para un problema sin corrección conocida.
@@ -822,14 +742,14 @@ del lado de systemd) — el `dup` puede haber reemplazado archivos de
 unidad de systemd de cualquier paquete, y aunque la mayoría de paquetes
 SUSE disparan esto solos (macros `%service_add_post`), no es universal.
 
-### 8.6 Trazabilidad del reinicio y conservación de evidencia
+### 8.5 Trazabilidad del reinicio y conservación de evidencia
 
 **Límite de espera del reinicio** (`sp_migration_reboot_timeout`,
 `roles/sp_migration/defaults/main.yml`): decisión explícita del usuario
 para este ambiente (2026-10-09), bajado de 1800s (30min) a **1200s
 (20min)**, un punto medio — ya corregidas las causas reales confirmadas
-de cuelgue indefinido (postfix/IPv6, sección 8.5; MOK pendiente, sección
-8.7), así que no se necesita tanto margen "por si acaso". Se dejó en 20min y no menos porque la mayoría del parque son
+de cuelgue indefinido (postfix/IPv6, sección 8.4; MOK pendiente, sección
+8.6), así que no se necesita tanto margen "por si acaso". Se dejó en 20min y no menos porque la mayoría del parque son
 servidores físicos, con tiempos de POST/inicialización de firmware y
 controladora RAID más largos que una VM. No garantiza que un reinicio
 nunca tarde más por una causa nueva todavía no identificada (el peor caso
@@ -886,7 +806,7 @@ evidencia adicional, con más detalle estructurado.
 
 Los tres quedan en el reporte, sección "Reinicio" (sección 11).
 
-### 8.7 Solicitud MOK pendiente (shim/grub2/kernel) — causa real de un cuelgue indefinido al reiniciar
+### 8.6 Solicitud MOK pendiente (shim/grub2/kernel) — causa real de un cuelgue indefinido al reiniciar
 
 Caso real confirmado en laboratorio (2026-10-08, host `sles15-sp5-sp7`,
 SP6→SP7): el arranque quedó colgado **indefinidamente** justo al reiniciar
@@ -906,7 +826,7 @@ Secure Boot deshabilitado** (confirmado: `mokutil --sb-state` mostraba
 `disabled` en ese mismo host).
 
 `roles/sp_migration/tasks/revoke_pending_mok_import.yml` (se ejecuta junto
-con la sección 8.5, antes de cualquier reinicio obligatorio) verifica esto
+con la sección 8.4, antes de cualquier reinicio obligatorio) verifica esto
 y, **solo si Secure Boot está realmente deshabilitado**, revoca
 automáticamente cualquier solicitud MOK pendiente (`mokutil
 --revoke-import`) para que `shim` no intercepte el próximo arranque. Si
@@ -918,10 +838,10 @@ no hay ninguna solicitud pendiente, no hace nada. Si el host no tiene
 `mokutil` instalado (no es UEFI/no aplica), se omite sin error. Queda
 registrado en el reporte, sección "Reinicio" (sección 11).
 
-### 8.8 Arranque de depuración de GRUB (opcional, apagado por defecto)
+### 8.7 Arranque de depuración de GRUB (opcional, apagado por defecto)
 
 Herramienta de diagnóstico para cuando un reinicio se cuelga **sin
-ningún rastro** en journald (ej. el caso de MOK de la sección 8.7, o
+ningún rastro** en journald (ej. el caso de MOK de la sección 8.6, o
 cualquier causa todavía no identificada) — motivada por un caso real
 (2026-10-09, SP6→SP7): pantalla casi en negro con solo un guion
 titilando, nada más. SLES usa `GRUB_TERMINAL="gfxterm"` con un tema
@@ -958,7 +878,7 @@ bloque sobrescribe sin necesidad de parsear ni reemplazar nada arriba.
 Cuando `grub_debug_boot_enabled` es `false` (por defecto), el bloque
 simplemente no existe — el host queda con su configuración de GRUB
 exactamente como viene por defecto, mismo principio que la decisión ya
-tomada para la unidad de systemd de postfix (sección 8.5). Regenera
+tomada para la unidad de systemd de postfix (sección 8.4). Regenera
 `grub.cfg` (`grub2-mkconfig`) solo cuando el bloque cambió, en cualquiera
 de los dos sentidos (activar o desactivar).
 
@@ -1052,7 +972,7 @@ por `stage_current_sp`/`stage_target_sp`/`stage_releasever`):
    fallan, la etapa termina en `FAILED` con esa causa exacta (`reboot_fallido`),
    **conservando** `dup_applied: true` y sin intentar la validación
    post-reboot (no tendría sentido si no se pudo reconectar).
-10. **Validación post-reboot** (sección 8.3, solo si el reinicio se
+10. **Validación post-reboot** (sección 8.2, solo si el reinicio se
     completó) → determina `stage_validated`.
 11. **Limpieza**: si la etapa fue exitosa (`OK`/`WARNING`), se retiran
     únicamente los repos Foreman de destino de esta etapa. Si falló (en
@@ -1061,9 +981,10 @@ por `stage_current_sp`/`stage_target_sp`/`stage_releasever`):
     habilitado —, salvo `cleanup_repositories_on_failure: true`.
 
 No existe una variable `dry_run` para estos modos ni una opción para omitir
-el reinicio: para **ensayar sin modificar nada**, use `upgrade_mode:
-validate` (sección 8.2). Un modo real siempre ejecuta el gate `dup -D`
-internamente, de forma obligatoria, inmediatamente antes del `dup` real.
+el reinicio. Un modo real siempre ejecuta el gate `dup -D`
+internamente, de forma obligatoria, inmediatamente antes del `dup` real —
+es la única comprobación real previa que existe, y nunca deja el sistema
+modificado si falla.
 
 ---
 
@@ -1072,7 +993,6 @@ internamente, de forma obligatoria, inmediatamente antes del `dup` real.
 | Modo | Qué hace | Modifica el sistema |
 |---|---|---|
 | `precheck` | Salud y preparación del servidor: prechecks de la sección 8.1 (etapa objetivo autodetectada) | No, salvo instalar la CA interna si falta (idempotente, ver sección 8.1) |
-| `validate` | Preflight real del upgrade contra Foreman (sección 8.2): metadata, TLS/CA y solver de Zypper (GPG omitido a propósito), más los chequeos básicos de precheck | No |
 | `sp4_to_sp5` | Ejecuta la etapa SP4→SP5 completa (para hosts que todavía están en SP4). **Independiente**: nunca se encadena dentro de `full` | Sí, si `confirm_production_upgrade: true` |
 | `sp5_to_sp6` | Ejecuta la etapa SP5→SP6 completa (ver secciones 8-9) | Sí, si `confirm_production_upgrade: true` |
 | `sp6_to_sp7` | Ejecuta la etapa SP6→SP7 completa | Sí, si `confirm_production_upgrade: true` |
@@ -1148,21 +1068,21 @@ supone que solo prepara.
   ser irrelevante, como un servicio de correo sin usar, o puede ser algo
   real); el operador debe revisar manualmente la lista de unidades
   `failed` si aparece alguna.
-- **Trazabilidad del reinicio** (sección 8.6): `boot_id` antes/después (y
+- **Trazabilidad del reinicio** (sección 8.5): `boot_id` antes/después (y
   si cambió), hora de inicio y de reconexión, duración devuelta por el
   módulo `ansible.builtin.reboot` y tiempo de reconexión por reloj de
   pared, resultado de la espera acotada a que `systemd` saliera de
   `starting`, y estado de `journald` persistente — todo en la sección
   "Reinicio" del reporte de cada etapa, puramente informativo.
-- **Causa raíz de postfix corregida** (sección 8.5): si se agregó
+- **Causa raíz de postfix corregida** (sección 8.4): si se agregó
   `inet_protocols = ipv4` a su configuración en esta corrida (defensa
   adicional; postfix sigue deshabilitado permanentemente).
-- **Solicitud MOK pendiente** (sección 8.7): estado de Secure Boot, si
+- **Solicitud MOK pendiente** (sección 8.6): estado de Secure Boot, si
   había una solicitud de inscripción de llave pendiente (`shim`/`grub2`/
   kernel) y si se revocó automáticamente (solo cuando Secure Boot está
   deshabilitado) — previene el cuelgue indefinido de `MokManager` al
   reiniciar.
-- **Arranque de depuración de GRUB** (sección 8.8): si
+- **Arranque de depuración de GRUB** (sección 8.7): si
   `grub_debug_boot_enabled` está activo, si se aplicó en esta corrida y si
   hizo falta un reinicio adicional de "armado" antes del reinicio real
   (para que el apagado de esa sesión, antes de GRUB, también quede
@@ -1237,7 +1157,7 @@ individuales (HTML + JSON) con el mismo árbol de 3 niveles:
   con espacios y caracteres especiales convertidos a `_` (ej. `RFC 2026-PRUEBA` →
   `RFC_2026-PRUEBA`). Si quedó vacío (ejecución local sin Survey), la carpeta es
   `SIN_CRQ`.
-- **etapa**: `{{ action }}` para `precheck`/`validate`/`full`, o
+- **etapa**: `{{ action }}` para `precheck`/`full`, o
   `{{ action }}_{{ phase }}` cuando `upgrade_phase` (sección 10.1) es `prepare` o
   `apply` (ej. `sp5_to_sp6_prepare`, `sp5_to_sp6_apply`) — `both` no se agrega al
   nombre, para no generar una carpeta redundante.
@@ -1290,7 +1210,7 @@ se pudo confirmar desde el desarrollo de este proyecto. Ver
 - Si SP6 falla, no reinicia, o no queda validado, **no se continúa a SP7**
   para ese host (en modo `full`) — ver `stage_validated`, sección 10.
 - Al final de la ejecución, si el resultado del host fue `FAILED` **o**
-  `NOT_CHECKED` (validate incompleto), la tarea del host se marca
+  `NOT_CHECKED` (validación incompleta), la tarea del host se marca
   explícitamente como fallida en Ansible/AWX, después de haber generado
   igualmente el reporte completo.
 - Los repositorios temporales y el respaldo se **conservan** ante un fallo
@@ -1386,10 +1306,9 @@ para casos donde no se necesita el control granular por etapa.
   no son solo trazabilidad — son el mecanismo de selección de hosts; se
   crea una sola vez en el Workflow Job Template):
   - `upgrade_mode` (choice: en el Workflow, solo sp4_to_sp5 / sp5_to_sp6 /
-    sp6_to_sp7 / full — precheck ya es automático en el Nodo 1 y validate
-    no participa en el Workflow; en la alternativa de un solo Job
-    Template, las 6: precheck / validate / sp4_to_sp5 / sp5_to_sp6 /
-    sp6_to_sp7 / full)
+    sp6_to_sp7 / full — precheck ya es automático en el Nodo 1; en la
+    alternativa de un solo Job Template, las 5: precheck / sp4_to_sp5 /
+    sp5_to_sp6 / sp6_to_sp7 / full)
   - `confirm_production_upgrade` (choice, **no boolean** — AWX no tiene ese tipo de
     pregunta; ver nota abajo)
   - `upgrade_crq` (texto, **obligatorio**): "Ingrese el CRQ/RFC"
@@ -1437,16 +1356,16 @@ para casos donde no se necesita el control granular por etapa.
   filtro, el string `"false"` (no vacío) se evaluaría como verdadero en
   Jinja y **autorizaría** la migración real por error.
 
-  **¿Qué pasa si se selecciona `precheck` (o `validate`) con
+  **¿Qué pasa si se selecciona `precheck` con
   `confirm_production_upgrade: true`?** Nada distinto de dejarlo en
   `false`: ese valor solo se lee dentro de `playbooks/tasks/run_stage.yml`
   (línea con el assert), y ese archivo únicamente se incluye cuando
   `upgrade_mode` es `sp4_to_sp5`/`sp5_to_sp6`/`sp6_to_sp7`/`full` (ver
-  `playbooks/upgrade.yml`). `precheck` y `validate` nunca llegan a ese
-  código, así que el valor de `confirm_production_upgrade` se ignora por
-  completo bajo esos dos modos — no hay ninguna combinación de
-  `upgrade_mode`/`confirm_production_upgrade` que haga que `precheck` o
-  `validate` modifiquen el servidor.
+  `playbooks/upgrade.yml`). `precheck` nunca llega a ese código, así que
+  el valor de `confirm_production_upgrade` se ignora por completo bajo
+  ese modo — no hay ninguna combinación de
+  `upgrade_mode`/`confirm_production_upgrade` que haga que `precheck`
+  modifique el servidor.
 
   **Por qué el prefijo `upgrade_`** (y no `crq`/`lote`/`ambiente` a secas):
   el inventario dinámico de arriba ya expone esos mismos nombres como
@@ -1470,7 +1389,7 @@ para casos donde no se necesita el control granular por etapa.
   seleccionar nada ni contra el host equivocado. Deje `Limit` vacío y sin
   "Prompt on Launch" en el Job Template: ya no participa en la selección.
 - **Schedule**: opcional, para ejecuciones programadas (por ejemplo,
-  `validate` periódico) — en ese caso, `upgrade_crq`/`upgrade_lote`/
+  `precheck` periódico) — en ese caso, `upgrade_crq`/`upgrade_lote`/
   `upgrade_ambiente` deben fijarse como extra-vars del Schedule, igual que
   cualquier otro valor del Survey.
 
@@ -1534,9 +1453,8 @@ efímera dentro del contenedor del Execution Environment).
 Survey.
 
 Mientras estos valores permanezcan como `CHANGE_ME` o listas vacías, el
-proyecto es seguro de ejecutar en modos de solo lectura (`precheck` y
-`validate`), pero **no debe usarse para una migración real** hasta
-completarlos.
+proyecto es seguro de ejecutar en el modo de solo lectura (`precheck`),
+pero **no debe usarse para una migración real** hasta completarlos.
 
 Ver [`docs/CHECKLIST_LABORATORIO.html`](docs/CHECKLIST_LABORATORIO.html) para
 el checklist completo (variables a conseguir, prerrequisitos de
@@ -1581,7 +1499,7 @@ infraestructura y orden recomendado de la primera ejecución real).
   considerar, como decisión explícita del administrador para ese host,
   detener `packagekit.service` antes de la ventana de mantenimiento (este
   proyecto ya lo hace automáticamente en Precheck para los agentes
-  conocidos, sección 8.4; esto es para cualquier otro caso).
+  conocidos, sección 8.3; esto es para cualquier otro caso).
   **Diagnóstico automático** (decisión explícita del usuario, 2026-10-07):
   cada uno de estos mensajes de fallo ya incluye, al final, la salida real
   de `systemctl status packagekit.service` y de `ps -ef | grep -Ei
@@ -1599,11 +1517,11 @@ infraestructura y orden recomendado de la primera ejecución real).
   decisión explícita del usuario de omitir la verificación GPG
   (`--no-gpgcheck` por repositorio, ver sección 5 y `CLAUDE.md`) — ya no
   debería reaparecer. Si vuelve a aparecer un error de "unsigned"/firma
-  pese a esto, revisar que el fix siga presente en
-  `add_temp_repos.yml`/`preflight.yml`.
+  pese a esto, revisar que el fix siga presente en `add_temp_repos.yml`.
 - **Precheck en `WARNING` en `endpoint_alcanzable_*`**: el host respondió
   (HTTP 401/403/404, por ejemplo), pero eso no confirma que el repositorio
-  sea utilizable — ejecute `validate` para la comprobación real.
+  sea utilizable — la comprobación real (metadata/GPG/TLS/solver) ocurre
+  con el gate obligatorio `dup -D` al ejecutar un modo real.
 - **Precheck en `FAILED` en `endpoint_alcanzable_*` con detalle "Connection
   failure: the read operation timed out"**: confirmado con evidencia real
   en laboratorio (2026-10-06) que puede ocurrir de forma intermitente por
@@ -1620,17 +1538,12 @@ infraestructura y orden recomendado de la primera ejecución real).
   Si existe una excepción operacional autorizada, sobrescribir
   `fail_precheck_if_unhealthy: false` en el `host_vars` correspondiente
   (queda registrado en el reporte).
-- **`validate` (preflight) en `FAILED`**: revisar
-  `stage_report.preflight.output_summary` en el reporte — contiene la
-  salida completa de Zypper. La verificación de firma GPG se omite a
-  propósito (`--no-gpgcheck`, decisión explícita del usuario, ver sección 5
-  y `CLAUDE.md`), así que ya no es una causa posible. Las causas más
-  comunes son: certificado TLS no confiable, URL de repo incorrecta, o
-  conflictos reales del solver.
-- **`validate` (preflight) en `NOT_CHECKED` con `supported: false`**: el
-  Zypper de ese host no expone `--reposd-dir` (muy poco probable en SLES
-  15, pero se verifica en cada ejecución en vez de asumirlo). Revisar
-  `zypper --help` manualmente en el host.
+- **Gate `dup -D` en `FAILED` (modo real)**: revisar la salida completa de
+  Zypper en el reporte (`stage_report.migration`/`.dup_full.log`, sección
+  11). La verificación de firma GPG se omite a propósito (`--no-gpgcheck`,
+  decisión explícita del usuario, ver sección 5 y `CLAUDE.md`), así que ya
+  no es una causa posible. Las causas más comunes son: certificado TLS no
+  confiable, URL de repo incorrecta, o conflictos reales del solver.
 - **Precheck en `WARNING` en `service_pack_doble_evidencia`**: `/etc/os-release`
   y `zypper products -i` no coinciden. No bloquea (el formato exacto del
   atributo de versión de Zypper para un Service Pack no está confirmado en
@@ -1698,12 +1611,6 @@ no-op simulable como éxito o fallo, por seguridad), probando:
   que quedó habilitado, para diagnóstico.
 - **`stage_validated` nunca es `true` si el reinicio o la reconexión
   fallan** (mismo caso anterior).
-- **VALIDATE usa `--reposd-dir` real y aislado, en dos directorios
-  independientes** (uno para origen con solo `refresh`, otro para destino
-  con `refresh` + `dup -D`): se verificó que ambos se crean, que Zypper
-  solo ve en cada uno los repos que le corresponden (nunca se mezclan entre
-  sí ni con los repos preexistentes), y que ambos se eliminan del
-  filesystem al finalizar.
 - **El gate `stage_validated` hacia SP7** se probó con 4 escenarios
   (SP6 falló / SP6 validado / host ya en SP6 / SP6 nunca completó
   dup+reboot): SP7 solo se ejecuta en los casos correctos.
@@ -1717,10 +1624,6 @@ no-op simulable como éxito o fallo, por seguridad), probando:
   fallar con "variable indefinida"), y el precheck reportó correctamente
   `FAILED` por repos Foreman vacíos — la prueba concreta de que la
   reubicación de variables (sección 6) funciona.
-- **`validate` con origen `NOT_CHECKED` y destino `OK` da como resultado
-  global `NOT_CHECKED`, nunca `OK`.**
-- **`validate` con origen `OK`, destino `OK` y `dup -D` `OK` da como
-  resultado global `OK`.**
 - **Un Service Pack correcto según `/etc/os-release` pero con evidencia de
   `zypper products` inconsistente produce `stage_validated: false` y
   `status: FAILED`** (`service_pack_evidencia_inconsistente`), conservando
@@ -1770,7 +1673,7 @@ pruebas antes/después de la corrección):
   se confirmó el formato para GA en la documentación oficial). Esto es
   ahora el riesgo más relevante a confirmar en laboratorio: desde esta
   revisión, la doble evidencia es un **gate real y obligatorio** de
-  `stage_validated` (sección 8.3) — si el parser no reconoce el formato
+  `stage_validated` (sección 8.2) — si el parser no reconoce el formato
   real de un SLES de laboratorio, **cada etapa quedará `FAILED`** con esa
   causa exacta (`service_pack_sin_evidencia_zypper`) hasta corregir el
   regex de `playbooks/roles/precheck/tasks/capture_state.yml` con la evidencia real
@@ -1785,6 +1688,6 @@ pruebas antes/después de la corrección):
 - Cualquier interacción real con Foreman/Katello (autenticación,
   Content Views, GPG) — todos los `CHANGE_ME` de la sección 14.
 
-Antes de producción: ejecutar `precheck` y luego `validate` contra un host
-de laboratorio real con datos de Foreman/Katello reales, revisar el
-reporte, y solo entonces evaluar una ejecución real de `sp5_to_sp6`.
+Antes de producción: ejecutar `precheck` contra un host de laboratorio
+real con datos de Foreman/Katello reales, revisar el reporte, y solo
+entonces evaluar una ejecución real de `sp5_to_sp6`.

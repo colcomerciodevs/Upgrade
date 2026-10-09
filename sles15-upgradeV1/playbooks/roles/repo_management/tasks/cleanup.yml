@@ -12,10 +12,8 @@
 # "ansible-sles-upgrade-sp6-dst-"). Acumula en `repos_temporary_removed`
 # (debe inicializarse en [] al comenzar la etapa).
 #
-# EVIDENCIA PARCIAL: si el repo N falla al eliminarse, los repos 1..N-1 ya
-# eliminados deben quedar registrados en repos_temporary_removed de todos
-# modos. El loop nunca aborta a mitad de camino (failed_when: false); el
-# fallo se reporta explícitamente DESPUÉS de consolidar la evidencia real.
+# Si un repo falla al eliminarse, los anteriores quedan registrados igual
+# (failed_when: false); el fallo se reporta explícito después.
 
 - name: Listar repositorios actuales para localizar los temporales a eliminar
   ansible.builtin.command:

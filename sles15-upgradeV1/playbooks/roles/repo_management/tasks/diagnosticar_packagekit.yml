@@ -3,9 +3,7 @@
 #
 # Captura un diagnóstico de solo lectura de qué está bloqueando a Zypper
 # (packagekitd u otro gestor de paquetes) justo en el momento del fallo,
-# para que el mensaje de error sea explícito sobre la causa real sin que
-# el operador tenga que conectarse por SSH. Decisión explícita del
-# usuario para este ambiente (2026-10-07).
+# para que el mensaje de error sea explícito sin tener que conectarse por SSH.
 #
 # Deja el resultado en packagekit_diagnostico (string), para que quien
 # incluya este archivo lo agregue a su propio mensaje de fallo. Nunca

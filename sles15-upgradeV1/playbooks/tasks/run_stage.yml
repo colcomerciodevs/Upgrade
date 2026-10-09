@@ -169,14 +169,9 @@
       when: stage_status != 'FAILED'
       block:
         - name: "Verificar/esperar a que no quede ningún packagekitd en ejecución (si hiciera falta)"
-          # Decisión explícita del usuario para este ambiente (2026-10-07):
-          # PRECHECK (roles/precheck/tasks/pause_competing_services.yml) ya
-          # detuvo los agentes de seguridad configurados una sola vez, antes
-          # de llegar aquí -- esta etapa NUNCA vuelve a detenerlos, solo
-          # verifica (de solo lectura) que packagekitd ya esté libre y, si
-          # no, espera un poco antes de continuar. Esto es TODAS las fases
-          # (prepare/apply/both) -- incluso en "apply" en solitario el
-          # dup -D/dup real corre el mismo riesgo.
+          # PRECHECK ya detuvo los agentes de seguridad configurados una
+          # sola vez; esta etapa nunca vuelve a detenerlos, solo
+          # verifica/espera (de solo lectura) que packagekitd esté libre.
           ansible.builtin.include_role:
             name: repo_management
             tasks_from: wait_packagekitd_clear.yml
@@ -519,41 +514,20 @@
         _stage_note_cleanup: "FALLÓ el intento de limpieza forzada tras el fallo, revisar manualmente"
 
 - name: "Calcular si el host está presumiblemente inalcanzable (dup aplicado, pero el reinicio obligatorio nunca completó/reconectó)"
-  # Confirmado con evidencia real (2026-10-07, job AWX #9299): un host que
-  # se queda colgado en el arranque (ver sección 15, "postfix") hace que
-  # Ansible marque el siguiente intento de conexión como UNREACHABLE (no
-  # simplemente FAILED) -- y UNREACHABLE salta cualquier rescue Y TODAS
-  # las tareas restantes de la etapa para ese host, incluida la generación
-  # del reporte. Por eso, a partir de aquí, ningún paso que necesite
-  # conectarse de nuevo al host (reiniciar agentes de seguridad,
-  # inventariar repos al final) se intenta si ya sabemos que el reinicio
-  # nunca completó -- se deja constancia explícita (NOT_CHECKED) en vez de
-  # intentarlo y arriesgar perder el reporte completo otra vez.
+  # Un host colgado en el arranque hace que Ansible lo marque UNREACHABLE
+  # (no FAILED) en el siguiente intento de conexión -- y UNREACHABLE salta
+  # cualquier rescue y el resto de la etapa, incluido el reporte. Por eso
+  # los pasos que necesiten reconectar (abajo) se saltan con NOT_CHECKED
+  # en vez de intentarlo y arriesgar perder el reporte completo.
   ansible.builtin.set_fact:
     _host_presumiblemente_inalcanzable: "{{ sp_migration_dup_applied | default(false) and not (sp_migration_reboot_completed | default(false)) }}"
 
 - name: "Calcular si corresponde reiniciar ahora los agentes de seguridad (zypper_lock_competing_services)"
-  # NUNCA entre los 2 saltos encadenados de upgrade_mode: full (reiniciarlos
-  # ahí los dejaría activos para nada, ya que el siguiente salto los
-  # necesitaría detenidos de nuevo de inmediato): solo se reinician al
-  # llegar al Service Pack final (SP7), en una etapa independiente (no
-  # "full"), o si esta etapa falló (no hay "siguiente salto" que proteger
-  # en ese caso). Ya NO depende de "qué detuvo esta misma ejecución"
-  # (PRECHECK, un Job de AWX separado, es quien realmente los detiene --
-  # ver roles/precheck/tasks/pause_competing_services.yml): depende
-  # directamente de si hay algo configurado para asegurar que vuelva a
-  # estar activo. Decisión explícita del usuario para este ambiente,
-  # 2026-10-07.
-  # "and not (dup_applied y NOT reboot_completed)": si el dup se aplicó
-  # pero el host nunca volvió a responder tras el reinicio obligatorio,
-  # NO intentar nada más contra él -- confirmado con evidencia real
-  # (2026-10-07, job AWX #9299): un host colgado en el arranque (ver
-  # sección 15, "postfix") deja a Ansible marcando el host como
-  # UNREACHABLE (no simplemente FAILED) en el primer intento de conexión
-  # posterior, y UNREACHABLE salta el "rescue" de este mismo bloque Y
-  # TODAS las tareas restantes de la etapa para ese host -- incluida la
-  # generación del reporte. Por eso "Inventariar repositorios..." (más
-  # abajo) tiene la misma protección.
+  # Nunca entre los 2 saltos encadenados de upgrade_mode: full (el
+  # siguiente salto los necesitaría detenidos de nuevo de inmediato): solo
+  # al llegar a SP7, en una etapa independiente, o si esta etapa falló.
+  # "and not (dup_applied y NOT reboot_completed)": si el host quedó
+  # presumiblemente inalcanzable (ver arriba), no se intenta reconectar.
   ansible.builtin.set_fact:
     _resume_security_agents_now: >-
       {{

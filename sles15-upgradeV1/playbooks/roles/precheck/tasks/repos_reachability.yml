@@ -17,8 +17,8 @@
 # prueba de que el repositorio sea utilizable por Zypper. Un HTTP
 # 401/403/404 significa que el servidor respondió (la red/TLS funcionan),
 # pero NO demuestra que el contenido del repo sea válido — esa validación
-# real (metadata/GPG/TLS/solver) ocurre en `upgrade_mode: validate`
-# (roles/sp_migration/tasks/preflight.yml), no aquí.
+# real (metadata/GPG/TLS/solver) ocurre con el gate obligatorio `dup -D`
+# de la migración real (roles/sp_migration/tasks/main.yml), no aquí.
 
 - name: Seleccionar Service Pack y repos Foreman de ORIGEN y DESTINO de esta etapa
   ansible.builtin.set_fact:

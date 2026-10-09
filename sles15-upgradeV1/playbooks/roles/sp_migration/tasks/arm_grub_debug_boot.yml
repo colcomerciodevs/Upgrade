@@ -5,27 +5,16 @@
 # justo después de configure_grub_debug_boot.yml y antes del reinicio real
 # de la migración (roles/sp_migration/tasks/main.yml).
 #
-# Motivo real (2026-10-09): un cuelgue reportado en consola aparece a los
-# pocos segundos de enviar el reinicio, ANTES de llegar a GRUB -- es decir,
-# durante el APAGADO de la sesión que ya estaba corriendo (systemd
-# deteniendo servicios), no durante el arranque nuevo.
-# GRUB_CMDLINE_LINUX_DEFAULT (y por lo tanto systemd.log_level=debug /
-# systemd.show_status=1 / sin splash ni quiet) solo afecta al PRÓXIMO
-# arranque -- el kernel que ya está corriendo conserva los parámetros con
-# los que arrancó. Sin este reinicio adicional, el apagado de la sesión
-# que hace el dup seguiría ciego aunque grub_debug_boot_enabled esté en
-# true, porque ese apagado ocurre ANTES de que el kernel nuevo (con debug)
-# llegue a arrancar.
+# GRUB_CMDLINE_LINUX_DEFAULT solo afecta al PRÓXIMO arranque -- el kernel
+# que ya está corriendo conserva los parámetros con los que arrancó. Sin
+# este reinicio de "armado", el apagado de la sesión que hace el dup
+# seguiría sin mostrar los parámetros de depuración, porque ocurre antes
+# de que el kernel nuevo (ya con debug) llegue a arrancar. Este reinicio
+# deja el kernel en ejecución ya armado, para que el reinicio real de la
+# migración muestre tanto su apagado como su arranque en la consola.
 #
-# Por eso, este reinicio "arma" el kernel en ejecución con los parámetros
-# de depuración ANTES del reinicio real de la migración: así, cuando ese
-# reinicio real ocurra, su propio apagado (la ventana "antes de GRUB") y
-# el arranque posterior quedan ambos visibles en la consola del
-# hipervisor.
-#
-# Idempotente: si el kernel que ya está corriendo ya tiene
-# systemd.log_level=debug en su /proc/cmdline (por ejemplo, porque esta
-# etapa ya se ejecutó antes con el flag en true), no se reinicia de nuevo.
+# Idempotente: si el kernel en ejecución ya tiene systemd.log_level=debug
+# en su /proc/cmdline, no se reinicia de nuevo.
 
 - name: "Leer el cmdline del kernel que está corriendo actualmente (para saber si ya está armado)"
   ansible.builtin.slurp:

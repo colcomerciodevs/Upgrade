@@ -4,10 +4,7 @@
 # Deshabilita PERMANENTEMENTE (systemctl disable + stop; nunca se vuelven
 # a reiniciar automáticamente) los servicios configurados en
 # reboot_disable_services, justo antes de cualquier reinicio obligatorio
-# de este proyecto. Decisión explícita del usuario para este ambiente,
-# 2026-10-07 -- ver playbooks/group_vars/all.yml para la evidencia real
-# que lo justifica (postfix puede colgar indefinidamente el arranque tras
-# un upgrade de Service Pack).
+# de este proyecto. Ver group_vars/all.yml.
 #
 # Solo actúa sobre los que estén realmente presentes en el host (no falla
 # si alguno no existe en un host en particular); es idempotente (no hace

@@ -1,27 +1,18 @@
 ---
 # roles/precheck/tasks/pause_competing_services.yml
 #
-# SEGUNDA excepción documentada a "precheck es de solo lectura" (la
-# primera es la instalación de la CA interna en repos_reachability.yml).
-# Decisión explícita del usuario para este ambiente (2026-10-07): detiene
-# aquí, UNA SOLA VEZ en PRECHECK, los agentes de seguridad corporativos
-# configurados en zypper_lock_competing_services (ver
-# playbooks/group_vars/all.yml para la evidencia real que justifica
-# esto), para que ya estén detenidos -- y cualquier transacción de
-# PackageKit que ya estuviera en curso ya haya terminado -- para cuando
-# arranque la siguiente etapa ("preparar repos"), en vez de competir
-# directamente contra la primera operación real de Zypper de esa etapa.
+# SEGUNDA excepción a "precheck es de solo lectura" (la primera es la CA
+# en repos_reachability.yml). Detiene aquí, UNA SOLA VEZ en PRECHECK, los
+# agentes de seguridad corporativos configurados en
+# zypper_lock_competing_services, para que ya estén libres cuando arranque
+# "preparar repos" en vez de competir contra esa etapa.
 #
-# Nunca deshabilita ni desinstala estos agentes: solo los detiene
-# temporalmente (ver roles/repo_management/tasks/pause_security_agents.yml,
-# reutilizado aquí para no duplicar la lógica). Se reinician al terminar
-# la migración real (roles/repo_management/tasks/resume_security_agents.yml,
-# ver playbooks/tasks/run_stage.yml para la condición exacta).
+# Nunca deshabilita ni desinstala estos agentes, solo los detiene
+# temporalmente (reutiliza pause_security_agents.yml). Se reinician al
+# terminar la migración real (resume_security_agents.yml).
 #
-# Si no se pudo detener alguno, se registra como FAILED explícito en el
-# precheck (en vez de dejar que la excepción aborte todo el rol sin dejar
-# evidencia de los demás checks) -- detener estos agentes es una condición
-# real para que la etapa siguiente no falle de forma intermitente.
+# Si no se pudo detener alguno, se registra como FAILED explícito en vez
+# de dejar que la excepción aborte el rol sin evidencia de los demás checks.
 
 - name: "Pausar agentes de seguridad que interfieren con Zypper (si hay alguno activo)"
   block:

@@ -10,22 +10,19 @@
 # del sistema operativo, no contra katello.ca_certificate_path (esa
 # variable solo alimenta el chequeo de alcanzabilidad de PRECHECK). Sin
 # esta CA instalada, cualquier refresh/dup real contra Foreman/Katello por
-# HTTPS falla con un error de TLS, tanto en VALIDATE como en UPGRADE.
+# HTTPS falla con un error de TLS.
 #
 # Por qué se incluye explícitamente aquí (decisión del usuario para este
 # ambiente — ver orden de fuentes de verdad en CLAUDE.md): es una
 # operación idempotente, no destructiva (agrega una CA de confianza
 # adicional; no toca servicios, no reinicia nada, no elimina ninguna CA
-# existente). Se invoca desde 2 lugares, cada uno cubriendo los caminos que
-# NO pasan por el otro:
+# existente). Se invoca desde un solo lugar:
 #   - roles/precheck/tasks/repos_reachability.yml -- PRECHECK (y por lo
 #     tanto también UPGRADE real, que siempre ejecuta precheck primero,
 #     ver playbooks/tasks/run_stage.yml). Es la ÚNICA escritura al sistema
 #     operativo que hace PRECHECK, a propósito: así la prueba de
 #     alcanzabilidad de PRECHECK es representativa del TLS real que usará
 #     Zypper más adelante, incluso en un host que nunca corrió nada antes.
-#   - roles/sp_migration/tasks/preflight.yml -- VALIDATE independiente, que
-#     NO pasa por repos_reachability.yml.
 # Ya NO se invoca desde add_temp_repos.yml (UPGRADE real): queda cubierto
 # por la llamada de PRECHECK, que siempre corre antes en la misma
 # ejecución.

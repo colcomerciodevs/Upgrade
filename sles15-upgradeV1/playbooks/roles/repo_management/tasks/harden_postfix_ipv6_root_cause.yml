@@ -2,34 +2,16 @@
 # roles/repo_management/tasks/harden_postfix_ipv6_root_cause.yml
 #
 # Manejo completo de postfix antes de cualquier reinicio obligatorio (ver
-# README sección 8.5). Decisión explícita del usuario para este ambiente
-# (2026-10-09, revisada el mismo día): se probó primero solo corrigiendo
-# la causa raíz en su configuración y dejándolo habilitado -- volvió a
-# fallar en laboratorio de la misma forma. Estrategia vigente, más
-# conservadora: corregir la configuración IGUAL (defensa en profundidad,
-# por si algo lo reinicia manualmente más adelante), pero además
-# deshabilitarlo, detenerlo y forzar la terminación de cualquier proceso
-# que pudiera quedar colgado -- no se vuelve a confiar únicamente en el
-# fix de configuración para garantizar que nunca intente arrancar.
+# README sección 8.4). Causa raíz: `inet_interfaces = localhost` en
+# main.cf hace que postfix intente resolver IPv6 durante el arranque, y se
+# cuelga en vez de fallar rápido si el host no tiene IPv6. Defensa en
+# profundidad: corrige main.cf (`inet_protocols = ipv4`) Y además
+# deshabilita, detiene y fuerza la terminación de cualquier proceso que
+# quede colgado -- no se confía solo en el fix de configuración.
 #
-# Causa raíz original confirmada: con `inet_interfaces = localhost` en
-# main.cf, postfix intenta resolver `::1` (IPv6) en un host sin IPv6
-# configurado; durante el arranque, antes de que la red esté completamente
-# lista, esa resolución se cuelga en vez de fallar rápido. El fix de
-# `inet_protocols = ipv4` corrige eso, pero la evidencia real en
-# laboratorio (2026-10-09) mostró que el cuelgue puede repetirse de todas
-# formas -- por eso ya no se confía solo en la corrección: se deshabilita
-# y se detiene de forma activa, con terminación forzada como respaldo
-# final.
-#
-# Decisión explícita del usuario para este ambiente (2026-10-09): NO se
-# modifica la unidad de systemd de postfix (ni con un drop-in) -- se
-# probó agregar un drop-in (After=network-online.target +
-# TimeoutStartSec=30) como defensa adicional, pero se descartó: la unidad
-# original de postfix.service queda exactamente como viene del paquete.
-# Solo se le corrige su propio archivo de configuración (main.cf, que no
-# es la unidad de systemd) y se gestiona vía systemctl + kill, nunca
-# modificando el service file ni agregando overrides.
+# No se modifica la unidad de systemd de postfix (ni con un drop-in,
+# descartado): queda exactamente como viene del paquete, gestionada solo
+# vía systemctl + kill.
 #
 # Idempotente: no falla si postfix no está instalado, si ya estaba
 # deshabilitado/detenido, o si no quedaba ningún proceso por terminar.
@@ -50,12 +32,8 @@
   when: _postfix_main_cf.stat.exists
 
 - name: "Quitar cualquier drop-in de systemd para postfix.service que haya quedado de una corrida anterior"
-  # Este proyecto llegó a agregar un drop-in (After=network-online.target
-  # + TimeoutStartSec=30) como defensa adicional; se descartó por decisión
-  # explícita del usuario (2026-10-09): no modificar la unidad de postfix,
-  # dejarla exactamente como viene por defecto. Esto converge cualquier
-  # host donde ya se hubiera aplicado de vuelta a ese estado, sin importar
-  # el historial de corridas anteriores.
+  # Converge cualquier host que haya quedado con el drop-in ya descartado
+  # de vuelta a la unidad original de postfix, sin importar el historial.
   ansible.builtin.file:
     path: /etc/systemd/system/postfix.service.d
     state: absent
@@ -80,12 +58,9 @@
   when: _postfix_main_cf.stat.exists
 
 - name: "Forzar la terminación de los procesos principales de postfix (master, pickup, qmgr)"
-  # "systemctl stop" de la tarea anterior debería bastar, pero la
-  # evidencia real (2026-10-09) es que el cuelgue volvió a pasar -- este
-  # es el respaldo final explícito que pidió el usuario. "master" es un
-  # nombre de proceso genérico: en teoría podría coincidir con un proceso
-  # no relacionado que se llame igual en este host (poco probable, pero
-  # no verificado).
+  # Respaldo final por si "systemctl stop" no bastara. "master" es un
+  # nombre de proceso genérico -- podría en teoría coincidir con otro
+  # proceso no relacionado en este host.
   ansible.builtin.command: killall -9 master pickup qmgr
   become: true
   changed_when: false
@@ -93,14 +68,9 @@
   when: _postfix_main_cf.stat.exists
 
 - name: "Barrido final: terminar CUALQUIER proceso de postfix por ruta de su binario (smtpd, cleanup, trivial-rewrite, bounce, anvil, proxymap, tlsmgr, local, smtp, etc.)"
-  # "master" (recién eliminado con -9, sin oportunidad de limpiar) puede
-  # dejar huérfanos a sus procesos hijo activos en ese momento -- no solo
-  # pickup/qmgr, también smtpd/cleanup/trivial-rewrite/bounce/anvil/
-  # proxymap/tlsmgr/local/smtp/lmtp según qué estuviera procesando postfix
-  # justo entonces. Un huérfano se reasigna a PID 1 y sigue corriendo
-  # igual. "pkill -f" empareja por la línea de comando completa (ruta del
-  # binario, que en SLES siempre es bajo /usr/lib/postfix/), así que
-  # atrapa a todos sin depender de conocer cada nombre de antemano.
+  # "master" recién eliminado con -9 puede dejar huérfanos a sus procesos
+  # hijo activos. "pkill -f" empareja por la ruta del binario
+  # (/usr/lib/postfix/), así que atrapa a todos sin listar cada nombre.
   ansible.builtin.command: pkill -9 -f /usr/lib/postfix
   become: true
   changed_when: false

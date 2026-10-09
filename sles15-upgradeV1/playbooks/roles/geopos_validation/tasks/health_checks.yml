@@ -11,6 +11,10 @@
       category_status: NOT_CHECKED
   when: not (geopos_validation.health_checks.enabled | default(false))
 
+# "ignore_errors: true": un health check caído es un RESULTADO a evaluar
+# (FAILED/WARNING según item.critical en la tarea siguiente), no un error
+# de ejecución que ocultar -- sin esto, Ansible abortaría en el primer
+# check caído en vez de consultar los demás y dejar evidencia de todos.
 - name: Consultar health checks HTTP/HTTPS de GeoPOS
   ansible.builtin.uri:
     url: "{{ item.url }}"

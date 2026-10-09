@@ -74,6 +74,9 @@
         - name: "Obtener token de acceso de Microsoft Graph y subir cada archivo"
           when: (_sync_files.files | length) > 0
           block:
+            # "no_log: true" en esta tarea y las siguientes: la respuesta
+            # (_sync_token.json.access_token) y el request (client_secret)
+            # nunca deben quedar escritos en el log del Job de AWX.
             - name: Obtener token de acceso de Microsoft Graph (client credentials)
               ansible.builtin.uri:
                 url: "https://login.microsoftonline.com/{{ lookup('env', 'TENANT_ID') }}/oauth2/v2.0/token"
@@ -98,6 +101,12 @@
               register: _sync_site
               no_log: true
 
+            # "failed_when: false": mismo principio que el gate dup -D de
+            # sp_migration -- si un archivo falla, el loop sigue con los
+            # demás y se registra la evidencia completa (resultado HTTP de
+            # cada uno); la decisión de fallar la etapa se toma explícita
+            # DESPUÉS, en "Fallar explícitamente..." más abajo, ya con el
+            # detalle de cuáles subieron y cuáles no.
             - name: "Subir cada archivo a SharePoint (PUT; sobreescribe si ya existe)"
               ansible.builtin.uri:
                 url: >-

@@ -18,9 +18,7 @@
 #   run_stage.yml, ANTES de tocar cualquier repositorio. Este archivo no
 #   vuelve a preguntarlo: si se llegó aquí, ya está autorizado.
 # - No existe un modo "solo dry-run" en este archivo: dup -D se ejecuta
-#   SIEMPRE como gate obligatorio inmediatamente antes del dup real. Para
-#   un ensayo que se pueda pedir de forma independiente sin llegar a este
-#   punto, use upgrade_mode: validate (roles/sp_migration/tasks/preflight.yml).
+#   SIEMPRE como gate obligatorio inmediatamente antes del dup real.
 # - El reinicio es SIEMPRE obligatorio tras un dup real aplicado.
 #
 # MODELO DE ESTADOS (no se pierde evidencia si el reinicio falla):
@@ -39,14 +37,8 @@
   when: journald_enable_persistent | default(true)
 
 - name: Ejecutar dup -D como gate obligatorio inmediatamente antes del dup real
-  # "failed_when: false" aquí es deliberado: si se deja que esta tarea falle
-  # por sí sola (rc != 0), Ansible aborta ANTES de llegar a la tarea
-  # siguiente, que es la que guarda la salida real de Zypper en un hecho —
-  # la evidencia de qué paquete/dependencia causó el problema se perdería
-  # por completo, dejando al operador solo un mensaje genérico en el
-  # reporte. Por eso se registra el resultado completo primero, y la
-  # decisión de fallar se hace explícita en la tarea siguiente, después de
-  # haber guardado la salida.
+  # failed_when: false -- se guarda la salida completa de Zypper en la
+  # tarea siguiente antes de decidir fallar explícito.
   ansible.builtin.command:
     cmd: >-
       zypper --non-interactive
@@ -54,12 +46,7 @@
       dup -D --no-allow-vendor-change --no-recommends
   become: true
   register: sp_migration_dry_run_result
-  # "until": mismo reintento por lock transitorio de PackageKit (rc=7,
-  # ZYPP_LOCKED) que repo_management -- confirmado con evidencia real en
-  # laboratorio (2026-10-06) que el lock puede aparecer en cualquier
-  # comando Zypper del host, no solo en los de repo_management. Cualquier
-  # otro código de error (conflictos reales de dependencias/vendor) se
-  # deja pasar de inmediato, sin agotar reintentos.
+  # Reintenta solo ante rc=7 (ZYPP_LOCKED, lock transitorio de PackageKit).
   until: (sp_migration_dry_run_result.rc | default(1)) != 7
   retries: "{{ zypper_lock_retries }}"
   delay: "{{ zypper_lock_delay }}"
@@ -101,32 +88,22 @@
       dup --no-allow-vendor-change --no-recommends
   become: true
   register: sp_migration_dup_result
-  # "until": mismo reintento por lock transitorio de PackageKit (rc=7) que
-  # el gate dup -D de arriba. El dup real ya pasó el gate exitosamente, así
-  # que un rc=7 aquí es casi con certeza el mismo lock transitorio, no un
-  # problema real recién aparecido.
+  # Mismo reintento por lock transitorio (rc=7) que el gate dup -D de arriba.
   until: (sp_migration_dup_result.rc | default(1)) != 7
   retries: "{{ zypper_lock_retries }}"
   delay: "{{ zypper_lock_delay }}"
   changed_when: true
-  # "failed_when: false" aquí es deliberado (igual que el gate dup -D de
-  # arriba): captura el resultado completo ANTES de decidir fallar, para
-  # no perder el stdout/stderr real de Zypper con el genérico "non-zero
-  # return code" de Ansible.
+  # failed_when: false -- captura el resultado completo antes de decidir
+  # fallar, para no perder el stdout/stderr real de Zypper.
   failed_when: false
 
 - name: Registrar salida resumida de la migración real
   ansible.builtin.set_fact:
     sp_migration_dup_output: "{{ sp_migration_dup_result.stdout | default('') | truncate(20000) }}"
-    # Salida COMPLETA, sin truncar -- "output_summary" (arriba) alcanza
-    # para leer el reporte HTML/JSON normalmente, pero en un dup grande
-    # (ej. SP6->SP7, cientos de paquetes) 20000 caracteres se agotan
-    # todavía en la fase de descarga, antes de la instalación/scripts
-    # post-instalación -- justo donde ocurriría cualquier problema real de
-    # kernel/GRUB/dracut. Confirmado con evidencia real (2026-10-08):
-    # ningún artefacto guardado llegaba a mostrar esa fase. Esta versión
-    # completa se guarda aparte (roles/reporting) como archivo .log, no
-    # dentro del HTML/JSON, para no volver ilegible el reporte normal.
+    # Sin truncar -- en un dup grande (SP6->SP7) los 20000 caracteres de
+    # arriba se agotan antes de la fase de instalación/scripts, justo
+    # donde ocurriría un problema de kernel/GRUB/dracut. Se guarda aparte
+    # (roles/reporting) como .log, no dentro del HTML/JSON.
     sp_migration_dup_output_full: "{{ sp_migration_dup_result.stdout | default('') }}"
 
 - name: "Diagnosticar qué bloquea a Zypper, si el dup real falló (diagnóstico de solo lectura)"
@@ -151,13 +128,8 @@
     sp_migration_dup_applied: true
 
 - name: "Refrescar systemd tras el dup (daemon-reload) antes de tocar cualquier servicio"
-  # El dup puede haber reemplazado archivos de unidad de systemd (de
-  # postfix o de cualquier otro paquete). La mayoría de paquetes SUSE
-  # disparan esto solos vía macros %service_add_post en su %posttrans,
-  # pero no es universal -- barato, idempotente y de solo lectura del
-  # lado de systemd (no inicia/detiene nada por sí solo), así que se
-  # ejecuta siempre como defensa adicional antes de decidir nada sobre
-  # servicios puntuales (deshabilitar, corregir, reiniciar).
+  # El dup puede haber reemplazado archivos de unidad; no siempre se
+  # recarga solo. Barato e idempotente, no inicia/detiene nada por sí solo.
   ansible.builtin.systemd:
     daemon_reload: true
   become: true
@@ -171,10 +143,7 @@
   failed_when: false
 
 - name: "Deshabilitar permanentemente servicios que pueden colgar el arranque (si hay alguno configurado), antes del reinicio obligatorio"
-  # Decisión explícita del usuario para este ambiente (2026-10-07): ver
-  # playbooks/group_vars/all.yml (reboot_disable_services) para la
-  # evidencia real que lo justifica -- confirmado que postfix puede
-  # colgar INDEFINIDAMENTE el arranque tras un upgrade de Service Pack.
+  # Ver reboot_disable_services en group_vars/all.yml.
   ansible.builtin.include_role:
     name: repo_management
     tasks_from: disable_boot_blocking_services.yml
@@ -197,12 +166,8 @@
   when: grub_debug_boot_enabled | default(false)
 
 - name: "Trazabilidad del reinicio: leer boot_id y hora de inicio ANTES de reiniciar"
-  # boot_id (/proc/sys/kernel/random/boot_id) es un UUID que el kernel
-  # genera de nuevo en cada arranque -- comparar el de antes/después es
-  # la única forma de confirmar que el host realmente reinició (y no, por
-  # ejemplo, que Ansible reconectó a la misma sesión tras una caída breve
-  # de red sin que el kernel haya cambiado). No requiere become: el
-  # archivo es de lectura pública.
+  # boot_id es un UUID que el kernel genera en cada arranque -- comparar
+  # antes/después confirma que el host realmente reinició.
   block:
     - name: Leer boot_id actual (antes del reinicio)
       ansible.builtin.slurp:
@@ -240,15 +205,9 @@
         - name: Calcular si el boot_id realmente cambió y el tiempo de reconexión real
           ansible.builtin.set_fact:
             sp_migration_reboot_boot_id_changed: "{{ sp_migration_reboot_boot_id_after != sp_migration_reboot_boot_id_before }}"
-            # "duración devuelta por Ansible": tiempo que el propio módulo
-            # reboot reporta haber esperado (incluye pre_reboot_delay +
-            # espera de reconexión). "tiempo de reconexión": cálculo
-            # independiente por reloj de pared (started_at vs
-            # finished_at, ambos capturados por esta misma automatización)
-            # -- mismo principio de doble evidencia que la verificación de
-            # Service Pack (sección 7 del README): si ambos números
-            # difieren mucho, es una señal real de algo raro durante el
-            # arranque, no solo un detalle de instrumentación.
+            # Dos mediciones independientes (doble evidencia): la que
+            # reporta el módulo reboot vs. un cálculo propio por reloj de
+            # pared. Si difieren mucho, es señal de algo raro en el arranque.
             sp_migration_reboot_elapsed_ansible_seconds: "{{ sp_migration_reboot_result.elapsed | default('NOT_CHECKED') }}"
             sp_migration_reboot_reconnect_seconds: >-
               {{

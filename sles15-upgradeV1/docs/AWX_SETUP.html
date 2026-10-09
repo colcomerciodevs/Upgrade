@@ -465,7 +465,7 @@ ANSIBLE_INVENTORY_PLUGINS: "/runner/project/&lt;CARPETA_DEL_PROJECT&gt;/inventor
     <code>starting</code>, registrando <code>running</code>/<code>degraded</code>/
     agotado sin tiempo. Todo queda en la sección "Reinicio" del reporte HTML por
     servidor — es información de diagnóstico, nunca decide el resultado de la etapa.
-    Ver README sección 8.6.
+    Ver README sección 8.5.
   </div>
 <div class="callout risk">
 <span class="label">postfix: corregido, deshabilitado, detenido Y terminado a la fuerza (estrategia vigente desde 2026-10-09)</span>
@@ -484,14 +484,14 @@ ANSIBLE_INVENTORY_PLUGINS: "/runner/project/&lt;CARPETA_DEL_PROJECT&gt;/inventor
     <code>TimeoutStartSec=30</code>) como defensa adicional, pero se descartó por
     decisión explícita del usuario: <code>postfix.service</code> queda exactamente
     como viene del paquete, y esta tarea quita cualquier drop-in que haya quedado de
-    una corrida anterior. Ver README sección 8.5 (incluye la advertencia sobre
+    una corrida anterior. Ver README sección 8.4 (incluye la advertencia sobre
     <code>master</code> como nombre de proceso genérico).
   </div>
 <div class="callout note">
 <span class="label">Defensa adicional: daemon-reload tras el dup</span>
     Justo después del <code>dup</code>, siempre se ejecuta <code>systemctl daemon-reload</code>
     (barato, idempotente) antes de tocar cualquier servicio, por si el <code>dup</code>
-    reemplazó algún archivo de unidad. Ver README sección 8.5.
+    reemplazó algún archivo de unidad. Ver README sección 8.4.
   </div>
 <div class="callout note">
 <span class="label">Límite de espera del reinicio: 20 minutos</span>
@@ -500,7 +500,7 @@ ANSIBLE_INVENTORY_PLUGINS: "/runner/project/&lt;CARPETA_DEL_PROJECT&gt;/inventor
     (servidores físicos, con POST/firmware/RAID más lentos que una VM). No garantiza que
     un reinicio nunca tarde más por una causa nueva no identificada, pero si pasa, la
     etapa falla explícito a los 20&nbsp;min en vez de esperar en silencio hasta 30.
-    Ver README sección 8.6.
+    Ver README sección 8.5.
   </div>
 <div class="callout note">
 <span class="label">Arranque de depuración de GRUB (opcional, apagado por defecto)</span>
@@ -525,7 +525,7 @@ ANSIBLE_INVENTORY_PLUGINS: "/runner/project/&lt;CARPETA_DEL_PROJECT&gt;/inventor
     para que el apagado de ese reinicio real también quede visible en consola.
     <code>plymouth.enable=0</code> se agregó por la misma evidencia: quitar
     <code>splash</code>/<code>quiet</code> no garantiza que <code>plymouth</code> no tome
-    la consola igual. Ver README sección 8.8.
+    la consola igual. Ver README sección 8.7.
   </div>
 <div class="callout risk">
 <span class="label">Solicitud MOK pendiente (shim/grub2/kernel) — otra causa real de cuelgue indefinido al reiniciar</span>
@@ -539,7 +539,7 @@ ANSIBLE_INVENTORY_PLUGINS: "/runner/project/&lt;CARPETA_DEL_PROJECT&gt;/inventor
     Secure Boot está realmente deshabilitado</strong>, revoca automáticamente la
     solicitud pendiente (<code>mokutil --revoke-import</code>). Si Secure Boot está
     habilitado, nunca se toca nada — esa llave podría ser legítima — y queda una
-    advertencia explícita en el reporte. Ver README sección 8.7.
+    advertencia explícita en el reporte. Ver README sección 8.6.
   </div>
 <div class="step-title"><span class="stepnum">4</span><h3>Etapa 4 — Reporting</h3></div>
 <table class="clean">

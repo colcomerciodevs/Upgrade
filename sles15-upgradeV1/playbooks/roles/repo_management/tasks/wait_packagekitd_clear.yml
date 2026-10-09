@@ -2,20 +2,15 @@
 # roles/repo_management/tasks/wait_packagekitd_clear.yml
 #
 # Espera (de solo lectura, vía "pgrep") a que no quede ningún proceso
-# "packagekitd" en ejecución, hasta zypper_lock_retries intentos con
-# zypper_lock_delay segundos entre cada uno. Si sigue activo al agotar la
-# espera, NO falla: continúa igual, confiando en que el "until"/"retries"
-# de cada comando real de Zypper (ver zypper_lock_retries/_delay en
-# playbooks/group_vars/all.yml) absorba el resto.
+# "packagekitd" en ejecución. Si sigue activo al agotar la espera, no
+# falla: confía en que el "until"/"retries" de cada comando de Zypper
+# absorba el resto.
 #
-# Confirmado con evidencia real en laboratorio (2026-10-07, job AWX #9257):
-# detener ds_agent/nessusagent (ver pause_security_agents.yml, llamado una
-# sola vez en PRECHECK) no mata una transacción de PackageKit que ya
-# estaba en curso en ese instante -- packagekitd es activado por D-Bus, no
-# es un proceso hijo del agente, así que sigue corriendo por su cuenta
-# hasta terminar. Por eso esta espera se repite aquí (más liviana: solo
-# "pgrep", nunca vuelve a detener nada) justo antes de que cada etapa
-# (preparar/aplicar) empiece a modificar repositorios/paquetes.
+# Detener ds_agent/nessusagent (pause_security_agents.yml, en PRECHECK) no
+# mata una transacción de PackageKit ya en curso -- packagekitd es
+# activado por D-Bus, no es hijo del agente. Por eso esta espera (más
+# liviana, nunca vuelve a detener nada) se repite antes de cada etapa que
+# vaya a modificar repositorios/paquetes.
 #
 # Deja wait_packagekitd_note con un resumen legible para el reporte.
 

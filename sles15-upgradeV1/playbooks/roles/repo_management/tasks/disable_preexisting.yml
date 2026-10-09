@@ -12,12 +12,9 @@
 # repositorio preexistente puede quedar habilitado durante updatestack/dup
 # de esta automatización (ver README, sección de repositorios).
 #
-# EVIDENCIA PARCIAL: si un repo falla a mitad del loop (por ejemplo, el
-# tercero de cuatro), los que sí se deshabilitaron correctamente ANTES del
-# fallo deben quedar registrados en repos_disabled_by_upgrade de todos
-# modos. Por eso el loop nunca aborta a mitad de camino (failed_when:
-# false) y el fallo se reporta de forma explícita DESPUÉS de consolidar la
-# evidencia real, nunca se oculta.
+# Si un repo falla a mitad del loop, los que sí se deshabilitaron antes
+# quedan registrados igual (failed_when: false); el fallo se reporta
+# explícito después, nunca se oculta.
 
 - name: Deshabilitar los repositorios preexistentes que estaban habilitados
   # "until": mismo reintento por lock transitorio de PackageKit (rc=7,

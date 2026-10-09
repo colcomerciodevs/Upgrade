@@ -11,6 +11,11 @@
       category_status: NOT_CHECKED
   when: not (geopos_validation.java_processes.enabled | default(false))
 
+# "failed_when: false": pgrep devuelve rc=1 cuando no encuentra ningún
+# proceso que coincida -- eso es un RESULTADO válido ("match_count=0",
+# evaluado como FAILED/WARNING según item.critical en la tarea siguiente),
+# no un error de ejecución. Sin esto, Ansible abortaría ante el primer
+# proceso no encontrado en vez de revisar los demás patrones configurados.
 - name: Buscar procesos Java de GeoPOS mediante patrón específico (pgrep -f)
   ansible.builtin.command:
     cmd: "pgrep -f -c -- '{{ item.match }}'"

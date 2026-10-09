@@ -3,31 +3,17 @@
 
 # Reintentos para la actualización de la pila de gestión de paquetes
 # (zypper puede pedir que se vuelva a ejecutar tras actualizarse a sí
-# mismo — código de retorno 103). También cubre, como efecto colateral
-# útil, el lock transitorio de PackageKit (rc=7, ver repo_management):
-# subido de 3/2s a 5/5s tras confirmarse en laboratorio (2026-10-06, job
-# AWX #9224) que 3 intentos con 2s de espera NO fueron suficientes --
-# packagekitd (pid distinto cada vez) mantuvo el lock durante toda la
-# ventana de reintentos. 5 intentos / 5s (25s máx.) es el mismo presupuesto
-# ya usado y confirmado suficiente en zypper_lock_retries/_delay (playbooks/group_vars/all.yml).
+# mismo -- rc=103). También cubre el lock transitorio de PackageKit (rc=7,
+# ver repo_management). 5 intentos / 5s, mismo presupuesto que
+# zypper_lock_retries/_delay en group_vars/all.yml.
 sp_migration_updatestack_retries: 5
 sp_migration_updatestack_delay: 5
 
 # Parámetros de reinicio tras una migración real aplicada.
 #
-# sp_migration_reboot_timeout: decisión explícita del usuario para este
-# ambiente (2026-10-09): bajado de 1800s (30min) a 1200s (20min), un
-# punto medio -- ya corregidas las dos causas reales confirmadas de
-# cuelgue indefinido (postfix/IPv6 sección 8.5, MOK pendiente sección 8.7
-# del README), así que no se necesita tanto margen "por si acaso". Se
-# dejó en 20min (no menos) porque la mayoría del parque son servidores
-# físicos, con tiempos de POST/inicialización de firmware y controladora
-# RAID más largos que una VM. No garantiza que un reinicio nunca tarde
-# más de 20min por una causa nueva todavía no identificada (el peor caso
-# real visto en laboratorio, antes de estos fixes, fue ~22min) -- lo que
-# sí garantiza es que, si pasa, la etapa falla explícito en 20min en vez
-# de seguir esperando en silencio hasta 30min, para que el operador se
-# entere antes de que hace falta revisar manualmente.
+# sp_migration_reboot_timeout: 20 min -- punto medio entre dar margen a
+# servidores físicos (POST/firmware/RAID más lentos que una VM) y no
+# esperar en silencio demasiado tiempo si algo nuevo cuelga el arranque.
 sp_migration_reboot_timeout: 1200
 sp_migration_reboot_connect_timeout: 30
 sp_migration_reboot_pre_reboot_delay: 5
@@ -37,9 +23,6 @@ sp_migration_reboot_pre_reboot_delay: 5
 #   main.yml        : sp_migration_current_sp, sp_migration_target_sp ("sp5"|"sp6"|"sp7"),
 #                      sp_migration_releasever ("" | "15-SP7")
 #   updatestack.yml : ninguna adicional (usa los repos Foreman de origen ya habilitados)
-#   preflight.yml   : sp_migration_target_sp, sp_migration_releasever,
-#                      sp_migration_repositories (lista [{name, url}])
 #
 # No existe sp_migration_dry_run: un modo real (sp4_to_sp5/sp5_to_sp6/sp6_to_sp7/full)
-# siempre ejecuta dup -D como gate obligatorio y, si pasa, el dup real. El
-# ensayo independiente y no destructivo es upgrade_mode: validate.
+# siempre ejecuta dup -D como gate obligatorio y, si pasa, el dup real.

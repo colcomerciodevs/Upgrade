@@ -229,8 +229,7 @@
 <p class="muted">Un upgrade real de Service Pack siempre reinicia si el dup se aplicó: no
    existe una opción para omitirlo. Los servicios listados arriba (si hay
    alguno) quedan deshabilitados de forma permanente, no se reinician
-   después — ver README sección 8.4/15 para la evidencia real que lo
-   justifica. El <code>boot_id</code> y la espera de systemd son
+   después — ver README sección 8.4. El <code>boot_id</code> y la espera de systemd son
    informativos para diagnóstico (ej. un arranque que se percibió
    "colgado"): nunca decide por sí solo el resultado de la etapa.</p>
 {% endif %}
@@ -243,7 +242,7 @@
   <tr><th>Servicios reiniciados en esta etapa</th><td colspan="3">{{ _security_agents.started | default([]) | join(', ') or 'ninguno' }}</td></tr>
   <tr><th>Nota</th><td colspan="3">{{ _security_agents.note | default('N/A') }}</td></tr>
 </table>
-<p class="muted">Ver README sección 8.4 — los servicios se detienen una sola vez
+<p class="muted">Ver README sección 8.3 — los servicios se detienen una sola vez
    en Precheck (Nodo 1), no en esta etapa; aquí solo se verifica/espera que
    packagekitd ya esté libre, y al final se asegura que vuelvan a estar activos.</p>
 {% endif %}

@@ -11,6 +11,10 @@
       category_status: NOT_CHECKED
   when: not (geopos_validation.services.enabled | default(false))
 
+# "failed_when: false": un servicio inactivo/inexistente es un RESULTADO a
+# evaluar (FAILED/WARNING según item.critical en la tarea siguiente), no
+# un error de ejecución -- sin esto, Ansible abortaría en el primer
+# servicio caído en vez de consultar los demás.
 - name: Consultar estado de los servicios systemd de GeoPOS configurados
   ansible.builtin.systemd:
     name: "{{ item.name }}"

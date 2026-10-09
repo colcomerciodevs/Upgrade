@@ -21,79 +21,51 @@
 # ---------------------------------------------------------------------------
 
 # Modo de ejecución. Se define normalmente como extra-var / Survey de AWX.
-# Valores válidos: precheck | validate | sp5_to_sp6 | sp6_to_sp7 | full
+# Valores válidos: precheck | sp4_to_sp5 | sp5_to_sp6 | sp6_to_sp7 | full
 #
 # - precheck : salud y preparación del servidor. No modifica nada.
-# - validate : preflight REAL contra Foreman (Zypper real, repos aislados
-#              con --reposd-dir). No modifica /etc/zypp/repos.d ni instala
-#              paquetes.
-# - sp5_to_sp6 / sp6_to_sp7 / full : ejecución REAL, con modificación del
-#              servidor. Requieren confirm_production_upgrade: true.
+# - sp4_to_sp5 / sp5_to_sp6 / sp6_to_sp7 / full : ejecución real, con
+#   modificación del servidor. Requieren confirm_production_upgrade: true.
 upgrade_mode: precheck
 
-# Metadatos de control de cambios (CRQ/RFC, Lote, Ambiente), provistos por
-# el Survey de AWX. Decisión explícita del usuario para este ambiente: estos
-# 3 valores NO son solo trazabilidad — son el ÚNICO mecanismo de selección
-# de hosts de todo el playbook (ver playbooks/upgrade.yml, plays iniciales
-# "Validar que se declaró..."/"Seleccionar los hosts..."/"Verificar que
-# hubo..."). Un host entra al alcance de la ejecución únicamente si sus
-# columnas CRQ/Lote/Ambiente del inventario (ver más abajo) coinciden
-# EXACTAMENTE con estos 3 valores; si ninguno coincide, el playbook falla
-# explícito antes de tocar cualquier host. "Limit" de AWX ya NO se usa para
-# seleccionar hosts en este proyecto.
+# CRQ/RFC, Lote y Ambiente del Survey de AWX: son el único mecanismo de
+# selección de hosts (un host entra al alcance solo si sus columnas
+# CRQ/Lote/Ambiente del inventario coinciden EXACTAMENTE con estos 3
+# valores -- ver playbooks/upgrade.yml). Ya no se usa "Limit" de AWX.
 #
-# Se usa el prefijo "upgrade_" deliberadamente, DISTINTO de "crq"/"lote"/
-# "ambiente" a secas: el inventario dinámico Excel/SharePoint de este
-# proyecto (inventory/linux_excel_inventory.yml) ya expone esos mismos
-# nombres como variables de host (columnas CRQ/Lote/Ambiente de la hoja de
-# parchado). Si el Survey usara los mismos nombres, un host heredaría
-# silenciosamente un CRQ/Lote de un ciclo de PARCHADO anterior, no el de
-# este upgrade. Vacíos por defecto solo para que ansible-playbook/ansible-lint
-# puedan cargar este archivo sin valores; en una ejecución real (local o AWX)
-# los 3 son obligatorios (ver el assert correspondiente en playbooks/upgrade.yml).
+# Prefijo "upgrade_" deliberado, distinto de "crq"/"lote"/"ambiente" a
+# secas: evita que un host herede silenciosamente el CRQ/Lote de un ciclo
+# de PARCHADO anterior (esos nombres ya los expone el inventario dinámico
+# para otro propósito). Vacíos aquí solo para que el archivo cargue sin
+# valores; en una ejecución real los 3 son obligatorios.
 upgrade_crq: ""
 upgrade_lote: ""
 upgrade_ambiente: ""
 
-# Permite ejecutar una etapa real (sp4_to_sp5/sp5_to_sp6/sp6_to_sp7) en 2
-# pasos separados (por ejemplo, como 2 nodos de un Workflow Job Template en
-# AWX, con un Approval Node entre ambos), en vez de todo en una sola corrida:
+# Permite partir una etapa real en 2 pasos separados (ej. 2 nodos de un
+# Workflow con un Approval Node entre ambos), en vez de todo en una corrida:
 #
 # - prepare : backup + deshabilitar preexistentes + repos ORIGEN +
-#             updatestack (real) + repos DESTINO agregados y verificados.
-#             Se detiene ahí -- NO ejecuta dup -D, dup, ni reinicio. El
-#             sistema SÍ queda modificado (requiere confirm_production_upgrade
-#             igual que "both").
-# - apply   : verifica (gate) que los repos DESTINO de una fase "prepare"
-#             previa sigan exactamente habilitados: si no, falla explícito
-#             pidiendo ejecutar primero "prepare". Luego dup -D -> dup real
-#             -> reinicio -> validación -> limpieza.
-# - both    : comportamiento de siempre, todo en una sola corrida (default,
-#             compatibilidad total con un único Job Template sin Workflow).
+#             updatestack + repos DESTINO agregados. Se detiene ahí --
+#             nunca ejecuta dup -D/dup/reinicio.
+# - apply   : exige que los repos DESTINO de un "prepare" previo ya estén
+#             habilitados, luego dup -D -> dup -> reinicio -> validación.
+# - both    : todo en una sola corrida (default).
 #
-# upgrade_mode: full SIEMPRE se comporta como "both" para cada uno de sus 2
-# saltos encadenados (SP5->SP6 y SP6->SP7): no tiene un único momento de
-# "preparar" válido para ambos a la vez. La ÚNICA excepción es
-# upgrade_phase=prepare combinado con upgrade_mode=full: ahí esta etapa no
-# hace nada (ver playbooks/tasks/run_stage.yml, _effective_upgrade_phase),
-# para que un Workflow con un solo diseño sirva tanto para un salto
-# individual como para full, sin que full dispare un dup real por error en
-# el nodo que se supone que solo prepara.
+# upgrade_mode: full siempre se comporta como "both" en cada uno de sus 2
+# saltos encadenados, excepto combinado con upgrade_phase=prepare, donde
+# no hace nada (ver run_stage.yml) -- así un mismo Workflow sirve para un
+# salto individual o para full sin disparar un dup real por error.
 upgrade_phase: "both"
 
 # Procesamiento productivo por defecto: un host a la vez.
 serial_batch_size: 1
 
-# Candado de seguridad explícito: NINGÚN modo real (sp5_to_sp6, sp6_to_sp7,
-# full) modifica el sistema a menos que este valor sea true. El assert que
-# lo exige se ejecuta ANTES de tocar repositorios o paquetes. Debe activarse
-# a propósito (por ejemplo desde un Survey de AWX), nunca por defecto.
+# Candado de seguridad: ningún modo real modifica el sistema a menos que
+# esto sea true. Se valida ANTES de tocar repositorios o paquetes.
 #
-# No existe una opción "dry_run" para los modos reales: para ensayar sin
-# modificar el sistema, use upgrade_mode: validate. Un modo real siempre
-# ejecuta internamente "dup -D" como gate obligatorio inmediatamente antes
-# del "dup" real (ver playbooks/roles/sp_migration/tasks/main.yml); si ese gate
-# falla, la etapa se detiene con FAILED sin aplicar ningún cambio.
+# No existe "dry_run": el gate obligatorio "dup -D" (sp_migration/tasks/
+# main.yml) cumple ese rol inmediatamente antes del "dup" real.
 confirm_production_upgrade: false
 
 # Un upgrade real de Service Pack SIEMPRE requiere reinicio: no existe una
@@ -111,32 +83,17 @@ confirm_production_upgrade: false
 katello:
   base_url: "https://ansibleforeman.coldecom.com"
 
-  # CA interna requerida para validar TLS contra Foreman/Katello (CA real
-  # "CAColdecom", provista por el administrador; archivo versionado en
-  # playbooks/roles/repo_management/files/coldecom-ca.crt de este repositorio).
-  #
-  # IMPORTANTE: esta ruta es en el HOST ADMINISTRADO (SLES), no en el nodo
-  # de control. Para el chequeo de PRECHECK (ansible.builtin.uri) alimenta
-  # directamente ca_path. Para que Zypper mismo confíe en Foreman durante
-  # VALIDATE/UPGRADE (Zypper no lee esta variable: usa el almacén de
-  # confianza del sistema operativo), esta misma CA se instala
-  # AUTOMÁTICAMENTE en este path mediante
-  # playbooks/roles/repo_management/tasks/ensure_ca_trusted.yml — decisión explícita
-  # del usuario para este ambiente (ver orden de fuentes de verdad en
-  # CLAUDE.md): es la única escritura al sistema operativo que ocurre
-  # durante upgrade_mode: validate, justificada porque sin ella la propia
-  # prueba TLS de VALIDATE no tiene sentido. Operación idempotente (solo
-  # agrega una CA de confianza si todavía no está presente; no reinicia
-  # servicios). Se ejecuta automáticamente justo antes de que se agregue o
-  # use cualquier repo Foreman real (add_temp_repos.yml y preflight.yml).
+  # CA interna para validar TLS contra Foreman/Katello ("CAColdecom",
+  # versionada en roles/repo_management/files/coldecom-ca.crt). Ruta en el
+  # HOST ADMINISTRADO, no en el nodo de control. Zypper usa el almacén de
+  # confianza del sistema operativo (no esta variable), así que PRECHECK
+  # instala esta CA ahí automáticamente si falta
+  # (roles/repo_management/tasks/ensure_ca_trusted.yml) -- idempotente.
   ca_certificate_path: /etc/pki/trust/anchors/coldecom-ca.crt
 
   # Repos Foreman para el Service Pack ORIGEN de la etapa SP4 -> SP5
-  # (modo independiente "sp4_to_sp5", para hosts que todavía están en
-  # SP4). Se usan ÚNICAMENTE para "zypper patch --updatestack-only".
-  # Verificado por API contra Foreman/Katello (solo lectura) el 2026-10-01:
-  # los 5 módulos existen, están sincronizados con éxito y cada uno trae
-  # exactamente Pool + Updates (sin Source/Debuginfo).
+  # (modo "sp4_to_sp5", hosts todavía en SP4). Solo para
+  # "zypper patch --updatestack-only".
   sp4_repositories:
     - name: SLE-Product-SLES15-SP4-Pool
       url: "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/SUSE_Linux_Enterprise_Server_15_SP4_x86_64_id_2292_/2292_SLE-Product-SLES15-SP4-Pool_for_sle-15-x86_64/"
@@ -159,14 +116,9 @@ katello:
     - name: SLE-Module-Python3-15-SP4-Updates
       url: "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/Python_3_Module_15_SP4_x86_64_id_2405_/2405_SLE-Module-Python3-15-SP4-Updates_for_sle-15-x86_64/"
 
-  # Repos Foreman para el Service Pack SP5: sirven como DESTINO en la
-  # etapa SP4 -> SP5 (dup, modo "sp4_to_sp5") y como ORIGEN en la etapa
-  # SP5 -> SP6 (updatestack, modo "sp5_to_sp6"). Un solo listado por
-  # Service Pack, reutilizado según el rol que le toque en cada etapa.
-  # name: identificador descriptivo. url: baseurl real del repositorio.
-  # Verificado por API contra Foreman/Katello (solo lectura) el 2026-10-01:
-  # los 5 módulos existen, están sincronizados con éxito y cada uno trae
-  # exactamente Pool + Updates (sin Source/Debuginfo).
+  # Repos Foreman para el Service Pack SP5: DESTINO en SP4->SP5 (dup) y
+  # ORIGEN en SP5->SP6 (updatestack) -- un solo listado, según el rol que
+  # le toque en cada etapa. name: identificador. url: baseurl real.
   sp5_repositories:
     - name: SLE-Product-SLES15-SP5-Pool
       url: "https://ansibleforeman.coldecom.com/pulp/content/Default_Organization/Library/custom/SUSE_Linux_Enterprise_Server_15_SP5_x86_64_id_2465_/2465_SLE-Product-SLES15-SP5-Pool_for_sle-15-x86_64/"
@@ -242,113 +194,49 @@ katello:
 # automatización (nunca se usa para nombrar repos permanentes).
 temporary_repo_prefix: "ansible-sles-upgrade-"
 
-# Reintentos ante el lock TRANSITORIO de PackageKit en cualquier comando de
-# Zypper que modifica algo (addrepo, modifyrepo --disable, removerepo,
-# refresh, dup -D, dup real) -- rc=7, ZYPPER_EXIT_ZYPP_LOCKED, confirmado
-# contra el código fuente oficial de zypper
-# (https://github.com/openSUSE/zypper/blob/master/src/main.h). Vive aquí
-# (no como default de un rol) porque la usan dos roles distintos
-# (repo_management y sp_migration) y "include_role" dinámico no expone los
-# defaults de un rol a otro (confirmado con prueba aislada, 2026-10-06).
+# Reintentos ante el lock TRANSITORIO de PackageKit (rc=7,
+# ZYPPER_EXIT_ZYPP_LOCKED) en cualquier comando de Zypper que modifica
+# algo. Vive aquí (no en un rol) porque lo usan repo_management y
+# sp_migration, y "include_role" dinámico no comparte defaults entre roles.
 zypper_lock_retries: 5
 zypper_lock_delay: 5
 
-# Agentes de seguridad corporativos que, confirmado con evidencia real en
-# laboratorio (sles15-sp5-sp7 / 10.181.8.36, 2026-10-06), toman
-# intermitentemente el lock de libzypp vía PackageKit (D-Bus) durante sus
-# escaneos de vulnerabilidades/parches -- cada escaneo activa un
-# "packagekitd" nuevo (PID distinto cada vez), que puede ganarle el lock a
-# Zypper incluso con los reintentos de zypper_lock_retries/_delay
-# agotados. Se confirmó en el host (systemctl, ps, journalctl) que no hay
-# timer/cron propio de este proyecto ni de parchado corporativo causando
-# esto -- es exclusivamente la actividad rutinaria de estos 2 agentes.
-#
+# Agentes de seguridad corporativos que pueden tomar intermitentemente el
+# lock de libzypp vía PackageKit durante sus escaneos de vulnerabilidades.
 # roles/repo_management/tasks/pause_security_agents.yml los detiene
-# TEMPORALMENTE (nunca los deshabilita/desinstala) justo antes de
-# modificar cualquier repositorio o paquete, y
-# resume_security_agents.yml los reinicia al terminar -- ver
-# playbooks/tasks/run_stage.yml para las condiciones exactas de cuándo se
-# reinician (nunca entre los 2 saltos encadenados de upgrade_mode: full,
-# solo al llegar a SP7 o si la etapa falló).
-#
-# Lista vacía es válida: un host sin estos agentes (o una decisión de no
-# tocarlos) simplemente no activa este mecanismo.
+# TEMPORALMENTE (nunca los deshabilita/desinstala) antes de modificar
+# cualquier repositorio o paquete; resume_security_agents.yml los
+# reinicia al terminar (ver run_stage.yml para cuándo exactamente).
+# Lista vacía es válida: un host sin estos agentes no activa el mecanismo.
 zypper_lock_competing_services:
   - ds_agent
   - nessusagent
 
 # Servicios que deben quedar PERMANENTEMENTE deshabilitados (systemctl
-# disable, no solo detenidos) antes de CUALQUIER reinicio obligatorio de
-# este proyecto. Lista vacía es válida -- es el valor por defecto desde
-# el cambio de política de abajo.
-#
-# HISTORIAL: "postfix" estuvo en esta lista entre 2026-10-07 y 2026-10-09.
-# Causa raíz confirmada con evidencia real en laboratorio:
-# "postfix.service" podía colgar INDEFINIDAMENTE el arranque tras un
-# upgrade de Service Pack -- `inet_interfaces = localhost` en
-# /etc/postfix/main.cf intentaba resolver "::1" (IPv6) en un host sin
-# IPv6 configurado; con el sistema ya arrancado y estable el mismo error
-# fallaba rápido (<1s), pero durante el arranque, antes de que la red
-# estuviera completamente lista, se quedaba colgado en vez de fallar
-# rápido.
-#
-# CAMBIO DE POLÍTICA -- decisión explícita del usuario para este ambiente
-# (2026-10-09): en vez de seguir deshabilitando postfix permanentemente,
-# se corrige la causa raíz directamente en su configuración
-# (`inet_protocols = ipv4`, roles/repo_management/tasks/
-# harden_postfix_ipv6_root_cause.yml -- se ejecuta siempre, sin depender
-# de esta lista) y se reinicia el servicio para que tome el fix de
-# inmediato. Validado con evidencia real (2026-10-08/09, host
-# sles15-sp5-sp7): con el fix puesto, postfix arranca en <1s sin
-# problema. postfix ya NO se agrega aquí -- queda habilitado/activo como
-# cualquier otro servicio del host, confiando en la corrección de su
-# configuración en vez de en deshabilitarlo.
-#
-# A diferencia de zypper_lock_competing_services (que se PAUSAN
-# temporalmente y se reinician después, porque el problema es
-# transitorio): un servicio que SÍ se agregue aquí se deshabilita de
-# forma PERMANENTE y nunca se vuelve a reiniciar automáticamente --
-# resérvese para un problema que de verdad sea una configuración rota
-# del host sin corrección conocida, no un parche temporal.
+# disable, no solo detenidos) antes de cualquier reinicio obligatorio.
+# Lista vacía es válida y es el default: "postfix" (causa real de cuelgue
+# de arranque por IPv6) ya no se maneja aquí -- se corrige en su propia
+# configuración (harden_postfix_ipv6_root_cause.yml, siempre se ejecuta)
+# en vez de deshabilitarse. Resérvese esta lista para un problema sin
+# corrección conocida; a diferencia de zypper_lock_competing_services
+# (pausa temporal), lo que se agregue aquí no se reinicia después.
 reboot_disable_services: []
 
-# Arranque de depuración (GRUB en texto plano + sin pantalla de carga +
-# systemd en modo detallado) -- deshabilitado por defecto, actívese por
-# host/corrida puntual (host_vars, o -e en el Job de AWX) cuando se
-# necesite ver en la consola del hipervisor qué está haciendo el arranque
-# paso a paso. Decisión explícita del usuario para este ambiente
-# (2026-10-09): motivado por un cuelgue real sin ningún rastro en
-# journald (SP6->SP7, pantalla casi en negro con un guion titilando) --
-# SLES usa GRUB_TERMINAL="gfxterm" con un tema gráfico
-# (GRUB_THEME/GRUB_BACKGROUND) y splash=silent/quiet en el kernel; si ese
-# renderizado gráfico falla en la tarjeta de video virtual del
-# hipervisor (ya confirmado que pasa con el adaptador SVGA de esta VM en
-# el propio sistema operativo -- Mesa/Gallium3D), el arranque puede estar
-# funcionando bien por debajo de una pantalla que simplemente no dibuja
-# nada. Validado con evidencia real (2026-10-09, host sles15-sp5-sp7,
-# sin reiniciar): grub2-mkconfig genera correctamente terminal_input
-# console y la línea de kernel sin splash/quiet, con systemd.log_level=
-# debug + systemd.show_status=1, preservando mitigations/security/
-# crashkernel del host real. Ver
-# roles/repo_management/tasks/configure_grub_debug_boot.yml.
-#
-# Cuando está en true: GRUB_TERMINAL pasa a "console" (texto plano, sin
-# tema gráfico) y se agregan systemd.log_level=debug +
-# systemd.show_status=1 al cmdline, quitando splash=silent/quiet -- vía
-# un bloque delimitado agregado al FINAL de /etc/default/grub (nunca se
-# tocan ni se borran las líneas originales: como el archivo se interpreta
-# como shell, la última asignación de cada variable gana).
-# Cuando está en false (por defecto): el bloque se retira si existía --
-# el host vuelve exactamente a su configuración original de GRUB.
+# Arranque de depuración -- deshabilitado por defecto, actívese por
+# host/corrida puntual cuando se necesite ver en la consola del
+# hipervisor qué está haciendo el arranque paso a paso (diagnóstico para
+# un cuelgue sin rastro en journald). Cuando está en true: GRUB_TERMINAL
+# pasa a "console" (sin tema gráfico) y se agregan systemd.log_level=debug
+# + systemd.show_status=1 + plymouth.enable=0 al cmdline, quitando
+# splash/quiet -- vía un bloque al final de /etc/default/grub, sin tocar
+# las líneas originales. En false (default), el bloque se retira si
+# existía. Ver roles/repo_management/tasks/configure_grub_debug_boot.yml
+# y roles/sp_migration/tasks/arm_grub_debug_boot.yml (reinicio de armado).
 grub_debug_boot_enabled: false
 
-# Conservar evidencia: habilitar almacenamiento persistente de journald
-# (Storage=persistent + /var/log/journal) justo antes de ejecutar la
-# migración real, para que los logs estructurados de la migración y del
-# reinicio sobrevivan aunque el arranque siguiente tenga problemas. Ver
-# roles/sp_migration/tasks/ensure_journald_persistent.yml. Idempotente;
-# deshabilitar solo si el host ya gestiona esto por otro medio (ej. un
-# forwarder centralizado que requiera journald en modo volátil).
+# Habilita journald persistente (Storage=persistent) antes de migrar, para
+# que los logs del reinicio sobrevivan aunque el arranque siguiente tenga
+# problemas. Ver roles/sp_migration/tasks/ensure_journald_persistent.yml.
 journald_enable_persistent: true
 
 # Validación post-reinicio: tras el reinicio obligatorio, cuánto tiempo
@@ -469,45 +357,27 @@ report_enabled: true
 # "localhost". Es solo la ubicación de trabajo mientras corre el playbook.
 report_local_dir: "{{ playbook_dir }}/../reports"
 
-# Destino persistente DEFINITIVO. Se copia aquí (ver playbooks/roles/reporting/tasks/
-# main.yml) con delegate_to: localhost + remote_src: true — es decir, esta
-# ruta se resuelve en el MISMO nodo de control/Execution Environment donde
-# corre Ansible, NUNCA en el servidor SLES administrado.
+# Destino persistente definitivo (resuelto en el nodo de control/EE, nunca
+# en el servidor SLES -- ver roles/reporting/tasks/main.yml).
 #
-# PENDIENTE DE CONFIRMAR EN EL AWX REAL (no se puede verificar desde el
-# desarrollo de este proyecto):
-#   1. Que /data/work/Salida_Upgrade exista y tenga permisos de escritura
-#      para el usuario con el que corre el Job en el Execution Environment.
-#   2. Que sea realmente persistente (un volumen/mount que sobrevive al
-#      Job), no un directorio efímero dentro del propio contenedor del EE
-#      — si el EE es un contenedor que se destruye al terminar el Job, esta
-#      ruta debe estar montada desde fuera de él. Ver
-#      ARQUITECTURA_Y_DISENO_TECNICO.html, sección 9.
-# Sin "CHANGE_ME" en el valor, playbooks/roles/reporting ya intenta la copia; revisar
-# el reporte HTML (bloque "Persistencia del reporte") para confirmar que la
-# copia fue exitosa en la primera ejecución real.
+# PENDIENTE DE CONFIRMAR EN AWX: que esta ruta exista con permisos de
+# escritura y sea realmente persistente (no un directorio efímero del
+# contenedor del EE). Revisar el bloque "Persistencia del reporte" del
+# reporte HTML en la primera ejecución real.
 report_destination: "/data/work/Salida_Upgrade"
 
 # ---------------------------------------------------------------------------
 # Sincronización de reportes hacia SharePoint (etapa 5 opcional del Workflow)
 # ---------------------------------------------------------------------------
-# playbooks/sync_sharepoint.yml sube hacia esta carpeta real de SharePoint
-# (dato real dado por el administrador, no inventado) los reportes YA
-# ESCRITOS en report_destination para el CRQ de la ejecución -- nunca
-# report_local_dir, que es efímero y puede no sobrevivir entre nodos
-# separados del Workflow (ver README, sección 11). Mismo sitio de
-# SharePoint que usa el inventario dinámico (inventory/linux_excel_inventory.yml),
-# pero una carpeta distinta.
+# sync_sharepoint.yml sube hacia esta carpeta de SharePoint los reportes
+# ya escritos en report_destination (nunca report_local_dir, que es
+# efímero). Mismo sitio de SharePoint que el inventario dinámico, carpeta
+# distinta. Requiere las mismas credenciales (TENANT_ID/CLIENT_ID/
+# CLIENT_SECRET) adjuntas también a este Job Template.
 #
-# Requiere las MISMAS credenciales que el inventario dinámico
-# (TENANT_ID/CLIENT_ID/CLIENT_SECRET, Credential "SharePoint Excel
-# Inventory") adjuntas también a este Job Template -- ver docs/AWX_SETUP.html.
-#
-# PENDIENTE DE CONFIRMAR: que el App Registration de Azure AD usado para
-# esas credenciales tenga permiso de ESCRITURA en SharePoint
-# (Sites.ReadWrite.All), no solo lectura -- el inventario dinámico solo
-# necesitaba leer. No se puede verificar desde el desarrollo de este
-# proyecto; confirmar en la primera sincronización real.
+# PENDIENTE DE CONFIRMAR: que ese App Registration de Azure AD tenga
+# permiso de ESCRITURA en SharePoint (Sites.ReadWrite.All), no solo
+# lectura -- confirmar en la primera sincronización real.
 sharepoint_sync:
   enabled: true
   site_hostname: "colcomerciocom.sharepoint.com"

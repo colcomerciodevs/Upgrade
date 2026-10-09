@@ -187,6 +187,11 @@
             dest: "{{ report_local_dir }}/{{ _consolidado_crq_folder }}/consolidado_{{ _consolidado_lote_folder }}.json"
             mode: "0644"
 
+        # Igual que roles/reporting/tasks/main.yml: tolerante a fallo tanto
+        # aquí como en la copia siguiente -- el consolidado local ya quedó
+        # generado arriba; si report_destination no existe o no tiene
+        # permisos en este momento, no se detiene la ejecución por eso (el
+        # consolidado local sigue siendo la fuente autoritativa).
         - name: Asegurar la carpeta del CRQ en el destino persistente, si ya está configurado
           ansible.builtin.file:
             path: "{{ report_destination }}/{{ _consolidado_crq_folder }}"

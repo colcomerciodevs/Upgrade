@@ -64,13 +64,9 @@
 
 - name: "Volcar a disco lo que journald ya tenía en memoria de este arranque (solo si recién se activó persistente)"
   # Cambiar Storage=persistent y reiniciar journald solo afecta lo que se
-  # escriba DE AQUÍ EN ADELANTE -- no mueve al disco lo que journald ya
-  # tenía en /run/log/journal (volátil) desde que arrancó este host, antes
-  # de que esta tarea corriera. Sin este flush, esa parte del arranque
-  # (y el propio dup/apagado que sigue) se pierde al reiniciar, dejando un
-  # hueco justo en la ventana que más interesa para diagnóstico. Confirmado
-  # con evidencia real (2026-10-08): sin flush, `journalctl --list-boots`
-  # tras el reinicio solo mostraba el arranque nuevo, nada del anterior.
+  # escriba de aquí en adelante -- no mueve a disco lo que ya tenía en
+  # /run/log/journal (volátil) desde que arrancó. Sin este flush, esa
+  # parte del arranque se pierde en el siguiente reinicio.
   ansible.builtin.command: journalctl --flush --sync
   become: true
   changed_when: false

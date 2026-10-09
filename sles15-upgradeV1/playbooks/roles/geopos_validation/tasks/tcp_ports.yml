@@ -10,6 +10,10 @@
       category_status: NOT_CHECKED
   when: not (geopos_validation.tcp_ports.enabled | default(false))
 
+# "ignore_errors: true": un puerto que no responde en el timeout es un
+# RESULTADO a evaluar (FAILED/WARNING según item.critical en la tarea
+# siguiente), no un error de ejecución -- sin esto, Ansible abortaría en
+# el primer puerto cerrado en vez de revisar los demás configurados.
 - name: Verificar que cada puerto TCP de GeoPOS esté escuchando
   ansible.builtin.wait_for:
     host: "{{ item.host | default('127.0.0.1') }}"

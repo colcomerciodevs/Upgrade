@@ -16,9 +16,7 @@
 # roles/precheck/tasks/repos_reachability.yml, que SIEMPRE corre antes que
 # este archivo dentro de la misma ejecución (ver playbooks/tasks/
 # run_stage.yml: "Ejecutar precheck de la etapa" es el primer paso real,
-# antes de "Preparar repos y migrar"). Para el camino de VALIDATE, que NO
-# pasa por repos_reachability.yml, la CA se sigue asegurando por su cuenta
-# en roles/sp_migration/tasks/preflight.yml.
+# antes de "Preparar repos y migrar").
 
 - name: "Validar que hay repositorios Foreman/Katello configurados para la fase {{ repo_management_alias_suffix }}"
   ansible.builtin.assert:
@@ -34,15 +32,10 @@
     _phase_alias_prefix: "{{ temporary_repo_prefix }}{{ repo_management_phase_sp }}-{{ repo_management_alias_suffix }}-"
 
 - name: "Retirar, si quedaron, repos huérfanos con este mismo prefijo de una ejecución anterior fallida"
-  # Confirmado con evidencia real en laboratorio (2026-10-06): si una
-  # ejecución previa falló DESPUÉS de agregar estos alias (por ejemplo, en
-  # el refresh posterior) pero ANTES de llegar a su propio cleanup.yml, los
-  # alias quedan existentes en el host. Al reintentar la etapa, "addrepo"
-  # fallaría de inmediato con "already exists" para los 10/10 alias. Esto
-  # es seguro de ejecutar siempre (incluso si no hay huérfanos, no hace
-  # nada): solo retira alias que coincidan EXACTAMENTE con el prefijo
-  # identificable de ESTA fase de esta automatización (nunca repositorios
-  # preexistentes del cliente ni de otra fase/etapa).
+  # Si una corrida previa falló entre crear estos alias y su propio
+  # cleanup.yml, quedarían en el host y "addrepo" fallaría con "already
+  # exists" al reintentar. Seguro de ejecutar siempre: solo retira alias
+  # con el prefijo exacto de ESTA fase, nunca repos de otra fase o del cliente.
   ansible.builtin.include_role:
     name: repo_management
     tasks_from: cleanup.yml
@@ -68,29 +61,13 @@
       {{ result }}
 
 - name: "Agregar repositorios temporales Foreman/Katello ({{ repo_management_alias_suffix }})"
-  # EVIDENCIA PARCIAL: si el repo N falla, los repos 1..N-1 ya agregados
-  # deben quedar registrados en repos_temporary_created de todos modos. El
-  # loop nunca aborta a mitad de camino (failed_when: false); el fallo se
-  # reporta explícitamente DESPUÉS de consolidar la evidencia real.
-  #
-  # "until" reintenta SOLO si Zypper devuelve rc=7 (ZYPP_LOCKED -- libzypp
-  # bloqueado, típicamente por PackageKit u otra herramienta de gestión de
-  # paquetes corriendo en ese momento; confirmado con evidencia real en
-  # laboratorio). Cualquier otro código de error se deja pasar de
-  # inmediato (sin agotar los reintentos) para que el fallo real se
-  # reporte sin demora innecesaria.
-  #
-  # "--no-gpgcheck": decisión explícita del usuario para este ambiente
-  # (ver CLAUDE.md, "Verificación GPG de repositorios Foreman", 2026-10-06)
-  # -- flag OFICIAL de Zypper, POR REPOSITORIO (zypper help addrepo), nunca
-  # el flag global "--no-gpg-checks". Solo afecta a este alias temporal que
-  # esta automatización está creando ahora mismo; nunca toca la
-  # configuración GPG de ningún repositorio preexistente del cliente.
-  # IMPORTANTE: debe ir ANTES de "-n" -- "-n" consume el siguiente token
-  # como su valor (el nombre descriptivo), así que colocarlo entre "-n" y
-  # el nombre real hace que zypper use "--no-gpgcheck" como nombre y deje
-  # un argumento posicional de más ("Too many arguments"); confirmado con
-  # evidencia real en laboratorio (2026-10-06).
+  # failed_when: false -- el loop no aborta a mitad de camino; el fallo se
+  # reporta explícito más abajo, ya con los repos 1..N-1 que sí se
+  # agregaron registrados. "until" solo reintenta si Zypper devuelve
+  # rc=7 (ZYPP_LOCKED, lock transitorio de PackageKit).
+  # "--no-gpgcheck" (por repositorio, nunca el flag global): decisión del
+  # usuario, ver CLAUDE.md. Debe ir ANTES de "-n", que si no consume el
+  # siguiente token como nombre descriptivo.
   ansible.builtin.command:
     cmd: >-
       zypper --non-interactive addrepo -f --no-gpgcheck -n "{{ item.name }}"
@@ -128,10 +105,8 @@
     repos_temporary_created: "{{ repos_temporary_created + _phase_created_aliases }}"
 
 - name: "Calcular el detalle real (stdout/stderr de Zypper) de los repositorios que no se pudieron agregar"
-  # Mismo principio que ya se aplicó al gate dup -D: decir SOLO "cuáles"
-  # fallaron, sin la salida real de Zypper, no es suficiente para
-  # diagnosticar (ej. "ya existe un repositorio con ese alias" vs. un
-  # problema de red/URL) sin tener que ir a leer el log crudo del Job.
+  # Decir solo "cuáles" fallaron no basta para diagnosticar sin leer el
+  # log crudo del Job; se adjunta la salida real de Zypper.
   ansible.builtin.set_fact:
     _phase_failed_details: |-
       {% set result = [] %}
@@ -161,11 +136,8 @@
   when: _phase_failed_aliases | length > 0
 
 - name: "Refrescar ÚNICAMENTE los alias temporales Foreman de esta fase (con --releasever si aplica)"
-  # Explícitamente SIN "-s"/"--services": este proyecto no usa servicios de
-  # Zypper para descubrir repositorios, y "-s" refresca TODOS los servicios
-  # del sistema (pudiendo introducir repos ajenos al conjunto controlado).
-  # Se listan los alias exactos recién creados para que el refresh no
-  # alcance a ningún otro repositorio (ni siquiera otros ya deshabilitados).
+  # Sin "-s"/"--services" -- eso refrescaría todos los servicios de
+  # Zypper del sistema. Se listan solo los alias recién creados.
   ansible.builtin.command:
     argv: >-
       {{
@@ -176,23 +148,12 @@
       }}
   become: true
   register: repo_refresh_result
-  # "until": mismo reintento por lock transitorio de PackageKit (rc=7,
-  # ZYPP_LOCKED) que el addrepo de más arriba -- confirmado con evidencia
-  # real en laboratorio (2026-10-06) que este lock también puede aparecer
-  # aquí, no solo en addrepo (PackageKit puede tomar el lock en cualquier
-  # momento; el precheck solo valida un instante puntual, no garantiza que
-  # siga libre minutos después). Zypper en --non-interactive nunca le pide
-  # a PackageKit que suelte el lock por su cuenta (confirmado contra el
-  # código fuente oficial), así que reintentar en Ansible es el único
-  # mecanismo real disponible -- no existe un flag de Zypper para esto.
   until: (repo_refresh_result.rc | default(1)) != 7
   retries: "{{ zypper_lock_retries }}"
   delay: "{{ zypper_lock_delay }}"
   changed_when: true
-  # Captura explícita en lugar de dejar que Ansible falle con el genérico
-  # "non-zero return code": ese mensaje, sin stdout/stderr real de Zypper,
-  # no permite diagnosticar sin leer el log crudo del Job (mismo principio
-  # ya aplicado a addrepo más arriba y a disable_preexisting.yml/cleanup.yml).
+  # Captura explícita (no el genérico "non-zero return code") para poder
+  # diagnosticar con el stdout/stderr real de Zypper en el mensaje de fallo.
   failed_when: false
 
 - name: "Diagnosticar qué bloquea a Zypper, si falló el refresh (diagnóstico de solo lectura)"

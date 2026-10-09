@@ -3,7 +3,7 @@
 #
 # Entrypoint único del proyecto. El modo de ejecución se controla con la
 # variable `upgrade_mode` (ver playbooks/group_vars/all.yml):
-#   precheck | validate | sp4_to_sp5 | sp5_to_sp6 | sp6_to_sp7 | full
+#   precheck | sp4_to_sp5 | sp5_to_sp6 | sp6_to_sp7 | full
 #
 # sp4_to_sp5 es una etapa INDEPENDIENTE (para hosts que todavía están en
 # SP4): no se encadena dentro de "full", que sigue siendo exclusivamente
@@ -45,9 +45,9 @@
     - name: Validar que upgrade_mode tiene un valor soportado
       ansible.builtin.assert:
         that:
-          - upgrade_mode in ['precheck', 'validate', 'sp4_to_sp5', 'sp5_to_sp6', 'sp6_to_sp7', 'full']
+          - upgrade_mode in ['precheck', 'sp4_to_sp5', 'sp5_to_sp6', 'sp6_to_sp7', 'full']
         fail_msg: >-
-          upgrade_mode debe ser uno de: precheck, validate, sp4_to_sp5, sp5_to_sp6,
+          upgrade_mode debe ser uno de: precheck, sp4_to_sp5, sp5_to_sp6,
           sp6_to_sp7, full (valor actual: {{ upgrade_mode | default('NO DEFINIDO') }})
 
     - name: Validar que upgrade_phase tiene un valor soportado
@@ -107,158 +107,6 @@
         - name: Propagar estado global del host (modo precheck)
           ansible.builtin.set_fact:
             host_overall_status: "{{ precheck_result.overall_status }}"
-
-    # -----------------------------------------------------------------
-    # MODO: validate — preflight REAL de la migración contra Foreman,
-    # sin modificar /etc/zypp/repos.d ni aplicar ningún cambio.
-    # Distinto de "precheck": aquí Zypper realmente contacta los repos
-    # Foreman de la etapa objetivo (metadata, TLS/CA, GPG, solver) en un
-    # directorio aislado con `--reposd-dir` (ver
-    # playbooks/roles/sp_migration/tasks/preflight.yml).
-    #
-    # Si el preflight no pudo ejecutarse realmente (NOT_CHECKED) o falló
-    # (FAILED), el resultado global de validate NUNCA es OK: debe quedar
-    # visible que la validación no se completó.
-    # -----------------------------------------------------------------
-    - name: "Modo validate"
-      when: upgrade_mode == 'validate'
-      block:
-        - name: Inicializar lista de checks básicos (reutiliza la lógica de precheck)
-          ansible.builtin.set_fact:
-            precheck_checks: []
-
-        - name: Determinar Service Pack actual y etapa objetivo efectiva
-          ansible.builtin.include_role:
-            name: precheck
-            tasks_from: sp_version.yml
-
-        - name: Inventariar repositorios actuales
-          ansible.builtin.include_role:
-            name: precheck
-            tasks_from: repo_inventory.yml
-
-        - name: Verificar servicios críticos
-          ansible.builtin.include_role:
-            name: precheck
-            tasks_from: critical_services.yml
-
-        - name: Validar GeoPOS (estado actual)
-          ansible.builtin.include_role:
-            name: geopos_validation
-          vars:
-            geopos_validation_phase: after
-
-        - name: Seleccionar repos Foreman/Katello de origen, destino y --releasever de la etapa objetivo
-          ansible.builtin.set_fact:
-            _validate_origin_sp: "{{ precheck_expected_current_sp | default('') }}"
-            _validate_origin_repositories: "{{ katello[precheck_expected_current_sp ~ '_repositories'] if (precheck_expected_current_sp | default('')) | length > 0 else [] }}"
-            _validate_target_repositories: "{{ katello[precheck_effective_target_sp ~ '_repositories'] if precheck_effective_target_sp in ['sp5', 'sp6', 'sp7'] else [] }}"
-            _validate_target_releasever: "{{ '15-SP7' if precheck_effective_target_sp == 'sp7' else '' }}"
-
-        - name: Registrar preflight NOT_CHECKED (sin etapa objetivo o sin repos Foreman de destino configurados)
-          ansible.builtin.set_fact:
-            sp_migration_preflight_result:
-              status: NOT_CHECKED
-              supported: null
-              origin: {checked: false, status: NOT_CHECKED, output_summary: "no evaluado: falta el destino"}
-              output_summary: >-
-                No hay etapa objetivo determinada o no hay repositorios Foreman/Katello
-                configurados todavía para "{{ precheck_effective_target_sp }}" (katello.{{ precheck_effective_target_sp }}_repositories).
-          when: (_validate_target_repositories | length == 0)
-
-        - name: "Ejecutar preflight real (origen: refresh; destino: refresh + dup -D)"
-          ansible.builtin.include_role:
-            name: sp_migration
-            tasks_from: preflight.yml
-          vars:
-            sp_migration_target_sp: "{{ precheck_effective_target_sp }}"
-            sp_migration_releasever: "{{ _validate_target_releasever }}"
-            sp_migration_repositories: "{{ _validate_target_repositories }}"
-            sp_migration_origin_sp: "{{ _validate_origin_sp }}"
-            sp_migration_origin_repositories: "{{ _validate_origin_repositories }}"
-          when: (_validate_target_repositories | length > 0)
-
-        - name: "Calcular estado de la validación: recolectar evidencia por categoría (precedencia FAILED > NOT_CHECKED > WARNING > OK)"
-          # IMPORTANTE: un precheck_checks en NOT_CHECKED (por ejemplo
-          # "repositorios_no_esperados" cuando permanent_repos está vacío)
-          # es informativo y NO degrada VALIDATE a NOT_CHECKED. Solo el
-          # preflight real (sp_migration_preflight_result) determina el
-          # NOT_CHECKED de VALIDATE.
-          ansible.builtin.set_fact:
-            _validate_failed_precheck_checks: "{{ precheck_checks | selectattr('status', 'equalto', 'FAILED') | map(attribute='name') | list }}"
-            _validate_failed_critical_services: "{{ critical_services_status | selectattr('status', 'equalto', 'FAILED') | map(attribute='name') | list }}"
-            _validate_warning_precheck_checks: "{{ precheck_checks | selectattr('status', 'equalto', 'WARNING') | map(attribute='name') | list }}"
-
-        - name: Calcular estado final de la validación
-          ansible.builtin.set_fact:
-            _validate_status: >-
-              {{
-                'FAILED' if (
-                  _validate_failed_precheck_checks | length > 0
-                  or _validate_failed_critical_services | length > 0
-                  or geopos_validation_result.critical_unhealthy
-                  or sp_migration_preflight_result.status == 'FAILED'
-                )
-                else ('NOT_CHECKED' if sp_migration_preflight_result.status == 'NOT_CHECKED'
-                else ('WARNING' if (
-                  _validate_warning_precheck_checks | length > 0
-                  or geopos_validation_result.overall_status == 'WARNING'
-                )
-                else 'OK'))
-              }}
-
-        - name: "Calcular el motivo exacto del resultado de VALIDATE (mismo orden de precedencia que el estado)"
-          ansible.builtin.set_fact:
-            _validate_status_reason: >-
-              {{
-                ('precheck FAILED: ' ~ (_validate_failed_precheck_checks | join(', '))) if _validate_failed_precheck_checks | length > 0
-                else (('servicios_criticos FAILED: ' ~ (_validate_failed_critical_services | join(', '))) if _validate_failed_critical_services | length > 0
-                else ('geopos_validation: critical_unhealthy=true' if geopos_validation_result.critical_unhealthy
-                else (('preflight FAILED: ' ~ (sp_migration_preflight_result.output_summary | default(''))) if sp_migration_preflight_result.status == 'FAILED'
-                else (('preflight NOT_CHECKED: ' ~ (sp_migration_preflight_result.output_summary | default(''))) if sp_migration_preflight_result.status == 'NOT_CHECKED'
-                else (('precheck WARNING: ' ~ (_validate_warning_precheck_checks | join(', '))) if _validate_warning_precheck_checks | length > 0
-                else ('geopos_validation: overall_status=WARNING' if geopos_validation_result.overall_status == 'WARNING'
-                else ''))))))
-              }}
-
-        - name: Ensamblar reporte de validación
-          ansible.builtin.set_fact:
-            stage_report:
-              hostname: "{{ inventory_hostname }}"
-              fqdn: "{{ ansible_facts['fqdn'] | default(inventory_hostname) }}"
-              crq: "{{ upgrade_crq | default('') }}"
-              lote: "{{ upgrade_lote | default('') }}"
-              ambiente: "{{ upgrade_ambiente | default('') }}"
-              action: "validate"
-              stage: "validate"
-              started_at: "{{ system_state_snapshot_before.captured_at }}"
-              finished_at: "{{ lookup('pipe', 'date -u +%Y-%m-%dT%H:%M:%SZ') }}"
-              sp_inicial: "{{ system_state_snapshot_before.current_sp_id }}"
-              sp_objetivo: "{{ precheck_effective_target_sp }}"
-              sp_final: "{{ system_state_snapshot_before.current_sp_id }}"
-              kernel_antes: "{{ system_state_snapshot_before.kernel }}"
-              kernel_despues: "{{ system_state_snapshot_before.kernel }}"
-              precheck:
-                checks: "{{ precheck_checks }}"
-                repo_inventory: "{{ precheck_repo_inventory | default([]) }}"
-              preflight: "{{ sp_migration_preflight_result }}"
-              repos: {}
-              migration: {}
-              reboot: {}
-              critical_services_before: "{{ critical_services_status }}"
-              critical_services_after: "{{ critical_services_status }}"
-              geopos_before: "{{ geopos_validation_before }}"
-              geopos_after: "{{ geopos_validation_result }}"
-              status: "{{ _validate_status }}"
-              failure_stage: "{{ ('validate: ' ~ _validate_status_reason) if _validate_status != 'OK' else '' }}"
-
-        - name: Generar reporte de validación
-          ansible.builtin.include_role:
-            name: reporting
-
-        - name: Propagar estado global del host (modo validate)
-          ansible.builtin.set_fact:
-            host_overall_status: "{{ _validate_status }}"
 
     # -----------------------------------------------------------------
     # MODO: sp4_to_sp5 (independiente; para hosts todavía en SP4)

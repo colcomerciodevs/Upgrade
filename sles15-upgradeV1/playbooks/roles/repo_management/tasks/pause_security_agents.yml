@@ -2,22 +2,13 @@
 # roles/repo_management/tasks/pause_security_agents.yml
 #
 # Detiene TEMPORALMENTE los agentes de seguridad corporativos listados en
-# zypper_lock_competing_services (ver playbooks/group_vars/all.yml para la
-# evidencia real que justifica esto) y espera a que no quede ningún
-# packagekitd corriendo. Confirmado con evidencia real en laboratorio
-# (sles15-sp5-sp7 / 10.181.8.36, 2026-10-06/07): estos agentes toman
-# intermitentemente el lock de libzypp vía PackageKit (D-Bus) durante sus
-# escaneos.
+# zypper_lock_competing_services (ver group_vars/all.yml) y espera a que
+# no quede ningún packagekitd corriendo.
 #
-# Decisión explícita del usuario para este ambiente (2026-10-07): esto se
-# ejecuta UNA SOLA VEZ, en PRECHECK (roles/precheck/tasks/
-# pause_competing_services.yml -- SEGUNDA excepción documentada a
-# "precheck es de solo lectura", la primera es la CA en
-# repos_reachability.yml), para que ya esté resuelto cuando arranque la
-# siguiente etapa, en vez de competir directamente contra la primera
-# operación real de Zypper de "preparar repos". Las etapas de
-# preparar/aplicar solo verifican con wait_packagekitd_clear.yml (más
-# liviano: nunca vuelve a detener nada, solo espera si todavía hiciera falta).
+# Se ejecuta UNA SOLA VEZ, en PRECHECK (pause_competing_services.yml --
+# segunda excepción a "precheck es de solo lectura", la primera es la CA
+# en repos_reachability.yml). Preparar/aplicar solo verifican con
+# wait_packagekitd_clear.yml: nunca vuelven a detener nada.
 #
 # Solo detiene los que:
 #   - están presentes en este host (unit systemd existente);
