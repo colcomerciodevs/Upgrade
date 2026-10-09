@@ -511,10 +511,21 @@ ANSIBLE_INVENTORY_PLUGINS: "/runner/project/&lt;CARPETA_DEL_PROJECT&gt;/inventor
     propio sistema operativo), dejando una pantalla negra con solo un guion titilando
     aunque el arranque esté funcionando bien por debajo. Activado, pone
     <code>GRUB_TERMINAL="console"</code> (texto plano) y agrega
-    <code>systemd.log_level=debug</code> + <code>systemd.show_status=1</code>, quitando
-    <code>splash</code>/<code>quiet</code> — vía un bloque al final de
-    <code>/etc/default/grub</code>, sin tocar las líneas originales. Ver README
-    sección 8.8.
+    <code>systemd.log_level=debug</code> + <code>systemd.show_status=1</code> +
+    <code>plymouth.enable=0</code>, quitando <code>splash</code> (con o sin valor) y
+    <code>quiet</code> — vía un bloque al final de <code>/etc/default/grub</code>, sin
+    tocar las líneas originales. Validado con una prueba real completa (2026-10-09): el
+    host llegó a SP6 con el <code>cmdline</code> de depuración activo, pero apareció una
+    ventana de error (parecida a postfix) a los pocos segundos de enviar el reinicio,
+    <strong>antes</strong> de llegar a GRUB —es decir, durante el apagado de la sesión
+    anterior, que el flag no cubría porque <code>GRUB_CMDLINE_LINUX_DEFAULT</code> solo
+    afecta al próximo arranque. Por eso se agregó un <strong>reinicio adicional de
+    "armado"</strong> (<code>roles/sp_migration/tasks/arm_grub_debug_boot.yml</code>), solo
+    cuando el flag está en <code>true</code> y antes del reinicio real de la migración,
+    para que el apagado de ese reinicio real también quede visible en consola.
+    <code>plymouth.enable=0</code> se agregó por la misma evidencia: quitar
+    <code>splash</code>/<code>quiet</code> no garantiza que <code>plymouth</code> no tome
+    la consola igual. Ver README sección 8.8.
   </div>
 <div class="callout risk">
 <span class="label">Solicitud MOK pendiente (shim/grub2/kernel) — otra causa real de cuelgue indefinido al reiniciar</span>

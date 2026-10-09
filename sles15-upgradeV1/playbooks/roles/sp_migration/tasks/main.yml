@@ -192,6 +192,10 @@
     name: repo_management
     tasks_from: configure_grub_debug_boot.yml
 
+- name: "Armar el arranque de depuración con un reinicio adicional ANTES del reinicio real (solo si grub_debug_boot_enabled; ver arm_grub_debug_boot.yml)"
+  ansible.builtin.include_tasks: arm_grub_debug_boot.yml
+  when: grub_debug_boot_enabled | default(false)
+
 - name: "Trazabilidad del reinicio: leer boot_id y hora de inicio ANTES de reiniciar"
   # boot_id (/proc/sys/kernel/random/boot_id) es un UUID que el kernel
   # genera de nuevo en cada arranque -- comparar el de antes/después es

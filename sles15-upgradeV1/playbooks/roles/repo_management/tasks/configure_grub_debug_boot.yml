@@ -10,9 +10,18 @@
 # Cuando está habilitado: GRUB_TERMINAL pasa a "console" (texto plano,
 # sin el tema gráfico SLE que podría estar fallando en el adaptador de
 # video virtual del hipervisor) y se agrega systemd.log_level=debug +
-# systemd.show_status=1 al cmdline del kernel, quitando splash=silent y
-# quiet -- para poder ver en la consola del hipervisor, paso a paso, qué
-# unidad de systemd se está iniciando (o esperando) durante el arranque.
+# systemd.show_status=1 + plymouth.enable=0 al cmdline del kernel,
+# quitando splash (con o sin valor) y quiet -- para poder ver en la
+# consola del hipervisor, paso a paso, qué unidad de systemd se está
+# iniciando/deteniendo (o esperando) durante el arranque y el apagado.
+#
+# plymouth.enable=0 (agregado 2026-10-09, evidencia real): en una prueba
+# real con el flag activo, el host llegó a SP6 correctamente pero el
+# operador reportó una interfaz gráfica apareciendo unos segundos en
+# consola -- quitar "splash"/"quiet" del cmdline no garantiza que
+# plymouth no tome la consola igual (sus unidades no están
+# necesariamente condicionadas al parámetro "splash" en SLES), así que
+# se agrega su propio parámetro de desactivación como seguro adicional.
 #
 # Mecanismo: un bloque delimitado (ansible.builtin.blockinfile) agregado
 # al FINAL de /etc/default/grub. Nunca se tocan ni se borran las líneas
@@ -48,16 +57,16 @@
       changed_when: false
       failed_when: false
 
-    - name: "Calcular el cmdline de depuración (igual al original, sin splash=X ni quiet, con los parámetros de depuración)"
+    - name: "Calcular el cmdline de depuración (igual al original, sin splash/quiet, con los parámetros de depuración)"
       ansible.builtin.set_fact:
         _grub_debug_cmdline: >-
           {{
             (
               (_grub_cmdline_original.stdout | default(''))
-              | regex_replace('\s*splash=\S+', '')
+              | regex_replace('(^|\s)splash(=\S+)?(\s|$)', ' ')
               | regex_replace('(^|\s)quiet(\s|$)', ' ')
               | trim
-            ) ~ ' systemd.log_level=debug systemd.show_status=1'
+            ) ~ ' systemd.log_level=debug systemd.show_status=1 plymouth.enable=0'
           }}
 
     - name: "Gestionar el bloque de arranque de depuración al final de /etc/default/grub"

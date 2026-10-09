@@ -200,7 +200,12 @@
       <td>
         habilitado: {{ _grub_debug.habilitado | default(false) }}
         {% if _grub_debug.se_aplico_ahora %}
-          — <span class="badge badge-WARNING">aplicado en esta corrida</span> (GRUB en texto plano, sin splash, systemd en modo detallado — ver la consola del hipervisor en el próximo arranque)
+          — <span class="badge badge-WARNING">aplicado en esta corrida</span> (GRUB en texto plano, sin splash, systemd en modo detallado)
+        {% endif %}
+        {% if _grub_debug.armado_con_reinicio_adicional %}
+          — <span class="badge badge-WARNING">se ejecutó un reinicio adicional de armado</span> antes del reinicio real, para que el apagado de esa sesión (antes de GRUB) también quede visible en la consola del hipervisor
+        {% elif _grub_debug.habilitado | default(false) %}
+          — el kernel ya estaba corriendo en modo de depuración, no hizo falta un reinicio adicional
         {% endif %}
       </td></tr>
   {% endif %}

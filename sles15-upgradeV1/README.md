@@ -939,11 +939,15 @@ arranque paso a paso en la consola del hipervisor, nunca como
 configuración permanente de toda la flota. Cuando está en `true`:
 
 - `GRUB_TERMINAL` pasa a `"console"` (texto plano, sin el tema gráfico).
-- Se agrega `systemd.log_level=debug` + `systemd.show_status=1` al
-  cmdline del kernel, quitando `splash=*` y `quiet` — conserva el resto
-  de parámetros reales del host (`mitigations`, `security=apparmor`,
-  `crashkernel`, etc.; no los inventa, los lee de la configuración
-  existente de `/etc/default/grub`).
+- Se agrega `systemd.log_level=debug` + `systemd.show_status=1` +
+  `plymouth.enable=0` al cmdline del kernel, quitando `splash` (con o sin
+  valor) y `quiet` — conserva el resto de parámetros reales del host
+  (`mitigations`, `security=apparmor`, `crashkernel`, etc.; no los
+  inventa, los lee de la configuración existente de `/etc/default/grub`).
+  `plymouth.enable=0` (agregado 2026-10-09, evidencia real abajo) es un
+  seguro adicional: quitar `splash`/`quiet` no garantiza que `plymouth`
+  no tome la consola igual, porque sus unidades no están necesariamente
+  condicionadas a ese parámetro en SLES.
 
 Mecanismo (`roles/repo_management/tasks/configure_grub_debug_boot.yml`):
 un bloque delimitado agregado al **final** de `/etc/default/grub`
@@ -964,6 +968,43 @@ generado muestra `terminal_output console` y la línea del kernel sin
 `splash`/`quiet`, con los parámetros de depuración — y al desactivarlo,
 vuelve exactamente a la línea original. Queda registrado en el reporte,
 sección "Reinicio" (sección 11).
+
+**Reinicio adicional de "armado" (motivado por evidencia real,
+2026-10-09)**: en una prueba real con `grub_debug_boot_enabled: true` se
+confirmó que el host sí terminó el upgrade (SP6 confirmado por SSH tras el
+reinicio, `postfix` quedó `disabled`/`inactive`, el `cmdline` real del
+nuevo arranque ya traía `systemd.log_level=debug systemd.show_status=1`),
+pero el operador reportó una ventana con aspecto de error de postfix
+**a los pocos segundos de enviar el reinicio, antes de llegar a GRUB** —
+es decir, durante el **apagado** de la sesión que ya estaba corriendo
+(systemd deteniendo servicios), no durante el arranque nuevo.
+`GRUB_CMDLINE_LINUX_DEFAULT` solo afecta al *próximo* arranque: el kernel
+que ya está corriendo conserva los parámetros con los que arrancó, así
+que ese apagado seguía siendo ciego aunque el bloque de depuración ya
+estuviera escrito en `/etc/default/grub`.
+
+Por eso, `roles/sp_migration/tasks/arm_grub_debug_boot.yml` agrega un
+**reinicio adicional**, incluido justo después de
+`configure_grub_debug_boot.yml` y **antes** del reinicio real de la
+migración, **solo cuando `grub_debug_boot_enabled` es `true`**: su único
+propósito es dejar el kernel en ejecución ya "armado" con los parámetros
+de depuración, para que cuando ocurra el reinicio real de la migración,
+su propio apagado (la ventana "antes de GRUB") también quede visible en
+la consola del hipervisor, además del arranque posterior. Como esa misma
+prueba dejó la duda de si lo visto era realmente `plymouth` tomando la
+consola (quitar `splash`/`quiet` no lo garantiza, sus unidades no están
+necesariamente condicionadas a ese parámetro en SLES), también se agregó
+`plymouth.enable=0` al cmdline de depuración (ver arriba) como seguro
+adicional. Es idempotente:
+si el kernel que ya está corriendo ya tiene `systemd.log_level=debug` en
+su `/proc/cmdline` (por ejemplo, porque esta etapa ya se había ejecutado
+antes con el flag en `true`), no se reinicia una segunda vez. Si este
+reinicio de armado no logra reconectar, la etapa falla explícitamente ahí
+mismo — no se continúa al reinicio real de la migración sin confirmar que
+el host volvió. Cuando `grub_debug_boot_enabled` es `false` (por
+defecto), esta tarea no se incluye y no hay ningún reinicio adicional.
+Queda registrado en el reporte junto con el resto de esta sección
+(`armado_con_reinicio_adicional`).
 
 ---
 
@@ -1122,8 +1163,10 @@ supone que solo prepara.
   deshabilitado) — previene el cuelgue indefinido de `MokManager` al
   reiniciar.
 - **Arranque de depuración de GRUB** (sección 8.8): si
-  `grub_debug_boot_enabled` está activo y si se aplicó en esta corrida —
-  herramienta de diagnóstico opcional, apagada por defecto.
+  `grub_debug_boot_enabled` está activo, si se aplicó en esta corrida y si
+  hizo falta un reinicio adicional de "armado" antes del reinicio real
+  (para que el apagado de esa sesión, antes de GRUB, también quede
+  visible) — herramienta de diagnóstico opcional, apagada por defecto.
 - **Salida completa del `dup` real, sin recortar** (`.dup_full.log`, junto al
   HTML/JSON de la etapa, mismo nombre): el HTML/JSON recorta la salida del
   `dup` a 20.000 caracteres para seguir siendo legible, lo cual en una
