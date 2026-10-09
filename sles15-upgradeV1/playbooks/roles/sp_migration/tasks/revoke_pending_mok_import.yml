@@ -1,0 +1,74 @@
+---
+# roles/sp_migration/tasks/revoke_pending_mok_import.yml
+#
+# Evitar un cuelgue REAL confirmado en laboratorio (2026-10-08, host
+# sles15-sp5-sp7, SP6->SP7): al actualizar shim/grub2/kernel, sus propios
+# scripts de instalación pueden dejar en cola una solicitud de inscripción
+# de llave MOK (Machine Owner Key, "mokutil --list-new"). En el siguiente
+# arranque, shim intercepta el proceso con su pantalla de MokManager para
+# confirmar/rechazar esa llave -- ANTES de que GRUB o el kernel carguen,
+# sin timeout, esperando una tecla en la consola física/del hipervisor.
+# Eso es invisible para SSH, journald y Ansible: se ve como un cuelgue
+# indefinido justo al reiniciar, sin ningún rastro en los logs del
+# sistema operativo (confirmado: el SO se había apagado limpio antes).
+#
+# Solo se actúa cuando Secure Boot está REALMENTE deshabilitado
+# ("mokutil --sb-state"): ahí esa llave pendiente no protege nada y
+# cancelarla es seguro. Si Secure Boot estuviera habilitado, la solicitud
+# podría ser legítima y necesaria -- en ese caso NUNCA se toca, y queda
+# registrado para que el operador la resuelva a propósito (sabiendo que
+# eso exige interacción física en la consola en el próximo reinicio).
+#
+# Idempotente: si no hay ninguna solicitud pendiente, no hace nada.
+
+- name: "Verificar si el binario mokutil existe en este host"
+  ansible.builtin.command: command -v mokutil
+  register: _mokutil_present
+  changed_when: false
+  failed_when: false
+
+- name: "Bloque de MOK: solo si mokutil existe en este host"
+  when: _mokutil_present.rc == 0
+  block:
+    - name: Consultar el estado de Secure Boot
+      ansible.builtin.command: mokutil --sb-state
+      register: _mok_sb_state
+      become: true
+      changed_when: false
+      failed_when: false
+
+    - name: Consultar si hay alguna solicitud de inscripción MOK pendiente
+      ansible.builtin.command: mokutil --list-new
+      register: _mok_list_new
+      become: true
+      changed_when: false
+      failed_when: false
+
+    - name: "Revocar la solicitud MOK pendiente (solo si Secure Boot está deshabilitado)"
+      ansible.builtin.command: mokutil --revoke-import
+      become: true
+      when:
+        - _mok_sb_state.stdout | default('') is search('disabled')
+        - (_mok_list_new.stdout | default('')) | trim | length > 0
+      register: _mok_revoke_result
+      changed_when: _mok_revoke_result.rc == 0
+
+    - name: "Advertir si hay una solicitud MOK pendiente CON Secure Boot habilitado (no se toca, requiere decisión del operador)"
+      ansible.builtin.debug:
+        msg: >-
+          Hay una solicitud de inscripción MOK pendiente (mokutil
+          --list-new) y Secure Boot está HABILITADO en este host. No se
+          revoca automáticamente -- podría ser una llave legítima
+          necesaria. El próximo reinicio mostrará la pantalla de
+          MokManager en la consola física/del hipervisor, esperando
+          confirmación manual antes de que el sistema pueda arrancar.
+      when:
+        - not (_mok_sb_state.stdout | default('') is search('disabled'))
+        - (_mok_list_new.stdout | default('')) | trim | length > 0
+
+    - name: "Registrar resultado de la verificación/revocación de MOK pendiente (para el reporte)"
+      ansible.builtin.set_fact:
+        mok_pending_import_result:
+          secure_boot_state: "{{ 'disabled' if (_mok_sb_state.stdout | default('') is search('disabled')) else 'enabled_o_no_determinado' }}"
+          habia_solicitud_pendiente: "{{ (_mok_list_new.stdout | default('')) | trim | length > 0 }}"
+          se_revoco_automaticamente: "{{ (_mok_revoke_result.changed | default(false)) }}"

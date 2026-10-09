@@ -1,0 +1,48 @@
+---
+# playbooks/host_vars/sles15-sp5-sp7.yml
+#
+# Servicios GeoPOS reales encontrados en este host de pruebas (confirmado
+# por SSH de solo lectura, 2026-10-08): el journal del arranque posterior
+# al upgrade SP5->SP6 muestra a systemd-sysv-generator generando wrappers
+# de compatibilidad para estos servicios SysV (/etc/init.d/):
+#
+#   geopos, geopromotion, geopos-verificador,
+#   tomcat6-conciliacion, tomcat6-consola, tomcat6-salida,
+#   tomcat6-salida-backup, jexec
+#
+# Además, el motor de base de datos que usa GeoPOS en este host (unidad
+# systemd nativa, no SysV): postgresql-9.4
+#
+# QUEDAN COMENTADOS A PROPÓSITO: son nombres reales de este host, pero
+# todavía falta que el equipo de GeoPOS confirme cuáles son realmente
+# críticos (y si "critical: true" es correcto para cada uno) antes de
+# activar el bloqueo de precheck (fail_precheck_if_unhealthy) sobre ellos.
+# Mientras este bloque siga comentado, geopos_validation.services sigue
+# heredando items: [] de group_vars/all.yml -> se reporta NOT_CHECKED,
+# nunca un OK falso.
+#
+# Una vez confirmado con GeoPOS, descomentar y ajustar "critical" según
+# corresponda.
+#
+# geopos_validation:
+#   services:
+#     enabled: true
+#     items:
+#       - name: geopos
+#         critical: true
+#       - name: geopromotion
+#         critical: true
+#       - name: geopos-verificador
+#         critical: true
+#       - name: tomcat6-conciliacion
+#         critical: true
+#       - name: tomcat6-consola
+#         critical: true
+#       - name: tomcat6-salida
+#         critical: true
+#       - name: tomcat6-salida-backup
+#         critical: true
+#       - name: jexec
+#         critical: true
+#       - name: postgresql-9.4
+#         critical: true

@@ -118,6 +118,16 @@
 - name: Registrar salida resumida de la migración real
   ansible.builtin.set_fact:
     sp_migration_dup_output: "{{ sp_migration_dup_result.stdout | default('') | truncate(20000) }}"
+    # Salida COMPLETA, sin truncar -- "output_summary" (arriba) alcanza
+    # para leer el reporte HTML/JSON normalmente, pero en un dup grande
+    # (ej. SP6->SP7, cientos de paquetes) 20000 caracteres se agotan
+    # todavía en la fase de descarga, antes de la instalación/scripts
+    # post-instalación -- justo donde ocurriría cualquier problema real de
+    # kernel/GRUB/dracut. Confirmado con evidencia real (2026-10-08):
+    # ningún artefacto guardado llegaba a mostrar esa fase. Esta versión
+    # completa se guarda aparte (roles/reporting) como archivo .log, no
+    # dentro del HTML/JSON, para no volver ilegible el reporte normal.
+    sp_migration_dup_output_full: "{{ sp_migration_dup_result.stdout | default('') }}"
 
 - name: "Diagnosticar qué bloquea a Zypper, si el dup real falló (diagnóstico de solo lectura)"
   ansible.builtin.include_role:
@@ -156,6 +166,14 @@
   ansible.builtin.include_role:
     name: repo_management
     tasks_from: disable_boot_blocking_services.yml
+
+- name: "Defensa adicional: corregir la causa raíz de postfix (IPv6) por si en algún momento llegara a iniciar"
+  ansible.builtin.include_role:
+    name: repo_management
+    tasks_from: harden_postfix_ipv6_root_cause.yml
+
+- name: "Evitar cuelgue de arranque por solicitud MOK pendiente (shim/grub2/kernel), antes del reinicio obligatorio"
+  ansible.builtin.include_tasks: revoke_pending_mok_import.yml
 
 - name: "Trazabilidad del reinicio: leer boot_id y hora de inicio ANTES de reiniciar"
   # boot_id (/proc/sys/kernel/random/boot_id) es un UUID que el kernel

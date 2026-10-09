@@ -66,6 +66,22 @@
   delegate_to: localhost
   become: false
 
+- name: "Guardar salida COMPLETA (sin truncar) del dup real, si la hubo, como archivo .log aparte"
+  # "migration.output_summary" (en el HTML/JSON) va truncado a 20000
+  # caracteres para que el reporte siga siendo legible -- en un dup
+  # grande (SP6->SP7, cientos de paquetes) eso se agota todavía en la
+  # fase de descarga, antes de instalación/scripts post-instalación.
+  # Este archivo aparte conserva TODO, para diagnóstico forense cuando
+  # haga falta (ej. confirmar qué pasó con kernel/GRUB/dracut durante el
+  # dup, justo antes de un reinicio que se cuelga).
+  ansible.builtin.copy:
+    content: "{{ stage_report.migration.output_full }}"
+    dest: "{{ _report_stage_dir }}/{{ _report_stage_folder }}_{{ _report_timestamp }}.dup_full.log"
+    mode: "0644"
+  delegate_to: localhost
+  become: false
+  when: (stage_report.migration.output_full | default('')) | length > 0
+
 - name: "Calcular la línea de historial de esta etapa (para el consolidado por Lote)"
   # Incluye crq/lote/ambiente/phase explícitamente: el consolidado
   # (playbooks/report_consolidado.yml) filtra por estos campos y agrupa
@@ -144,6 +160,19 @@
   become: false
   register: _report_destination_copy
   when: not (report_destination is search('CHANGE_ME'))
+  failed_when: false
+
+- name: Copiar el log completo del dup (.dup_full.log) al destino persistente, si existe y ya está configurado
+  ansible.builtin.copy:
+    src: "{{ _report_stage_dir }}/{{ _report_stage_folder }}_{{ _report_timestamp }}.dup_full.log"
+    dest: "{{ report_destination }}/{{ _report_crq_folder }}/{{ inventory_hostname }}/{{ _report_stage_folder }}/{{ _report_stage_folder }}_{{ _report_timestamp }}.dup_full.log"
+    remote_src: true
+    mode: "0644"
+  delegate_to: localhost
+  become: false
+  when:
+    - not (report_destination is search('CHANGE_ME'))
+    - (stage_report.migration.output_full | default('')) | length > 0
   failed_when: false
 
 - name: Advertir si la copia hacia report_destination falló

@@ -764,6 +764,26 @@ hosts. Solo actúa sobre los servicios configurados que estén realmente
 presentes en cada host; queda registrado en el reporte, sección "Reinicio"
 (sección 11).
 
+**Defensa adicional — causa raíz de postfix corregida en el archivo de
+configuración** (`roles/repo_management/tasks/harden_postfix_ipv6_root_cause.yml`,
+se ejecuta junto con lo anterior). Causa raíz confirmada: con
+`inet_interfaces = localhost` y `inet_protocols` incluyendo IPv6, postfix
+intenta resolver `::1` en un host sin IPv6 configurado; con el sistema ya
+arrancado y estable ese mismo error falla en menos de 1 segundo, pero
+durante el arranque se cuelga en vez de fallar rápido. Esta tarea agrega
+`inet_protocols = ipv4` a `/etc/postfix/main.cf` (idempotente, solo si
+postfix está instalado) — el fix oficial documentado por Postfix para
+hosts sin IPv6. **No vuelve a habilitar ni a iniciar postfix**: sigue
+deshabilitado permanentemente como arriba; esto es una segunda capa, para
+que, si alguna vez llegara a iniciar por cualquier motivo (error humano,
+un cambio futuro en `reboot_disable_services`), falle rápido en vez de
+colgar el arranque. Validado con evidencia real en laboratorio
+(2026-10-08, host `sles15-sp5-sp7`): con el fix puesto, `systemctl start
+postfix` arrancó en 0.996 s, `active (running)`, escuchando en
+`127.0.0.1:25` sin ningún problema — se detuvo de nuevo después de
+confirmarlo, conforme a la decisión de mantenerlo deshabilitado. Queda
+registrado en el reporte, sección "Reinicio" (sección 11).
+
 ### 8.6 Trazabilidad del reinicio y conservación de evidencia
 
 Motivadas por un caso real (upgrade a SP7 exitoso, pero con el arranque
@@ -814,6 +834,38 @@ no cambia nada. Controlado por `journald_enable_persistent` (por defecto
 evidencia adicional, con más detalle estructurado.
 
 Los tres quedan en el reporte, sección "Reinicio" (sección 11).
+
+### 8.7 Solicitud MOK pendiente (shim/grub2/kernel) — causa real de un cuelgue indefinido al reiniciar
+
+Caso real confirmado en laboratorio (2026-10-08, host `sles15-sp5-sp7`,
+SP6→SP7): el arranque quedó colgado **indefinidamente** justo al reiniciar
+— pantalla congelada, sin ningún rastro en `journalctl` ni en ningún log
+del sistema operativo. Diagnóstico por eliminación (`journalctl
+--list-boots` mostró el sistema operativo apagándose limpio, y luego un
+vacío total de ~21 minutos hasta el siguiente arranque — es decir, el
+cuelgue ocurrió **por debajo** del sistema operativo, invisible para
+Ansible/SSH/journald) llevó a la causa raíz real: al actualizar
+`shim`/`grub2`/el kernel, sus propios scripts de instalación dejaron en
+cola una solicitud de inscripción de llave MOK (Machine Owner Key,
+`mokutil --list-new`). En el siguiente arranque, `shim` intercepta el
+proceso con su pantalla de **MokManager** para confirmar/rechazar esa
+llave — antes de que GRUB o el kernel carguen, sin timeout, esperando una
+tecla física en la consola del hipervisor. Esto ocurre **incluso con
+Secure Boot deshabilitado** (confirmado: `mokutil --sb-state` mostraba
+`disabled` en ese mismo host).
+
+`roles/sp_migration/tasks/revoke_pending_mok_import.yml` (se ejecuta junto
+con la sección 8.5, antes de cualquier reinicio obligatorio) verifica esto
+y, **solo si Secure Boot está realmente deshabilitado**, revoca
+automáticamente cualquier solicitud MOK pendiente (`mokutil
+--revoke-import`) para que `shim` no intercepte el próximo arranque. Si
+Secure Boot está habilitado, nunca se toca nada automáticamente — esa
+llave podría ser legítima y necesaria — y en cambio se deja registrado una
+advertencia explícita en el reporte: el próximo reinicio puede requerir
+confirmación manual en la consola física/del hipervisor. Idempotente: si
+no hay ninguna solicitud pendiente, no hace nada. Si el host no tiene
+`mokutil` instalado (no es UEFI/no aplica), se omite sin error. Queda
+registrado en el reporte, sección "Reinicio" (sección 11).
 
 ---
 
@@ -963,6 +1015,22 @@ supone que solo prepara.
   pared, resultado de la espera acotada a que `systemd` saliera de
   `starting`, y estado de `journald` persistente — todo en la sección
   "Reinicio" del reporte de cada etapa, puramente informativo.
+- **Causa raíz de postfix corregida** (sección 8.5): si se agregó
+  `inet_protocols = ipv4` a su configuración en esta corrida (defensa
+  adicional; postfix sigue deshabilitado permanentemente).
+- **Solicitud MOK pendiente** (sección 8.7): estado de Secure Boot, si
+  había una solicitud de inscripción de llave pendiente (`shim`/`grub2`/
+  kernel) y si se revocó automáticamente (solo cuando Secure Boot está
+  deshabilitado) — previene el cuelgue indefinido de `MokManager` al
+  reiniciar.
+- **Salida completa del `dup` real, sin recortar** (`.dup_full.log`, junto al
+  HTML/JSON de la etapa, mismo nombre): el HTML/JSON recorta la salida del
+  `dup` a 20.000 caracteres para seguir siendo legible, lo cual en una
+  migración grande (ej. SP6→SP7, cientos de paquetes) se agota todavía en
+  la descarga, antes de instalación/scripts post-instalación — justo donde
+  importaría ver algo relacionado con kernel/GRUB/dracut. Este archivo
+  aparte conserva el `stdout` completo del `dup`, para diagnóstico forense
+  cuando haga falta. Se genera solo si hubo un `dup` real en esa etapa.
 - Estados usados: `OK`, `WARNING`, `FAILED`, `NOT_CHECKED`.
 - Cada ejecución añade una línea a `run_summary.jsonl` (en `report_local_dir`
   **y** en `report_destination` si ya está configurado — ver advertencia de

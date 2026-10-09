@@ -141,6 +141,9 @@
 <pre>{{ stage_report.migration.dry_run_gate_output | default('N/A (no se llegó a ejecutar)') }}</pre>
 <h3>dup real</h3>
 <pre>{{ stage_report.migration.output_summary | default('N/A (no aplicado)') }}</pre>
+{% if (stage_report.migration.output_full | default('')) | length > (stage_report.migration.output_summary | default('')) | length %}
+<p class="muted">La salida de arriba está recortada para que el reporte siga siendo legible. La salida COMPLETA sin recortar del <code>dup</code> real quedó guardada junto a este reporte, mismo nombre, con extensión <code>.dup_full.log</code>.</p>
+{% endif %}
 {% if stage_report.migration.orphaned_packages %}
 <p><strong>Paquetes huérfanos/no necesarios detectados tras la migración (informativo, no se eliminan automáticamente):</strong></p>
 <pre>{{ stage_report.migration.orphaned_packages }}</pre>
@@ -161,6 +164,22 @@
   <tr><th>Reinicio completado</th><td>{{ stage_report.reboot.completed | default(false) }}</td></tr>
   <tr><th>Reconexión exitosa</th><td>{{ stage_report.reboot.reconnected | default(false) }}</td></tr>
   <tr><th>Servicios deshabilitados permanentemente antes de reiniciar</th><td>{{ (stage_report.reboot.boot_blocking_services_disabled | default([])) | join(', ') or 'ninguno' }}</td></tr>
+  {% if stage_report.reboot.postfix_ipv6_root_cause_fixed is defined %}
+  <tr><th>Causa raíz de postfix corregida (<code>inet_protocols = ipv4</code>)</th><td>{{ stage_report.reboot.postfix_ipv6_root_cause_fixed }} <span class="muted">— defensa adicional: postfix sigue deshabilitado; esto es solo para que, si alguna vez llegara a iniciar, falle rápido en vez de colgar el arranque</span></td></tr>
+  {% endif %}
+  {% set _mok = stage_report.reboot.mok_pending_import | default({}) %}
+  {% if _mok %}
+  <tr><th>Solicitud MOK pendiente (shim/grub2/kernel)</th>
+      <td>
+        Secure Boot: <strong>{{ _mok.secure_boot_state | default('NOT_CHECKED') }}</strong>,
+        había solicitud pendiente: {{ _mok.habia_solicitud_pendiente | default(false) }}
+        {% if _mok.se_revoco_automaticamente %}
+          — <span class="badge badge-OK">revocada automáticamente</span> (Secure Boot deshabilitado; evita que "shim" intercepte el próximo arranque pidiendo confirmación manual en consola)
+        {% elif _mok.habia_solicitud_pendiente and _mok.secure_boot_state != 'disabled' %}
+          — <span class="badge badge-WARNING">NO revocada (Secure Boot habilitado)</span>: el próximo reinicio puede mostrar la pantalla de MokManager esperando confirmación manual en la consola física/del hipervisor
+        {% endif %}
+      </td></tr>
+  {% endif %}
   <tr><th>Hora de inicio del reinicio</th><td>{{ stage_report.reboot.started_at | default('NOT_CHECKED') }}</td></tr>
   <tr><th>Hora de reconexión confirmada</th><td>{{ stage_report.reboot.finished_at | default('NOT_CHECKED') }}</td></tr>
   <tr><th>boot_id antes</th><td><code>{{ stage_report.reboot.boot_id_before | default('NOT_CHECKED') }}</code></td></tr>

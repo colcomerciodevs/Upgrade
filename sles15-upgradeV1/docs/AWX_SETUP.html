@@ -470,6 +470,31 @@ ANSIBLE_INVENTORY_PLUGINS: "/runner/project/&lt;CARPETA_DEL_PROJECT&gt;/inventor
     servidor — es información de diagnóstico, nunca decide el resultado de la etapa.
     Ver README sección 8.6.
   </div>
+<div class="callout note">
+<span class="label">Defensa adicional: causa raíz de postfix corregida en su configuración</span>
+    Junto con deshabilitar postfix permanentemente (arriba), este nodo también agrega
+    <code>inet_protocols = ipv4</code> a <code>/etc/postfix/main.cf</code> (idempotente,
+    solo si postfix está instalado) — el fix oficial de Postfix para hosts sin IPv6, que
+    es la causa raíz confirmada del cuelgue. No vuelve a habilitar ni iniciar postfix: es
+    una segunda capa para que, si alguna vez llegara a iniciar por cualquier motivo, falle
+    rápido en vez de colgar el arranque. Validado con evidencia real (2026-10-08): con el
+    fix puesto, <code>systemctl start postfix</code> arrancó en 0.996&nbsp;s sin problema.
+    Ver README sección 8.5.
+  </div>
+<div class="callout risk">
+<span class="label">Solicitud MOK pendiente (shim/grub2/kernel) — otra causa real de cuelgue indefinido al reiniciar</span>
+    Confirmado con evidencia real en laboratorio (2026-10-08, SP6→SP7): al actualizar
+    <code>shim</code>/<code>grub2</code>/el kernel, sus scripts pueden dejar en cola una
+    solicitud de inscripción de llave MOK. En el siguiente arranque, <code>shim</code>
+    intercepta el proceso con su pantalla de MokManager pidiendo confirmación —
+    <strong>antes</strong> de que GRUB o el kernel carguen, sin timeout, esperando una
+    tecla física en la consola del hipervisor. Invisible para SSH/journald/Ansible (el
+    sistema operativo todavía no cargó). Este nodo verifica esto y, <strong>solo si
+    Secure Boot está realmente deshabilitado</strong>, revoca automáticamente la
+    solicitud pendiente (<code>mokutil --revoke-import</code>). Si Secure Boot está
+    habilitado, nunca se toca nada — esa llave podría ser legítima — y queda una
+    advertencia explícita en el reporte. Ver README sección 8.7.
+  </div>
 <div class="step-title"><span class="stepnum">4</span><h3>Etapa 4 — Reporting</h3></div>
 <table class="clean">
 <tr><th>Campo</th><th>Valor</th></tr>
