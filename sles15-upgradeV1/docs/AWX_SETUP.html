@@ -182,7 +182,7 @@ ANSIBLE_INVENTORY_PLUGINS: "/runner/project/&lt;CARPETA_DEL_PROJECT&gt;/inventor
     ningún host del inventario coincide con los 3 valores declarados, el playbook falla
     explícito antes de tocar cualquier host (ver <code>playbooks/upgrade.yml</code>).
   </div>
-<div class="callout decision"><span class="label">Cuatro rutas en el Survey del Workflow</span> El nodo 1 ejecuta PRECHECK automáticamente. La encuesta solo debe ofrecer los cuatro modos de migración: <code>sp4_to_sp5</code>, <code>sp5_to_sp6</code>, <code>sp6_to_sp7</code> y <code>full</code>. FULL encadena SP5→SP6→SP7; nunca incorpora SP4.</div>
+<div class="callout decision"><span class="label">Cuatro rutas en el Survey del Workflow</span> El nodo 1 ejecuta PRECHECK automáticamente. La encuesta solo debe ofrecer los cuatro modos de migración: <code>sp4_to_sp5</code>, <code>sp5_to_sp6</code>, <code>sp6_to_sp7</code> y <code>full</code>. FULL detecta el Service Pack real del host y encadena automáticamente los saltos que falten hasta SP7, incluyendo SP4→SP5 si el host todavía está en SP4 (decisión explícita del usuario, 2026-11-18).</div>
 <div class="callout decision">
 <span class="label">upgrade_crq / upgrade_lote / upgrade_ambiente ya no son solo trazabilidad</span>
     Estos 3 campos son el <strong>único mecanismo de selección de hosts</strong> del
@@ -214,7 +214,7 @@ ANSIBLE_INVENTORY_PLUGINS: "/runner/project/&lt;CARPETA_DEL_PROJECT&gt;/inventor
 <td>Modo de ejecución</td>
 <td><code>upgrade_mode</code></td>
 <td>Selección múltiple. <strong>4 opciones:</strong> <code>sp4_to_sp5</code>, <code>sp5_to_sp6</code>, <code>sp6_to_sp7</code>, <code>full</code>. En el Workflow se crean una sola vez.</td>
-<td>Las tres rutas individuales ejecutan un solo salto con reinicio y validación. <code>full</code> ejecuta SP5→SP6 y después SP6→SP7 únicamente si la etapa intermedia quedó validada. SP4→SP5 es independiente.</td>
+<td>Las tres rutas individuales ejecutan un solo salto con reinicio y validación. <code>full</code> detecta el Service Pack real del host y ejecuta, encadenado, únicamente los saltos que falten hasta SP7 (incluyendo SP4→SP5 si el host está en SP4), continuando a cada salto siguiente únicamente si el anterior quedó validado. SP4→SP5 también se puede ejecutar de forma independiente.</td>
 </tr>
 <tr>
 <td>¿Confirma ejecución real en producción?</td>
@@ -310,8 +310,9 @@ ANSIBLE_INVENTORY_PLUGINS: "/runner/project/&lt;CARPETA_DEL_PROJECT&gt;/inventor
 </table>
 <div class="callout risk">
 <span class="label">upgrade_mode: full es la única excepción</span>
-<code>full</code> encadena SP5→SP6 y SP6→SP7, cada uno con su propio set de
-    repos — no existe un único momento de "preparar" válido para ambos saltos a la
+<code>full</code> encadena hasta 3 saltos (SP4→SP5, SP5→SP6 y SP6→SP7, según el
+    Service Pack real del host), cada uno con su propio set de
+    repos — no existe un único momento de "preparar" válido para varios saltos a la
     vez. Por eso, si <code>upgrade_mode=full</code>, el código (<code>_effective_upgrade_phase</code>
     en <code>playbooks/tasks/run_stage.yml</code>) ignora <code>upgrade_phase</code> y
     hace todo junto (como <code>both</code>) — <strong>excepto</strong> en el nodo 2
@@ -374,8 +375,9 @@ ANSIBLE_INVENTORY_PLUGINS: "/runner/project/&lt;CARPETA_DEL_PROJECT&gt;/inventor
     Service Pack real detectado (ej. <code>sp4_to_sp5</code> en un host que ya está en SP5,
     o <code>sp6_to_sp7</code> en un host todavía en SP5), este check queda <code>FAILED</code>
     — fallando lo antes posible, aquí, en vez de que el Nodo 2 descubra la inconsistencia a
-    mitad de camino. <code>full</code> es la excepción: válido para un host en SP5, SP6 o
-    SP7 (autodetecta el salto correcto), <code>FAILED</code> solo si está en SP4.
+    mitad de camino. <code>full</code> es la excepción: válido para un host en SP4, SP5,
+    SP6 o SP7 (autodetecta el punto de partida y recorre automáticamente los saltos que
+    falten hasta SP7).
   <p class="small-note">Para el historial y resultados observados, consultar <a href="INFORME_VALIDACION_Y_PRUEBAS.html#s5">Notas de ejecución y diagnóstico</a>.</p></div>
 <div class="step-title"><span class="stepnum">2</span><h3>Etapa 2 — Preparar repos (modifica el sistema)</h3></div>
 <table class="clean">
@@ -503,13 +505,15 @@ ANSIBLE_INVENTORY_PLUGINS: "/runner/project/&lt;CARPETA_DEL_PROJECT&gt;/inventor
     Ver README sección 8.5.
   </div>
 <div class="callout note">
-<span class="label">Arranque de depuración de GRUB (opcional, apagado por defecto)</span>
-    <code>grub_debug_boot_enabled</code> (<code>false</code> por defecto, activar por host
-    puntual) — para cuando un reinicio se cuelga sin ningún rastro en journald. SLES usa
+<span class="label">GRUB en consola — corrección permanente del cuelgue de arranque (ya no es un diagnóstico opcional)</span>
+    <code>grub_debug_boot_enabled</code> (<code>true</code> por defecto, aplica a todos los
+    hosts; dejarlo en <code>false</code> solo como excepción puntual por host) — SLES usa
     un tema gráfico de GRUB que puede fallar en renderizar en el adaptador de video
     virtual del hipervisor (confirmado en este proyecto: errores de Mesa/Gallium3D en el
     propio sistema operativo), dejando una pantalla negra con solo un guion titilando
-    aunque el arranque esté funcionando bien por debajo. Activado, pone
+    aunque el arranque esté funcionando bien por debajo. Confirmado con dos pruebas
+    reales consecutivas (SP5→SP6 y SP6→SP7) sin ningún cuelgue con este mecanismo activo.
+    Siempre activo, pone
     <code>GRUB_TERMINAL="console"</code> (texto plano) y agrega
     <code>systemd.log_level=debug</code> + <code>systemd.show_status=1</code> +
     <code>plymouth.enable=0</code>, quitando <code>splash</code> (con o sin valor) y
@@ -525,7 +529,11 @@ ANSIBLE_INVENTORY_PLUGINS: "/runner/project/&lt;CARPETA_DEL_PROJECT&gt;/inventor
     <code>dup</code> sería un segundo reinicio redundante del mismo kernel ya armado, en
     vez de uno solo. <code>plymouth.enable=0</code> se agregó como seguro adicional: quitar
     <code>splash</code>/<code>quiet</code> no garantiza que <code>plymouth</code> no tome
-    la consola igual. Ver README sección 8.7.
+    la consola igual. <strong>Se retira automáticamente al finalizar con éxito</strong>
+    (<code>roles/repo_management/tasks/revert_grub_debug_boot.yml</code>): un reinicio
+    manual posterior del host muestra el GRUB gráfico normal, no la consola de depuración;
+    si el reinicio falla, se deja activo a propósito para diagnóstico. Ver README
+    sección 8.7.
   </div>
 <div class="callout risk">
 <span class="label">Solicitud MOK pendiente (shim/grub2/kernel) — otra causa real de cuelgue indefinido al reiniciar</span>
@@ -563,7 +571,8 @@ ANSIBLE_INVENTORY_PLUGINS: "/runner/project/&lt;CARPETA_DEL_PROJECT&gt;/inventor
     <code>playbooks/precheck_only.yml</code> en cualquier modo — se extrajo a
     su propio archivo justo para que este nodo pueda apuntar ahí
     directamente, sin duplicar esa lógica en varios lugares. Lee el
-    historial de <code>run_summary.jsonl</code> desde <code>report_destination</code>
+    historial (un <code>run_summary.jsonl</code> por host, buscados y
+    juntados por carpeta) desde <code>report_destination</code>
     (no <code>report_local_dir</code>, que no sobrevive entre los Jobs
     separados de este Workflow) para ver realmente lo que hicieron los
     Nodos 1-3.

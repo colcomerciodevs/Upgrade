@@ -28,10 +28,11 @@
 #   apply   -> gate (repos DESTINO de un "prepare" previo) -> dup -D -> dup
 #              real -> reinicio -> validación -> limpieza.
 #   both    -> todo junto, como siempre (default).
-# upgrade_mode: full siempre fuerza "both" para sus 2 saltos encadenados,
-# EXCEPTO cuando upgrade_phase=prepare: ahí esta etapa no hace nada (ver
-# _effective_upgrade_phase = 'skip' más abajo), porque full no tiene un
-# único momento de "preparar" válido para sus 2 saltos a la vez.
+# upgrade_mode: full siempre fuerza "both" para sus saltos encadenados
+# (hasta 3, si el host está en SP4), EXCEPTO cuando upgrade_phase=prepare:
+# ahí esta etapa no hace nada (ver _effective_upgrade_phase = 'skip' más
+# abajo), porque full no tiene un único momento de "preparar" válido para
+# varios saltos a la vez.
 
 - name: "Inicializar estado de la etapa de migración {{ stage_target_sp }}"
   ansible.builtin.set_fact:
@@ -523,7 +524,7 @@
     _host_presumiblemente_inalcanzable: "{{ sp_migration_dup_applied | default(false) and not (sp_migration_reboot_completed | default(false)) }}"
 
 - name: "Calcular si corresponde reiniciar ahora los agentes de seguridad (zypper_lock_competing_services)"
-  # Nunca entre los 2 saltos encadenados de upgrade_mode: full (el
+  # Nunca entre los saltos encadenados de upgrade_mode: full (el
   # siguiente salto los necesitaría detenidos de nuevo de inmediato): solo
   # al llegar a SP7, en una etapa independiente, o si esta etapa falló.
   # "and not (dup_applied y NOT reboot_completed)": si el host quedó

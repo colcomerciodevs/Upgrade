@@ -1,0 +1,42 @@
+---
+# roles/repo_management/tasks/revert_grub_debug_boot.yml
+#
+# Retira el bloque de arranque de depuración de GRUB (si existe) al
+# terminar con éxito el reinicio obligatorio de la migración -- así, un
+# reinicio manual posterior del servidor (fuera de esta automatización)
+# muestra el GRUB gráfico normal del host, no la consola de depuración.
+#
+# Se llama solo en el camino de éxito (roles/sp_migration/tasks/main.yml,
+# justo después de confirmar reinicio y reconexión): si el reinicio o la
+# reconexión fallaron, el bloque se deja activo a propósito, para que el
+# operador siga teniendo la consola de depuración disponible en el
+# hipervisor mientras diagnostica.
+#
+# Idempotente: si el bloque no existe (grub_debug_boot_enabled nunca
+# estuvo activo en este host, o ya se había retirado), no hace nada.
+
+- name: Verificar si existe /etc/default/grub en este host
+  ansible.builtin.stat:
+    path: /etc/default/grub
+  register: _grub_default_file_revert
+
+- name: "Retirar el bloque de arranque de depuración de GRUB, si existe"
+  when: _grub_default_file_revert.stat.exists
+  block:
+    - name: "Quitar el bloque de arranque de depuración al final de /etc/default/grub"
+      ansible.builtin.blockinfile:
+        path: /etc/default/grub
+        marker: "# {mark} ANSIBLE MANAGED BLOCK -- arranque de depuración (ansible-sles-upgrade, ver README sección 8.7)"
+        state: absent
+      become: true
+      register: _grub_debug_revert_result
+
+    - name: "Regenerar grub.cfg si se quitó el bloque"
+      ansible.builtin.command: grub2-mkconfig -o /boot/grub2/grub.cfg
+      become: true
+      changed_when: false
+      when: _grub_debug_revert_result.changed | default(false)  # noqa no-handler
+
+    - name: "Registrar que el arranque de depuración quedó retirado tras esta corrida (para el reporte)"
+      ansible.builtin.set_fact:
+        grub_debug_boot_result: "{{ (grub_debug_boot_result | default({})) | combine({'retirado_al_finalizar': _grub_debug_revert_result.changed | default(false)}) }}"

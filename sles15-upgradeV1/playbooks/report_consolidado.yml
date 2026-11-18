@@ -24,6 +24,15 @@
 #
 # Requiere upgrade_crq/upgrade_lote (del Survey) para saber qué Lote
 # consolidar y en qué carpeta CRQ guardarlo.
+#
+# El historial de cada host vive en SU PROPIO run_summary.jsonl (RFC/CRQ
+# -> hostname -> run_summary.jsonl, ver roles/reporting/tasks/main.yml) --
+# nunca un único archivo compartido entre todos los hosts del Lote, para
+# que procesar varios hosts a la vez (serial_batch_size > 1) nunca arriesgue
+# perder la línea de un host por una escritura concurrente de otro. Este
+# archivo busca (ansible.builtin.find) todos los run_summary.jsonl bajo la
+# carpeta de este CRQ y los junta, sin depender de conocer de antemano los
+# hostnames.
 
 - name: Generar el reporte consolidado del Lote de esta ejecución
   hosts: localhost
@@ -55,18 +64,26 @@
                 else report_destination
               }}
 
-        - name: Verificar si existe historial (run_summary.jsonl) en la fuente elegida
-          ansible.builtin.stat:
-            path: "{{ _consolidado_source_dir }}/run_summary.jsonl"
-          register: _run_summary_file
+        - name: "Buscar todos los run_summary.jsonl de este CRQ (uno por host, ver roles/reporting/tasks/main.yml)"
+          ansible.builtin.find:
+            paths: "{{ _consolidado_source_dir }}/{{ _consolidado_crq_folder }}"
+            patterns: "run_summary.jsonl"
+            recurse: true
+            file_type: file
+          register: _run_summary_files
 
-        - name: "Leer el historial completo (todas las líneas, sin colapsar -- cada fase se muestra)"
+        - name: "Leer el historial completo de todos los hosts (todas las líneas, sin colapsar -- cada fase se muestra)"
           ansible.builtin.set_fact:
-            _summary_entries_all: >-
-              {{
-                (lookup('file', _consolidado_source_dir ~ '/run_summary.jsonl').splitlines() | select | list | map('from_json') | list)
-                if _run_summary_file.stat.exists else []
-              }}
+            _summary_entries_all: |-
+              {% set result = [] %}
+              {% for f in _run_summary_files.files | default([]) %}
+              {% for line in lookup('file', f.path).splitlines() %}
+              {% if line | trim | length > 0 %}
+              {% set _ = result.append(line | from_json) %}
+              {% endif %}
+              {% endfor %}
+              {% endfor %}
+              {{ result }}
 
         - name: "Filtrar el historial a este CRQ+Lote exactos"
           ansible.builtin.set_fact:

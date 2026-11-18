@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1" name="viewport"/>
+<title>Propuesta: ejecución simultánea en varios servidores</title>
+<style>
+:root{--navy:#112342;--navy2:#09172e;--teal:#087f77;--teal2:#16a08d;--gray-dark:#1f2d40;--gray-mid:#63758c;--light-bg:#f5f8fc;--ok-green:#138364;--warn-amber:#b57317;--fail-red:#bb3e4b;--line:#e0e7ef;--card:#fff;--ink:#213047}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:#f3f6fb;color:var(--ink);font:15px/1.72 'Segoe UI',Inter,'Helvetica Neue',Arial,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:var(--teal)}
+h1,h2,h3{font-family:'Segoe UI',Inter,Arial,sans-serif;color:var(--navy);line-height:1.25}
+h2{font-size:22px;letter-spacing:-.02em}
+h3{font-size:17px;margin:26px 0 10px}
+p{margin:10px 0 16px}
+strong{font-weight:700}
+header.top{background:radial-gradient(ellipse 90% 200% at 90% 5%,#275472 0%,#142e50 42%,#09172e 100%);color:#fff;padding:46px 0 36px;border-bottom:5px solid #17ab91}
+header.top .wrap{max-width:980px;margin:0 auto;padding:0 32px}
+header.top .kicker{letter-spacing:.16em;text-transform:uppercase;font-size:11px;color:#75d8c5;font-weight:700;margin-bottom:10px}
+header.top h1{font-size:clamp(26px,3.6vw,36px);margin:0 0 12px;color:#fff;letter-spacing:-.03em}
+header.top .subtitle{font-size:15px;color:#c9d9e8;max-width:780px}
+header.top .meta{border-top:1px solid #50718a;color:#d6e5ec;font-size:12px;margin-top:20px;padding-top:14px;line-height:1.7}
+.wrap{max-width:980px;margin:0 auto;padding:30px 32px 70px}
+.main-section{background:#fff;border:1px solid #e2e9f1;border-radius:16px;padding:26px 28px 30px;margin:0 0 18px;box-shadow:0 3px 19px #20354c09}
+.section-head{display:flex;align-items:center;gap:12px;border-bottom:1px solid #e4ebf3;padding:0 0 16px;margin:0 0 16px}
+.section-num{display:flex;align-items:center;justify-content:center;min-width:36px;width:36px;height:36px;border-radius:10px;background:#e5f5f1;color:#0c8175;font-size:15px;font-weight:800}
+.callout{border-left:4px solid #a4acb8;background:#f6f8fb;padding:14px 16px;margin:16px 0;border-radius:0 10px 10px 0}
+.callout .label{display:block;font-size:11px;letter-spacing:.06em;font-weight:800;text-transform:uppercase;margin-bottom:5px}
+.callout.risk{border-color:#e2ad52;background:#fffaee}.callout.risk .label{color:#9b641a}
+.callout.note{border-color:#27a891;background:#f0f9f7}.callout.note .label{color:#0b8171}
+.callout.decision{border-color:#315e99;background:#f2f6fd}.callout.decision .label{color:#315e99}
+code{background:#edf3f8;color:#235578;border-radius:5px;padding:2px 5px;font:0.9em Consolas,'DejaVu Sans Mono',monospace;overflow-wrap:anywhere}
+table.clean{border-collapse:separate;border-spacing:0;width:100%;border:1px solid #e1e9f1;border-radius:10px;overflow:hidden;font-size:13.5px;margin:16px 0}
+table.clean th{text-align:left;background:#193452;color:#fff;padding:11px 12px;font-size:12px}
+table.clean td{padding:11px 12px;border-bottom:1px solid #e7edf2;vertical-align:top}
+table.clean tr:last-child td{border-bottom:0}
+table.clean tr:nth-child(even) td{background:#f8fafc}
+.quote{border-left:3px solid #c7d3e0;padding:2px 0 2px 14px;margin:12px 0;color:#4a5b72;font-size:13.5px}
+.quote code{display:block;white-space:pre-wrap}
+ol.steps li,ul.plain li{margin-bottom:9px}
+.badge{font-size:10.5px;padding:3px 8px;border-radius:20px;font-weight:700}
+.badge-req{background:#ffe6e6;color:#a7373d}
+.badge-ok{background:#dcefe9;color:#0a846e}
+.page-footer{text-align:center;font-size:12px;color:#8491a1;padding:20px 0 40px}
+@media print{header.top{print-color-adjust:exact;-webkit-print-color-adjust:exact}.main-section{box-shadow:none;border:1px solid #ccc}}
+</style>
+</head>
+<body>
+<header class="top">
+<div class="wrap">
+<span class="kicker">Propuesta técnica — para discusión y decisión</span>
+<h1>Ejecución simultánea en varios servidores (varios hosts en paralelo)</h1>
+<p class="subtitle">Estado actual del modelo de ejecución (secuencial, un host a la vez), por qué quedó así, y qué opciones reales existen para paralelizarlo y reducir el tiempo total del upgrade cuando el Lote incluye muchos servidores. Documento de solo lectura: no modifica ningún archivo del proyecto ni ninguna infraestructura.</p>
+<div class="meta">Proyecto: ansible-sles-upgrade (SLES 15 SP4→SP5→SP6→SP7, GeoPOS) · Fecha: 2026-10-19 · Basado exclusivamente en el código y la documentación actuales del repositorio — ninguna cifra o comportamiento aquí descrito está inventado.</div>
+</div>
+</header>
+
+<div class="wrap">
+
+<section class="main-section">
+<div class="section-head"><div class="section-num">1</div><h2>Resumen ejecutivo</h2></div>
+<p>Hoy, cuando un Lote de AWX incluye varios servidores, el proyecto los procesa <strong>uno a la vez, de principio a fin</strong>, en cada etapa del Workflow. Esto no es un límite técnico del proyecto — es un valor de configuración (<code>serial_batch_size: 1</code>) que ya está pensado para poder cambiarse. El código que selecciona los hosts de un Lote <strong>ya soporta múltiples servidores en una sola ejecución</strong> sin ningún cambio; lo único que serializa es ese valor.</p>
+<p>La recomendación de esta propuesta es: subir <code>serial_batch_size</code> de forma escalonada y probada (piloto con un Lote pequeño, con <code>serial_batch_size: 2</code> o <code>3</code>, antes de ir a números mayores), y evaluar en paralelo si conviene complementarlo con múltiples Jobs de AWX simultáneos para Lotes distintos. Ningún cambio de arquitectura grande es necesario.</p>
+</section>
+
+<section class="main-section">
+<div class="section-head"><div class="section-num">2</div><h2>Cómo funciona hoy (verificado en el código)</h2></div>
+<h3>2.1 Selección de hosts — ya soporta varios servidores por Lote</h3>
+<p><code>playbooks/select_target_hosts.yml</code> selecciona hosts por coincidencia exacta de <code>CRQ</code>+<code>Lote</code>+<code>Ambiente</code> contra el inventario dinámico, usando <code>ansible.builtin.group_by: key: upgrade_target</code>. No hay ningún límite de cantidad en esa lógica: si 4, 10 o 40 filas del Excel comparten el mismo CRQ/Lote/Ambiente, <strong>todas</strong> entran al grupo <code>upgrade_target</code> en la misma ejecución, con una sola declaración del Survey.</p>
+<div class="quote">Confirmado también en <code>README.md</code> (sección "Procesamiento por defecto"): <em>"El match CRQ/Lote/Ambiente no limita la selección a un solo host: si 4 filas del Excel comparten el mismo CRQ, el mismo Lote y el mismo Ambiente, las 4 entran al grupo upgrade_target con una sola declaración del Survey."</em></div>
+
+<h3>2.2 Qué es lo que realmente serializa: <code>serial_batch_size</code></h3>
+<p>Definido en <code>playbooks/group_vars/all.yml:62</code>: <code>serial_batch_size: 1</code>. Se usa como el <code>serial:</code> nativo de Ansible en los dos plays que tocan servidores reales:</p>
+<table class="clean">
+<tr><th>Archivo</th><th>Línea</th><th>Uso</th></tr>
+<tr><td><code>playbooks/upgrade.yml</code></td><td>34</td><td><code>serial: "{{ serial_batch_size | default(1) }}"</code> (play principal — precheck/prepare/apply/full)</td></tr>
+<tr><td><code>playbooks/precheck_only.yml</code></td><td>31</td><td><code>serial: "{{ serial_batch_size | default(1) }}"</code> (Nodo 1 del Workflow)</td></tr>
+</table>
+<p><code>serial</code> en Ansible controla cuántos hosts avanzan <strong>juntos</strong> por todas las tareas de la etapa antes de que el siguiente lote de hosts empiece. Con <code>1</code> (el valor actual), Ansible termina absolutamente todo en el primer host antes de tocar el segundo — nunca hay dos servidores ejecutando tareas reales al mismo tiempo.</p>
+<p>El propio <code>README.md</code> ya documenta que este valor es ajustable: <em>"Puede sobrescribirse vía extra-vars/Survey si el operador decide explícitamente procesar más de uno en paralelo, bajo su propio criterio de riesgo."</em> Es decir: el proyecto nunca cerró la puerta a esto — simplemente nunca se activó.</p>
+
+<h3>2.3 El otro knob relevante: <code>forks</code></h3>
+<p>Subir <code>serial_batch_size</code> a, por ejemplo, <code>5</code> no basta por sí solo: Ansible también necesita suficientes <strong>forks</strong> (procesos de control concurrentes) para realmente conectarse a esos 5 hosts al mismo tiempo. El valor de <code>forks</code> de Ansible (y, en AWX, el campo "Forks" del Job Template, o el límite de la Execution Environment/Instance Group) debe ser igual o mayor que el tamaño del lote deseado — de lo contrario, aunque <code>serial_batch_size</code> esté en 5, Ansible seguirá limitado por un <code>forks</code> más bajo. <strong>Esto no está documentado hoy en <code>docs/AWX_SETUP.html</code></strong> (se revisó explícitamente: no hay ninguna mención de "Forks", "Instance Group" con capacidad, ni "Job Slicing" en ese documento) — habría que agregarlo si se aprueba esta propuesta.</p>
+
+<h3>2.4 Por qué quedó en "uno a la vez" — lo que dice la documentación, y lo que no dice</h3>
+<p><code>CLAUDE.md</code> lo establece como requisito: <em>"El procesamiento productivo por defecto debe ser de un host a la vez: <code>serial_batch_size: 1</code>"</em>, sin una justificación técnica adicional en ese mismo párrafo. No se encontró en ningún documento del proyecto (README, CLAUDE.md, los 3 HTML de <code>docs/</code>) una razón de capacidad documentada — por ejemplo, no hay ninguna mención de límites de descargas concurrentes contra Foreman/Katello, ni de que el lock de PackageKit (agentes de seguridad corporativos, sección 8.3 del README) sea compartido entre servidores (es un lock <strong>local a cada host</strong>, cada uno compite solo contra su propio Zypper).</p>
+<p>La razón documentada es, en esencia, de <strong>gestión de riesgo operativo</strong>: este proyecto trata cada ejecución como ligada a un CRQ/RFC de control de cambios real, con <code>confirm_production_upgrade</code> como candado explícito, y procesar un host a la vez permite observar el resultado de cada uno antes de continuar, sin necesidad de un mecanismo de "frenar todo el Lote" si algo sale mal a mitad de camino (de hecho, el proyecto <strong>no</strong> fija <code>any_errors_fatal</code>: un host que falla no detiene a los demás, ni siquiera hoy en modo serial).</p>
+</section>
+
+<section class="main-section">
+<div class="section-head"><div class="section-num">3</div><h2>Lo que NO cambiaría</h2></div>
+<ul class="plain">
+<li>El mecanismo de selección de hosts (CRQ+Lote+Ambiente, nunca "Limit" de AWX).</li>
+<li><code>confirm_production_upgrade</code> y el resto de los gates de seguridad — se siguen validando por host, independientemente de cuántos corran a la vez.</li>
+<li>Las correcciones de arranque (postfix, MOK, GRUB en consola) — son 100% por host, sin ninguna dependencia entre servidores.</li>
+<li>La estructura de 5 nodos del Workflow.</li>
+<li>El reporte individual por host (HTML/JSON) — cada host sigue generando el suyo, sin cambios.</li>
+</ul>
+</section>
+
+<section class="main-section">
+<div class="section-head"><div class="section-num">4</div><h2>Opciones de implementación para paralelizar</h2></div>
+<table class="clean">
+<tr><th>Opción</th><th>Mecanismo</th><th>Qué gana</th><th>Qué hay que cuidar</th></tr>
+<tr><td><strong>A. Subir <code>serial_batch_size</code></strong></td><td>Cambiar el valor fijo (ej. <code>3</code>, <code>5</code>, o un porcentaje como <code>"25%"</code>) en <code>group_vars/all.yml</code>, o pasarlo por Survey/extra-vars por ejecución.</td><td>Cambio mínimo, ya soportado por el código actual sin tocar lógica.</td><td>Requiere <code>forks</code> suficientes (sección 2.3).</td></tr>
+<tr><td><strong>B. Rampa escalonada</strong></td><td><code>serial: [1, 3, "25%"]</code> — Ansible soporta una lista: procesa 1 host, si va bien sigue con 3, luego el resto en lotes del 25%.</td><td>El primer host actúa como "canario": si falla, el resto del Lote ni siquiera arranca.</td><td>Un poco más de configuración que la opción A.</td></tr>
+<tr><td><strong>C. Varios Jobs de AWX simultáneos</strong></td><td>Permitir "Concurrent Jobs" en el Job Template + Instance Group con capacidad suficiente, para lanzar <strong>Lotes distintos</strong> (CRQ/Lote diferentes) en paralelo, cada uno internamente serial (u con la opción A/B adentro).</td><td>Paraleliza entre Lotes/CRQs distintos, útil si hay muchos Lotes pequeños en vez de uno grande.</td><td>No documentado hoy en <code>docs/AWX_SETUP.html</code> — habría que diseñarlo y documentarlo. No resuelve por sí solo la concurrencia dentro de un mismo Lote.</td></tr>
+</table>
+<div class="callout decision"><span class="label">Recomendación</span>
+Combinar <strong>A o B</strong> (paralelismo dentro de un Lote) con un piloto controlado: un Lote de prueba pequeño, <code>serial_batch_size: 2</code> o <code>3</code>, antes de subir el número. La opción C (Lotes distintos en paralelo) puede evaluarse por separado, más adelante, si el volumen de servidores lo justifica.
+</div>
+</section>
+
+<section class="main-section">
+<div class="section-head"><div class="section-num">5</div><h2>Riesgos operativos a validar con el equipo (no técnicos)</h2></div>
+<ul class="plain">
+<li><strong>Disponibilidad de GeoPOS durante el reinicio</strong>: si varios de los servidores de un mismo Lote sirven GeoPOS de forma balanceada/redundante entre sí, reiniciar varios al mismo tiempo podría reducir más capacidad de la deseada en una sola ventana — a diferencia de hoy, que libera y recupera un servidor a la vez. Esto hay que confirmarlo con el equipo de GeoPOS, no es algo que el código decida.</li>
+<li><strong>Diagnóstico ante un problema nuevo</strong>: si apareciera un cuelgue de arranque todavía no identificado (distinto a los ya corregidos: postfix, MOK, GRUB en consola), con varios hosts reiniciando a la vez habría que diagnosticar varios incidentes simultáneos en vez de uno.</li>
+<li><strong>Carga sobre Foreman/Katello</strong>: no hay evidencia documentada de un límite real, pero varios hosts descargando paquetes del mismo repositorio Foreman al mismo tiempo sí aumenta la carga real sobre ese servidor — vale la pena una prueba con un Lote pequeño antes de generalizar a Lotes grandes.</li>
+</ul>
+</section>
+
+<section class="main-section">
+<div class="section-head"><div class="section-num">6</div><h2>Qué habría que actualizar si se aprueba</h2></div>
+<ol class="steps">
+<li>Ajustar <code>serial_batch_size</code> (código) y documentarlo como valor probado, no solo teórico.</li>
+<li><code>CLAUDE.md</code> actualmente exige <em>"un host a la vez"</em> como comportamiento por defecto — si se cambia el default, ese texto debe actualizarse explícitamente como una nueva "decisión explícita del usuario para este ambiente", seguiendo la misma convención que el resto de decisiones de este proyecto.</li>
+<li>Documentar en <code>docs/AWX_SETUP.html</code> el campo "Forks" del Job Template/Instance Group (hoy no está documentado) y el valor mínimo recomendado según el <code>serial_batch_size</code> elegido.</li>
+<li>Probar el piloto (sección 4) en un Lote de prueba real antes de generalizar.</li>
+</ol>
+</section>
+
+<div class="page-footer">Documento de propuesta — de solo lectura, no se modificó ningún archivo del proyecto ni infraestructura real al generarlo.</div>
+</div>
+</body>
+</html>

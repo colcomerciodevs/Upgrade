@@ -52,10 +52,11 @@ upgrade_ambiente: ""
 #             habilitados, luego dup -D -> dup -> reinicio -> validación.
 # - both    : todo en una sola corrida (default).
 #
-# upgrade_mode: full siempre se comporta como "both" en cada uno de sus 2
-# saltos encadenados, excepto combinado con upgrade_phase=prepare, donde
-# no hace nada (ver run_stage.yml) -- así un mismo Workflow sirve para un
-# salto individual o para full sin disparar un dup real por error.
+# upgrade_mode: full siempre se comporta como "both" en cada uno de sus
+# saltos encadenados (hasta 3, si el host está en SP4), excepto combinado
+# con upgrade_phase=prepare, donde no hace nada (ver run_stage.yml) -- así
+# un mismo Workflow sirve para un salto individual o para full sin
+# disparar un dup real por error.
 upgrade_phase: "both"
 
 # Procesamiento productivo por defecto: un host a la vez.
@@ -222,17 +223,31 @@ zypper_lock_competing_services:
 # (pausa temporal), lo que se agregue aquí no se reinicia después.
 reboot_disable_services: []
 
-# Arranque de depuración -- deshabilitado por defecto, actívese por
-# host/corrida puntual cuando se necesite ver en la consola del
-# hipervisor qué está haciendo el arranque paso a paso (diagnóstico para
-# un cuelgue sin rastro en journald). Cuando está en true: GRUB_TERMINAL
-# pasa a "console" (sin tema gráfico) y se agregan systemd.log_level=debug
-# + systemd.show_status=1 + plymouth.enable=0 al cmdline, quitando
-# splash/quiet -- vía un bloque al final de /etc/default/grub, sin tocar
-# las líneas originales. En false (default), el bloque se retira si
-# existía. Ver roles/repo_management/tasks/configure_grub_debug_boot.yml
-# y roles/sp_migration/tasks/arm_grub_debug_boot.yml (reinicio de armado).
-grub_debug_boot_enabled: false
+# Corrección permanente, activa por defecto (ya NO es un diagnóstico
+# opcional): el tema gráfico de GRUB (gfxterm + plymouth) falla en
+# renderizar en el adaptador de video virtual de este hipervisor,
+# dejando el arranque colgado en una pantalla negra o en una ventana que
+# nunca avanza (confirmado repetidamente: el mismo mecanismo resolvió,
+# en pruebas reales consecutivas, tanto el cuelgue de SP5->SP6 como el
+# de SP6->SP7). Cuando está en true: GRUB_TERMINAL pasa a "console" (sin
+# tema gráfico) y se agregan systemd.log_level=debug + systemd.show_status=1
+# + plymouth.enable=0 al cmdline, quitando splash/quiet -- vía un bloque
+# al final de /etc/default/grub, sin tocar las líneas originales.
+#
+# Se aplica solo durante el ciclo de reinicio de esta automatización: en
+# cuanto el reinicio obligatorio de la migración reconecta con éxito, el
+# bloque se retira y grub.cfg se regenera de vuelta a su estado gráfico
+# original (roles/repo_management/tasks/revert_grub_debug_boot.yml) --
+# un reinicio manual posterior, fuera de esta automatización, muestra el
+# GRUB normal del host, no la consola de depuración. Si el reinicio
+# falla o no reconecta, el bloque se deja activo a propósito (evidencia
+# para diagnóstico en la consola del hipervisor).
+#
+# Dejar en false solo como excepción puntual por host (host_vars), si
+# algún host concreto no lo necesitara. Ver
+# roles/repo_management/tasks/configure_grub_debug_boot.yml y
+# roles/sp_migration/tasks/arm_grub_debug_boot.yml (reinicio de armado).
+grub_debug_boot_enabled: true
 
 # Habilita journald persistente (Storage=persistent) antes de migrar, para
 # que los logs del reinicio sobrevivan aunque el arranque siguiente tenga

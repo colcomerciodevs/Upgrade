@@ -6,7 +6,9 @@
 # sistema esté en el Service Pack de origen correcto para esa etapa.
 # Referencia: CLAUDE.md exige fallar explícitamente si continuar no es
 # seguro; aquí se aplica a la secuencia obligatoria SP4 -> SP5 -> SP6 -> SP7
-# (SP4 -> SP5 es una etapa independiente, no se encadena dentro de "full").
+# (sp4_to_sp5/sp5_to_sp6/sp6_to_sp7 son etapas independientes de un solo
+# salto; "full" encadena automáticamente los saltos que falten desde el SP
+# real detectado hasta SP7, incluyendo SP4 si corresponde).
 #
 # NOTA: este archivo solo se incluye cuando roles/precheck/tasks/main.yml
 # ya confirmó ansible_facts['distribution'] == 'SLES' (gate de seguridad

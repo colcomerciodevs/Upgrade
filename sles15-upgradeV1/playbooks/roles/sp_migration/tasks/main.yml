@@ -49,7 +49,7 @@
   # reinicio obligatorio siguiente sería un segundo reinicio redundante
   # del mismo kernel ya armado, en vez de uno solo.
   ansible.builtin.include_tasks: arm_grub_debug_boot.yml
-  when: grub_debug_boot_enabled | default(false)
+  when: grub_debug_boot_enabled | default(true)
 
 - name: Ejecutar dup -D como gate obligatorio inmediatamente antes del dup real
   # failed_when: false -- se guarda la salida completa de Zypper en la
@@ -227,6 +227,11 @@
       ansible.builtin.set_fact:
         sp_migration_reboot_completed: true
         sp_migration_reconnected: true
+
+    - name: "Retirar el arranque de depuración de GRUB tras un reinicio exitoso (para que un reinicio manual futuro muestre GRUB gráfico normal)"
+      ansible.builtin.include_role:
+        name: repo_management
+        tasks_from: revert_grub_debug_boot.yml
   rescue:
     - name: "Registrar que el reinicio o la reconexión fallaron (el dup sigue registrado como aplicado; se conserva boot_id 'antes' para diagnóstico)"
       ansible.builtin.set_fact:

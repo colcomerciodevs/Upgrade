@@ -51,8 +51,10 @@
 - name: "Validar que el upgrade_mode seleccionado coincide con el Service Pack real del host (solo en hosts SLES)"
   # Falla lo antes posible si el modo elegido no corresponde al SP real
   # detectado (ej. "sp4_to_sp5" en un host ya en SP5, salto directo nunca
-  # permitido). "full" es la única excepción: válido para sp5/sp6/sp7,
-  # FAILED si el host está en sp4. "precheck"/vacío quedan NOT_CHECKED.
+  # permitido). "full" es la única excepción: válido en sp4/sp5/sp6/sp7,
+  # ya que detecta el punto de partida y recorre automáticamente los
+  # saltos que falten (ver CLAUDE.md, sección "Ruta de upgrade").
+  # "precheck"/vacío quedan NOT_CHECKED.
   #
   # Lee upgrade_mode directamente -- único lugar de este rol que lo hace;
   # es seguro porque solo alimenta esta validación informativa.
@@ -67,14 +69,14 @@
         'name': 'upgrade_mode_coincide_con_sp_real',
         'status': (
           'NOT_CHECKED' if not _upgrade_mode_tiene_origen_fijo
-          else ('OK' if (upgrade_mode == 'full' and system_state_snapshot_before.current_sp_id in ['sp5', 'sp6', 'sp7'])
+          else ('OK' if (upgrade_mode == 'full' and system_state_snapshot_before.current_sp_id in ['sp4', 'sp5', 'sp6', 'sp7'])
           else ('FAILED' if upgrade_mode == 'full'
           else ('OK' if system_state_snapshot_before.current_sp_id == _upgrade_mode_expected_origin
           else 'FAILED')))
         ),
         'detail': (
           ('upgrade_mode=' ~ (upgrade_mode | default('N/D')) ~ ': sin origen fijo que validar aquí (precheck/vacío)') if not _upgrade_mode_tiene_origen_fijo
-          else ('upgrade_mode=full, SP real detectado=' ~ system_state_snapshot_before.current_sp_id ~ ' (full es válido en sp5/sp6/sp7; FAILED si el host está en sp4)')
+          else ('upgrade_mode=full, SP real detectado=' ~ system_state_snapshot_before.current_sp_id ~ ' (full es válido en sp4/sp5/sp6/sp7: detecta el punto de partida y recorre automáticamente los saltos que falten)')
           if upgrade_mode == 'full'
           else ('upgrade_mode=' ~ upgrade_mode ~ ' espera SP real=' ~ _upgrade_mode_expected_origin ~ ', SP real detectado=' ~ system_state_snapshot_before.current_sp_id)
         )

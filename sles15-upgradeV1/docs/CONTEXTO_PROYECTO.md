@@ -372,9 +372,14 @@ No realizar SP5 → SP7 directamente dentro de esta automatización.
 > construido también soporta `SP4 → SP5` como etapa independiente
 > (modo `sp4_to_sp5`), con el mismo patrón precheck → dry-run (`validate`)
 > → upgrade → reboot → validación que el diagrama anterior, para hosts que
-> todavía están en SP4. **Deliberadamente no se encadena** con el diagrama
-> de arriba: `full` sigue siendo exclusivamente SP5 → SP6 → SP7. Ver
-> `docs/ARQUITECTURA_Y_DISENO_TECNICO.html` para el razonamiento.
+> todavía están en SP4. **Decisión explícita del usuario para este
+> ambiente (2026-11-18)**: el diagrama de arriba, cuando se ejecuta en
+> modo `full`, ahora SÍ incluye automáticamente este salto si el host
+> todavía está en SP4 (antes era exclusivamente SP5 → SP6 → SP7 y había
+> que ejecutar `sp4_to_sp5` por separado primero). El modo `sp4_to_sp5`
+> standalone se conserva igual, para quien quiera ejecutar y aprobar ese
+> salto de forma aislada. Ver `docs/ARQUITECTURA_Y_DISENO_TECNICO.html`
+> para el detalle actualizado.
 
 ---
 

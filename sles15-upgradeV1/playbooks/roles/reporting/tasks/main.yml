@@ -2,8 +2,10 @@
 # roles/reporting/tasks/main.yml
 #
 # Genera el reporte HTML (+ JSON) por host y por etapa a partir de
-# `stage_report`, y registra una línea de resumen en run_summary.jsonl
-# para poder construir después el resumen consolidado.
+# `stage_report`, y registra una línea de resumen en el run_summary.jsonl
+# PROPIO de este host (uno por host, nunca un archivo único compartido
+# entre todos los hosts del Lote -- ver más abajo por qué) para poder
+# construir después el resumen consolidado.
 #
 # Los reportes se escriben primero en el nodo de control (delegate_to:
 # localhost) bajo report_local_dir. ESTO NO ES ALMACENAMIENTO PERSISTENTE:
@@ -100,9 +102,22 @@
       timestamp: "{{ _report_timestamp }}"
       report_html: "{{ _report_stage_dir ~ '/' ~ _report_stage_folder ~ '_' ~ _report_timestamp ~ '.html' }}"
 
-- name: "Registrar línea de historial en run_summary.jsonl (área de trabajo local de esta ejecución)"
+- name: "Registrar línea de historial en el run_summary.jsonl de ESTE host (área de trabajo local de esta ejecución)"
+  # Un archivo POR HOST (RFC/CRQ -> hostname -> run_summary.jsonl), nunca
+  # un único run_summary.jsonl compartido por todos los hosts del Lote --
+  # decisión explícita del usuario para este ambiente (2026-10-19):
+  # "lineinfile" lee el archivo completo, agrega la línea en memoria y
+  # reescribe todo; con un solo archivo compartido, dos hosts de un mismo
+  # Lote terminando esta tarea casi al mismo instante (serial_batch_size
+  # > 1) podrían perder silenciosamente la línea del otro (uno reescribe
+  # el archivo completo justo cuando el otro ya lo había leído, sin que
+  # ninguno vea ningún error). Un archivo por host elimina ese riesgo por
+  # completo: cada host solo escribe el suyo, nunca compite con otro.
+  # report_consolidado.yml junta todos los run_summary.jsonl de un Lote
+  # buscándolos por carpeta (ansible.builtin.find), no leyendo un único
+  # archivo.
   ansible.builtin.lineinfile:
-    path: "{{ report_local_dir }}/run_summary.jsonl"
+    path: "{{ report_local_dir }}/{{ _report_crq_folder }}/{{ inventory_hostname }}/run_summary.jsonl"
     line: "{{ _run_summary_entry | to_json }}"
     create: true
     insertafter: EOF
@@ -110,7 +125,17 @@
   delegate_to: localhost
   become: false
 
-- name: "Registrar la misma línea en el destino persistente (sobrevive entre nodos separados del Workflow)"
+- name: "Asegurar el subdirectorio RFC/CRQ -> hostname en el destino persistente, si ya está configurado (para el run_summary.jsonl de este host)"
+  ansible.builtin.file:
+    path: "{{ report_destination }}/{{ _report_crq_folder }}/{{ inventory_hostname }}"
+    state: directory
+    mode: "0755"
+  delegate_to: localhost
+  become: false
+  when: not (report_destination is search('CHANGE_ME'))
+  failed_when: false
+
+- name: "Registrar la misma línea en el run_summary.jsonl de ESTE host en el destino persistente (sobrevive entre nodos separados del Workflow)"
   # CRÍTICO para el consolidado: en el Workflow de 5 etapas, cada nodo
   # (Precheck/Preparar/Aplicar) es un Job de AWX separado, normalmente en
   # su propio Execution Environment -- report_local_dir NO sobrevive entre
@@ -121,7 +146,7 @@
   # seguiría mostrando solo el último estado que SÍ pudo leer -- "OK" de
   # una etapa anterior -- en vez del fallo real).
   ansible.builtin.lineinfile:
-    path: "{{ report_destination }}/run_summary.jsonl"
+    path: "{{ report_destination }}/{{ _report_crq_folder }}/{{ inventory_hostname }}/run_summary.jsonl"
     line: "{{ _run_summary_entry | to_json }}"
     create: true
     insertafter: EOF

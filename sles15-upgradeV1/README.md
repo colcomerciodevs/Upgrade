@@ -29,7 +29,7 @@ Este proyecto automatiza:
 - **SP4 → SP5** (modo independiente `sp4_to_sp5`, para hosts que todavía están en SP4)
 - **SP5 → SP6**
 - **SP6 → SP7**
-- **SP5 → SP6 → SP7** de forma secuencial (modo `full`)
+- **SP4/SP5/SP6 → SP7** de forma secuencial y automática (modo `full`, detecta el Service Pack de partida del host)
 - Precheck independiente (`precheck`)
 
 La ruta operacional es siempre secuencial. **Este proyecto nunca realiza
@@ -37,12 +37,16 @@ saltos directos de etapa** (ni SP4 → SP6, ni SP5 → SP7). Si una etapa no
 queda realmente validada (aplicada, reiniciada y verificada), no se
 continúa a la siguiente.
 
-**`sp4_to_sp5` es deliberadamente independiente, no se encadena dentro de
-`full`**: el modo `full` sigue siendo exclusivamente `SP5 → SP6 → SP7`. Un
-host en SP4 debe ejecutar primero `sp4_to_sp5` por separado y, en una
-corrida posterior, `sp5_to_sp6`/`full`. Ver
+**Decisión explícita del usuario para este ambiente (2026-11-18)**: el
+modo `full` detecta automáticamente el Service Pack real del host al
+iniciar y recorre, encadenado, únicamente los saltos que falten hasta
+SP7 — incluyendo SP4 → SP5 si el host todavía está en SP4. Antes de esta
+decisión, `full` era exclusivamente `SP5 → SP6 → SP7` y un host en SP4
+debía ejecutar primero `sp4_to_sp5` por separado. El modo `sp4_to_sp5`
+standalone se conserva sin cambios para cuando se quiera ejecutar y
+aprobar ese salto de forma aislada. Ver
 [`docs/ARQUITECTURA_Y_DISENO_TECNICO.html`](docs/ARQUITECTURA_Y_DISENO_TECNICO.html)
-para el razonamiento de esta decisión.
+y la sección 9 de este README para el detalle completo.
 
 ---
 
@@ -527,8 +531,8 @@ Valida (ver `playbooks/roles/precheck/tasks/`):
   por ejemplo, se eligió `sp4_to_sp5` en un host que ya está en SP5, o
   `sp6_to_sp7` en un host que todavía está en SP5 (salto directo, nunca
   permitido). `full` es la única excepción real — válido para un host en
-  SP5, SP6 **o** SP7 (autodetecta el salto correcto), pero igual `FAILED`
-  si el host está en SP4 (`full` nunca encadena SP4→SP5). `precheck` o
+  SP4, SP5, SP6 **o** SP7 (autodetecta el punto de partida y recorre
+  automáticamente los saltos que falten hasta SP7). `precheck` o
   sin dato: `NOT_CHECKED` (no tienen un único origen fijo que validar
   aquí).
 - Arquitectura, hostname, kernel, uptime (informativo, para el reporte).
@@ -838,25 +842,32 @@ no hay ninguna solicitud pendiente, no hace nada. Si el host no tiene
 `mokutil` instalado (no es UEFI/no aplica), se omite sin error. Queda
 registrado en el reporte, sección "Reinicio" (sección 11).
 
-### 8.7 Arranque de depuración de GRUB (opcional, apagado por defecto)
+### 8.7 GRUB en consola: corrección permanente del cuelgue de arranque
 
-Herramienta de diagnóstico para cuando un reinicio se cuelga **sin
-ningún rastro** en journald (ej. el caso de MOK de la sección 8.6, o
-cualquier causa todavía no identificada) — motivada por un caso real
-(2026-10-09, SP6→SP7): pantalla casi en negro con solo un guion
-titilando, nada más. SLES usa `GRUB_TERMINAL="gfxterm"` con un tema
-gráfico (`GRUB_THEME`/`GRUB_BACKGROUND`) y `splash=silent`/`quiet` en el
-kernel — si ese renderizado gráfico falla en el adaptador de video
-virtual del hipervisor (confirmado que esto pasa en el propio sistema
-operativo de este host de pruebas: errores de Mesa/Gallium3D/Zink), el
-arranque puede estar funcionando bien **por debajo** de una pantalla que
-simplemente no dibuja nada.
+**Ya no es un diagnóstico opcional** — es una corrección que esta
+automatización aplica siempre, en cada reinicio obligatorio que ejecuta.
+Motivada por un caso real (2026-10-09, SP6→SP7): pantalla casi en negro
+con solo un guion titilando, sin ningún rastro en journald. SLES usa
+`GRUB_TERMINAL="gfxterm"` con un tema gráfico (`GRUB_THEME`/
+`GRUB_BACKGROUND`) y `splash=silent`/`quiet` en el kernel — si ese
+renderizado gráfico falla en el adaptador de video virtual del
+hipervisor (confirmado que esto pasa en el propio sistema operativo de
+este host de pruebas: errores de Mesa/Gallium3D/Zink), el arranque puede
+estar funcionando bien **por debajo** de una pantalla que simplemente no
+dibuja nada.
+
+**Confirmado con pruebas reales consecutivas**: con este mecanismo
+activo, tanto el salto SP5→SP6 (que antes mostraba una ventana con
+aspecto de error de postfix al apagar) como SP6→SP7 (el guion titilando)
+completaron el reinicio obligatorio sin ningún cuelgue. Dos resultados
+limpios seguidos, con el mismo cambio, es la base para tratarlo como la
+corrección real — no una coincidencia de laboratorio.
 
 Controlado por `grub_debug_boot_enabled` (`playbooks/group_vars/all.yml`;
-**`false` por defecto**) — actívese por host puntual (`host_vars`) o para
-una corrida específica (`-e` en el Job de AWX) cuando se necesite ver el
-arranque paso a paso en la consola del hipervisor, nunca como
-configuración permanente de toda la flota. Cuando está en `true`:
+**`true` por defecto**) — déjese en `false` solo como excepción puntual
+por host (`host_vars`), nunca como configuración de toda la flota. Ya no
+se expone como pregunta del Survey de AWX: aplica igual a cualquier
+ejecución real. Cuando está en `true`:
 
 - `GRUB_TERMINAL` pasa a `"console"` (texto plano, sin el tema gráfico).
 - Se agrega `systemd.log_level=debug` + `systemd.show_status=1` +
@@ -864,10 +875,9 @@ configuración permanente de toda la flota. Cuando está en `true`:
   valor) y `quiet` — conserva el resto de parámetros reales del host
   (`mitigations`, `security=apparmor`, `crashkernel`, etc.; no los
   inventa, los lee de la configuración existente de `/etc/default/grub`).
-  `plymouth.enable=0` (agregado 2026-10-09, evidencia real abajo) es un
-  seguro adicional: quitar `splash`/`quiet` no garantiza que `plymouth`
-  no tome la consola igual, porque sus unidades no están necesariamente
-  condicionadas a ese parámetro en SLES.
+  `plymouth.enable=0` es un seguro adicional: quitar `splash`/`quiet` no
+  garantiza que `plymouth` no tome la consola igual, porque sus unidades
+  no están necesariamente condicionadas a ese parámetro en SLES.
 
 Mecanismo (`roles/repo_management/tasks/configure_grub_debug_boot.yml`):
 un bloque delimitado agregado al **final** de `/etc/default/grub`
@@ -875,55 +885,46 @@ un bloque delimitado agregado al **final** de `/etc/default/grub`
 originales — como el archivo se interpreta como shell al generar
 `grub.cfg`, la última asignación de cada variable gana, así que el
 bloque sobrescribe sin necesidad de parsear ni reemplazar nada arriba.
-Cuando `grub_debug_boot_enabled` es `false` (por defecto), el bloque
-simplemente no existe — el host queda con su configuración de GRUB
-exactamente como viene por defecto, mismo principio que la decisión ya
-tomada para la unidad de systemd de postfix (sección 8.4). Regenera
-`grub.cfg` (`grub2-mkconfig`) solo cuando el bloque cambió, en cualquiera
-de los dos sentidos (activar o desactivar).
+Regenera `grub.cfg` (`grub2-mkconfig`) solo cuando el bloque cambió, en
+cualquiera de los dos sentidos (aplicar o retirar).
 
-Validado con evidencia real en laboratorio (2026-10-09, host
-`sles15-sp5-sp7`, sin reiniciar): con el bloque activo, `grub.cfg`
-generado muestra `terminal_output console` y la línea del kernel sin
-`splash`/`quiet`, con los parámetros de depuración — y al desactivarlo,
-vuelve exactamente a la línea original. Queda registrado en el reporte,
-sección "Reinicio" (sección 11).
-
-**Reinicio adicional de "armado", ANTES del `dup` (no después)**: en una
-prueba real con `grub_debug_boot_enabled: true` el operador reportó una
-ventana con aspecto de error de postfix a los pocos segundos de enviar el
-reinicio obligatorio posterior al `dup`, **antes de llegar a GRUB** — es
-decir, durante el **apagado** de la sesión que hizo el `dup`, no durante
-el arranque nuevo. `GRUB_CMDLINE_LINUX_DEFAULT` solo afecta al *próximo*
-arranque: el kernel que ya está corriendo conserva los parámetros con los
-que arrancó, así que ese apagado sigue siendo ciego a menos que esa misma
-sesión ya haya arrancado con los parámetros de depuración activos.
+**Reinicio adicional de "armado", ANTES del `dup` (no después)**: el
+apagado que interesa cubrir es el de la sesión que hace el `dup`, cuando
+llegue el reinicio obligatorio posterior a él — no un arranque nuevo.
+`GRUB_CMDLINE_LINUX_DEFAULT` solo afecta al *próximo* arranque: el kernel
+que ya está corriendo conserva los parámetros con los que arrancó, así
+que ese apagado sigue siendo ciego a menos que esa misma sesión ya haya
+arrancado con los parámetros activos.
 
 Por eso, `roles/sp_migration/tasks/arm_grub_debug_boot.yml` agrega un
 **reinicio adicional**, incluido justo después de
 `configure_grub_debug_boot.yml` y **antes del gate `dup -D`/`dup` real**
-(nunca después), **solo cuando `grub_debug_boot_enabled` es `true`**: deja
-el kernel en ejecución ya "armado" con los parámetros de depuración antes
-de que el `dup` corra, para que cuando ese `dup` dispare el reinicio
-obligatorio, su propio apagado (la ventana "antes de GRUB") también quede
-visible en la consola del hipervisor, además del arranque posterior.
-Armarlo *después* del `dup` sería incorrecto: ese reinicio de armado ya
-arrancaría el kernel nuevo que el `dup` instaló, y el reinicio obligatorio
-siguiente sería un segundo reinicio redundante del mismo kernel ya armado,
-en vez de uno solo.
+(nunca después): deja el kernel en ejecución ya "armado" antes de que el
+`dup` corra, para que cuando ese `dup` dispare el reinicio obligatorio,
+su propio apagado también quede visible en la consola del hipervisor,
+además del arranque posterior. Armarlo *después* del `dup` sería
+incorrecto: ese reinicio de armado ya arrancaría el kernel nuevo que el
+`dup` instaló, y el reinicio obligatorio siguiente sería un segundo
+reinicio redundante del mismo kernel ya armado, en vez de uno solo. Es
+idempotente: si el kernel que ya está corriendo ya tiene
+`systemd.log_level=debug` en su `/proc/cmdline` (por ejemplo, en el
+segundo salto de un `full`), no se reinicia una segunda vez. Si este
+reinicio de armado no logra reconectar, la etapa falla explícitamente ahí
+mismo — no se continúa al `dup` ni al reinicio real sin confirmar que el
+host volvió.
 
-`plymouth.enable=0` se agregó al cmdline de depuración (ver arriba) como
-seguro adicional, porque quitar `splash`/`quiet` no garantiza por sí solo
-que `plymouth` no tome la consola igual.
-
-Es idempotente: si el kernel que ya está corriendo ya tiene
-`systemd.log_level=debug` en su `/proc/cmdline`, no se reinicia una
-segunda vez. Si este reinicio de armado no logra reconectar, la etapa
-falla explícitamente ahí mismo — no se continúa al `dup` ni al reinicio
-real sin confirmar que el host volvió. Cuando `grub_debug_boot_enabled`
-es `false` (por defecto), esta tarea no se incluye y no hay ningún
-reinicio adicional. Queda registrado en el reporte junto con el resto de
-esta sección (`armado_con_reinicio_adicional`).
+**Se retira automáticamente al finalizar con éxito**
+(`roles/repo_management/tasks/revert_grub_debug_boot.yml`, llamado justo
+después de confirmar reinicio+reconexión en `sp_migration/tasks/main.yml`,
+antes de cualquier otra tarea): quita el bloque y regenera `grub.cfg` de
+vuelta a su estado gráfico original — un reinicio manual posterior de
+este host, fuera de esta automatización, muestra el GRUB normal del
+cliente, no la consola de depuración. Si el reinicio real o la
+reconexión fallan, el bloque se deja activo a propósito (el `rescue` de
+ese bloque nunca llama al revert), para que el operador siga teniendo la
+consola de depuración disponible en el hipervisor mientras diagnostica.
+Todo queda registrado en el reporte, sección "Reinicio" (sección 11):
+`armado_con_reinicio_adicional` y `retirado_al_finalizar`.
 
 ---
 
@@ -992,31 +993,29 @@ modificado si falla.
 | Modo | Qué hace | Modifica el sistema |
 |---|---|---|
 | `precheck` | Salud y preparación del servidor: prechecks de la sección 8.1 (etapa objetivo autodetectada) | No, salvo instalar la CA interna si falta (idempotente, ver sección 8.1) |
-| `sp4_to_sp5` | Ejecuta la etapa SP4→SP5 completa (para hosts que todavía están en SP4). **Independiente**: nunca se encadena dentro de `full` | Sí, si `confirm_production_upgrade: true` |
+| `sp4_to_sp5` | Ejecuta la etapa SP4→SP5 completa (para hosts que todavía están en SP4). **Independiente**: se puede ejecutar y aprobar por separado | Sí, si `confirm_production_upgrade: true` |
 | `sp5_to_sp6` | Ejecuta la etapa SP5→SP6 completa (ver secciones 8-9) | Sí, si `confirm_production_upgrade: true` |
 | `sp6_to_sp7` | Ejecuta la etapa SP6→SP7 completa | Sí, si `confirm_production_upgrade: true` |
-| `full` | Ejecuta SP5→SP6 y, **solo si `stage_validated` quedó en `true`** (dup aplicado + reiniciado + reconectado + SP confirmado + servicios críticos OK + GeoPOS crítico OK) — o si el host ya partía de SP6 —, continúa con SP6→SP7. **Nunca incluye SP4→SP5** | Sí, si `confirm_production_upgrade: true` |
+| `full` | Detecta el Service Pack real del host y recorre, encadenado, únicamente los saltos que falten hasta SP7: SP4→SP5→SP6→SP7 si está en SP4, SP5→SP6→SP7 si está en SP5, o solo SP6→SP7 si está en SP6. Cada salto solo continúa al siguiente **si `stage_validated` quedó en `true`** (dup aplicado + reiniciado + reconectado + SP confirmado + servicios críticos OK + GeoPOS crítico OK) | Sí, si `confirm_production_upgrade: true` |
 
-El gate hacia SP7 en modo `full` usa la bandera explícita `stage_validated`
-(no simplemente "¿se aplicó el dup?"): un `dup` aplicado pero con un
-reinicio fallido, un Service Pack final que no coincide, un servicio
-crítico caído, o un componente GeoPOS crítico insalubre tras el upgrade,
-**todos** dejan `stage_validated: false` y SP7 no se ejecuta. Esto se
-verificó explícitamente con 4 casos de prueba (sección 16).
+El gate entre saltos en modo `full` usa la bandera explícita
+`stage_validated` (no simplemente "¿se aplicó el dup?"): un `dup` aplicado
+pero con un reinicio fallido, un Service Pack final que no coincide, un
+servicio crítico caído, o un componente GeoPOS crítico insalubre tras el
+upgrade, **todos** dejan `stage_validated: false` y el siguiente salto no
+se ejecuta. Esto se verificó explícitamente con 4 casos de prueba (sección
+16, para el encadenamiento SP5→SP6→SP7; el mismo mecanismo aplica sin
+cambios al salto adicional SP4→SP5).
 
-**Por qué `full` no incluye SP4→SP5**: es una decisión explícita, no una
-limitación técnica — `run_stage.yml` es genérico y soportaría encadenarlo
-igual que SP6→SP7. Se mantuvo fuera para no ampliar el alcance de lo que
-ya estaba validado/congelado; un host en SP4 ejecuta primero `sp4_to_sp5`
-de forma independiente y, en una corrida posterior, `sp5_to_sp6` o `full`.
-Si se ejecuta `full` directamente sobre un host en SP4, falla
-explícitamente — no hay riesgo de que se salte la etapa SP4→SP5
-silenciosamente. Esto se detecta en **dos capas**: ya en Precheck (Nodo 1,
-check `upgrade_mode_coincide_con_sp_real`, sección 8.1 — decisión
-explícita del usuario, 2026-10-07, para fallar lo antes posible en vez de
-esperar hasta que arranque la etapa real) y, si por algún motivo se
-llegara ahí igual, también en el precheck ligero de la propia etapa
-`sp5_to_sp6` (check `service_pack_actual`, espera SP5, encuentra SP4).
+**Decisión explícita del usuario para este ambiente (2026-11-18): `full`
+incluye SP4→SP5**. Antes de esta decisión, `full` era exclusivamente
+`SP5 → SP6 → SP7` y un host en SP4 debía ejecutar primero `sp4_to_sp5` de
+forma independiente. `run_stage.yml` es genérico (parametrizado por
+`stage_current_sp`/`stage_target_sp`/`stage_releasever`), así que
+encadenar el salto adicional no requirió duplicar lógica — ver
+`playbooks/upgrade.yml`, bloque "Modo full". El modo `sp4_to_sp5`
+standalone se conserva sin cambios, para cuando se quiera ejecutar y
+aprobar ese salto de forma aislada.
 
 Cada modo produce su propio reporte por host (sección 11).
 
@@ -1035,8 +1034,9 @@ sección 7):
 | `apply` | Gate: verifica que los repos DESTINO de una fase `prepare` previa sigan exactamente habilitados (si no, falla explícito) → `dup -D` → `dup` real → reinicio → validar → limpiar | Sí |
 
 **`upgrade_mode: full` ignora `upgrade_phase`** (siempre se comporta como
-`both` para cada uno de sus 2 saltos encadenados: no existe un único momento
-de "preparar" válido para SP5→SP6 y SP6→SP7 a la vez) — **excepto**
+`both` para cada uno de sus saltos encadenados, hasta 3 si el host está en
+SP4: no existe un único momento de "preparar" válido para varios saltos a
+la vez) — **excepto**
 `upgrade_phase: prepare`, que en ese caso específico no hace absolutamente
 nada (ver `_effective_upgrade_phase` en `playbooks/tasks/run_stage.yml`),
 para que un mismo diseño de Workflow sirva tanto para un salto individual
@@ -1081,11 +1081,12 @@ supone que solo prepara.
   kernel) y si se revocó automáticamente (solo cuando Secure Boot está
   deshabilitado) — previene el cuelgue indefinido de `MokManager` al
   reiniciar.
-- **Arranque de depuración de GRUB** (sección 8.7): si
-  `grub_debug_boot_enabled` está activo, si se aplicó en esta corrida y si
-  hizo falta un reinicio adicional de "armado" antes del reinicio real
-  (para que el apagado de esa sesión, antes de GRUB, también quede
-  visible) — herramienta de diagnóstico opcional, apagada por defecto.
+- **GRUB en consola** (sección 8.7): si `grub_debug_boot_enabled` está
+  activo (`true` por defecto), si se aplicó en esta corrida, si hizo
+  falta un reinicio adicional de "armado" antes del `dup`, y si quedó
+  retirado al finalizar con éxito (para que un reinicio manual futuro
+  muestre el GRUB gráfico normal) — corrección permanente del cuelgue de
+  arranque, ya no un diagnóstico opcional.
 - **Salida completa del `dup` real, sin recortar** (`.dup_full.log`, junto al
   HTML/JSON de la etapa, mismo nombre): el HTML/JSON recorta la salida del
   `dup` a 20.000 caracteres para seguir siendo legible, lo cual en una
@@ -1095,9 +1096,11 @@ supone que solo prepara.
   aparte conserva el `stdout` completo del `dup`, para diagnóstico forense
   cuando haga falta. Se genera solo si hubo un `dup` real en esa etapa.
 - Estados usados: `OK`, `WARNING`, `FAILED`, `NOT_CHECKED`.
-- Cada ejecución añade una línea a `run_summary.jsonl` (en `report_local_dir`
-  **y** en `report_destination` si ya está configurado — ver advertencia de
-  persistencia más abajo), y al final de la ejecución se genera/actualiza el
+- Cada ejecución añade una línea al `run_summary.jsonl` **propio de ese
+  host** (en `report_local_dir` **y** en `report_destination` si ya está
+  configurado — ver advertencia de persistencia más abajo; un archivo por
+  host, nunca uno compartido entre todos los hosts del Lote — sección
+  11.1), y al final de la ejecución se genera/actualiza el
   **reporte consolidado** del Lote (`consolidado_<LOTE>.html`/`.json`, sección
   11.1): una vista por host de **todas las fases que corrieron realmente**
   (precheck/preparar/aplicar/validar) con su estado real, más el estado final
@@ -1161,22 +1164,35 @@ individuales (HTML + JSON) con el mismo árbol de 3 niveles:
   `apply` (ej. `sp5_to_sp6_prepare`, `sp5_to_sp6_apply`) — `both` no se agrega al
   nombre, para no generar una carpeta redundante.
 
-`run_summary.jsonl` se queda en la raíz de `report_local_dir`/`report_destination`
-(abarca todos los CRQ/hosts/etapas). El reporte **consolidado** por Lote vive
-dentro de la carpeta de su CRQ: `<CRQ sanitizado>/consolidado_<LOTE sanitizado>.html`/`.json`
-(ej. `RFC_2026-PRUEBA/consolidado_LOTE1.html`) — un nivel, no por host/etapa,
-porque resume TODOS los hosts de ese Lote dentro de ese CRQ.
+`run_summary.jsonl` vive **dentro de la carpeta de cada host**
+(`<CRQ sanitizado>/<hostname>/run_summary.jsonl`, un archivo por host) —
+decisión explícita del usuario para este ambiente (2026-10-19): antes era
+un único archivo en la raíz compartido por todos los hosts del Lote,
+pero `lineinfile` (lee el archivo completo, agrega la línea, reescribe
+todo) no es seguro si dos o más hosts del mismo Lote terminan esa tarea
+casi al mismo instante (`serial_batch_size > 1`) — existía un riesgo real
+de que uno sobrescribiera la línea que el otro acababa de agregar, sin
+ningún error visible. Con un archivo por host, cada uno escribe solo el
+suyo: no hay ninguna escritura compartida que pueda chocar.
+`report_consolidado.yml` junta todos los `run_summary.jsonl` de un CRQ
+buscándolos por carpeta (`ansible.builtin.find`, recursivo), sin
+necesidad de conocer de antemano qué hosts existen. El reporte
+**consolidado** por Lote vive un nivel más arriba, directamente en la
+carpeta de su CRQ: `<CRQ sanitizado>/consolidado_<LOTE sanitizado>.html`/`.json`
+(ej. `RFC_2026-PRUEBA/consolidado_LOTE1.html`) — porque resume TODOS los
+hosts de ese Lote dentro de ese CRQ.
 
-**Por qué `run_summary.jsonl` se escribe en `report_destination` y no solo en
-`report_local_dir`**: en el Workflow de 5 etapas, Precheck/Preparar/Aplicar son
-Jobs de AWX **separados**, normalmente en Execution Environments distintos —
-`report_local_dir` de un nodo no sobrevive para que lo lea otro nodo
-posterior. El reporte consolidado SIEMPRE lee de `report_destination` cuando
-ya está configurado (cae a `report_local_dir` solo si `report_destination`
-sigue en `CHANGE_ME`) — de lo contrario, el consolidado generado en un nodo
-posterior mostraría estados incompletos o desactualizados (por ejemplo, una
-etapa "Aplicar" que falló realmente, pero el consolidado seguiría mostrando
-el último estado que sí pudo leer de un nodo anterior).
+**Por qué el historial se escribe también en `report_destination` y no
+solo en `report_local_dir`**: en el Workflow de 5 etapas, Precheck/
+Preparar/Aplicar son Jobs de AWX **separados**, normalmente en Execution
+Environments distintos — `report_local_dir` de un nodo no sobrevive para
+que lo lea otro nodo posterior. El reporte consolidado SIEMPRE lee de
+`report_destination` cuando ya está configurado (cae a `report_local_dir`
+solo si `report_destination` sigue en `CHANGE_ME`) — de lo contrario, el
+consolidado generado en un nodo posterior mostraría estados incompletos o
+desactualizados (por ejemplo, una etapa "Aplicar" que falló realmente,
+pero el consolidado seguiría mostrando el último estado que sí pudo leer
+de un nodo anterior).
 
 ### 11.2 Sincronización a SharePoint (Etapa 5 opcional del Workflow)
 
@@ -1206,8 +1222,9 @@ se pudo confirmar desde el desarrollo de este proyecto. Ver
 - Un host que falla en una etapa **no detiene** el procesamiento de los
   demás hosts del batch (comportamiento estándar de Ansible sin
   `any_errors_fatal`).
-- Si SP6 falla, no reinicia, o no queda validado, **no se continúa a SP7**
-  para ese host (en modo `full`) — ver `stage_validated`, sección 10.
+- Si un salto falla, no reinicia, o no queda validado, **no se continúa al
+  siguiente salto** para ese host (en modo `full`, incluido SP4→SP5 si
+  aplica) — ver `stage_validated`, sección 10.
 - Al final de la ejecución, si el resultado del host fue `FAILED` **o**
   `NOT_CHECKED` (validación incompleta), la tarea del host se marca
   explícitamente como fallida en Ansible/AWX, después de haber generado

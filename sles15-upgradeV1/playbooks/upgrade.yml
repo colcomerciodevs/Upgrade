@@ -5,9 +5,18 @@
 # variable `upgrade_mode` (ver playbooks/group_vars/all.yml):
 #   precheck | sp4_to_sp5 | sp5_to_sp6 | sp6_to_sp7 | full
 #
-# sp4_to_sp5 es una etapa INDEPENDIENTE (para hosts que todavía están en
-# SP4): no se encadena dentro de "full", que sigue siendo exclusivamente
-# SP5 -> SP6 -> SP7 (decisión explícita, ver ARQUITECTURA_Y_DISENO_TECNICO.html).
+# sp4_to_sp5/sp5_to_sp6/sp6_to_sp7 son etapas INDEPENDIENTES: un solo salto,
+# para cuando se quiere ejecutar y aprobar cada etapa por separado.
+#
+# full detecta automáticamente el Service Pack real del host al iniciar y
+# recorre, encadenado y con la misma validación obligatoria entre cada
+# salto, únicamente los que falten hasta SP7 -- decisión explícita del
+# usuario para este ambiente (2026-11-18, ver ARQUITECTURA_Y_DISENO_TECNICO.html
+# y CLAUDE.md, sección "Ruta de upgrade"):
+#   host en SP4 -> SP4->SP5->SP6->SP7 (los 3 saltos)
+#   host en SP5 -> SP5->SP6->SP7 (2 saltos)
+#   host en SP6 -> SP6->SP7 (1 salto)
+#   host en SP7 -> nada que hacer, reporta informativo
 #
 # El alcance de hosts de esta ejecución NO se controla con "Limit" de AWX:
 # se controla con el MATCH EXACTO entre lo que el operador declara en el
@@ -158,21 +167,33 @@
           ansible.builtin.set_fact:
             _full_mode_current_sp: "{{ system_state_snapshot_before.current_sp_id }}"
 
-    - name: "Modo full: ejecutar etapa SP5 -> SP6 (si el host no está ya en SP6/SP7)"
+    - name: "Modo full: ejecutar etapa SP4 -> SP5 (solo si el host está en SP4)"
       when:
         - upgrade_mode == 'full'
-        - _full_mode_current_sp not in ['sp6', 'sp7']
+        - _full_mode_current_sp == 'sp4'
+      ansible.builtin.include_tasks: tasks/run_stage.yml
+      vars:
+        stage_current_sp: "sp4"
+        stage_target_sp: "sp5"
+        stage_releasever: ""
+
+    - name: "Modo full: ejecutar etapa SP5 -> SP6 (host ya en SP5, o SP4 recién aplicado, reiniciado y validado en esta misma ejecución)"
+      when: >
+        upgrade_mode == 'full' and (
+          _full_mode_current_sp == 'sp5' or
+          (_full_mode_current_sp == 'sp4' and (stage_validated | default(false)))
+        )
       ansible.builtin.include_tasks: tasks/run_stage.yml
       vars:
         stage_current_sp: "sp5"
         stage_target_sp: "sp6"
         stage_releasever: ""
 
-    - name: "Modo full: ejecutar etapa SP6 -> SP7 (host ya en SP6, o SP6 recién aplicado, reiniciado y validado en esta misma ejecución)"
+    - name: "Modo full: ejecutar etapa SP6 -> SP7 (host ya en SP6, o SP5/SP4 recién aplicado, reiniciado y validado en esta misma ejecución)"
       when: >
         upgrade_mode == 'full' and (
           _full_mode_current_sp == 'sp6' or
-          (stage_validated | default(false))
+          (_full_mode_current_sp in ['sp4', 'sp5'] and (stage_validated | default(false)))
         )
       ansible.builtin.include_tasks: tasks/run_stage.yml
       vars:
