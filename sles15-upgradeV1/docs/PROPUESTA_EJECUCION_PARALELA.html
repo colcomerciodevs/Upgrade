@@ -52,11 +52,27 @@ ol.steps li,ul.plain li{margin-bottom:9px}
 <span class="kicker">Propuesta técnica — para discusión y decisión</span>
 <h1>Ejecución simultánea en varios servidores (varios hosts en paralelo)</h1>
 <p class="subtitle">Estado actual del modelo de ejecución (secuencial, un host a la vez), por qué quedó así, y qué opciones reales existen para paralelizarlo y reducir el tiempo total del upgrade cuando el Lote incluye muchos servidores. Documento de solo lectura: no modifica ningún archivo del proyecto ni ninguna infraestructura.</p>
-<div class="meta">Proyecto: ansible-sles-upgrade (SLES 15 SP4→SP5→SP6→SP7, GeoPOS) · Fecha: 2026-10-19 · Basado exclusivamente en el código y la documentación actuales del repositorio — ninguna cifra o comportamiento aquí descrito está inventado.</div>
+<div class="meta">Proyecto: ansible-sles-upgrade (SLES 15 SP4→SP5→SP6→SP7, GeoPOS) · Fecha: 2026-10-19 · Decisión e implementación: 2026-11-18 · Basado exclusivamente en el código y la documentación actuales del repositorio — ninguna cifra o comportamiento aquí descrito está inventado.</div>
 </div>
 </header>
 
 <div class="wrap">
+
+<div class="callout decision" style="margin:0 0 18px">
+<span class="label">Estado: aprobada e implementada (2026-11-18)</span>
+Se aprobó la <strong>Opción A</strong> (sección 4), pero no con un valor fijo ni con la
+rampa escalonada de la Opción B: el operador controla <code>serial_batch_size</code>
+<strong>por ejecución</strong> con una nueva pregunta del Survey de AWX, "Seleccione
+cantidad de Hosts en paralelo" (tipo Integer, default <code>5</code>, tope operativo
+<code>10</code>, validado también en el código, no solo en el Survey). <code>forks</code>
+se subió de <code>5</code> a <code>10</code> en <code>ansible.cfg</code> (sección 2.3)
+para que ese tope sea paralelismo real, no solo nominal. Antes de aprobar esto se corrigió
+el riesgo de <code>run_summary.jsonl</code> mencionado originalmente en este documento (ya
+resuelto: cada host escribe su propio archivo). Detalle completo en <code>CLAUDE.md</code>,
+<code>README.md</code> (sección "Procesamiento por defecto: ejecución en paralelo") y
+<code>docs/AWX_SETUP.html</code> (sección 6). El resto de este documento se conserva como
+el análisis que motivó la decisión.
+</div>
 
 <section class="main-section">
 <div class="section-head"><div class="section-num">1</div><h2>Resumen ejecutivo</h2></div>
@@ -81,7 +97,7 @@ ol.steps li,ul.plain li{margin-bottom:9px}
 <p>El propio <code>README.md</code> ya documenta que este valor es ajustable: <em>"Puede sobrescribirse vía extra-vars/Survey si el operador decide explícitamente procesar más de uno en paralelo, bajo su propio criterio de riesgo."</em> Es decir: el proyecto nunca cerró la puerta a esto — simplemente nunca se activó.</p>
 
 <h3>2.3 El otro knob relevante: <code>forks</code></h3>
-<p>Subir <code>serial_batch_size</code> a, por ejemplo, <code>5</code> no basta por sí solo: Ansible también necesita suficientes <strong>forks</strong> (procesos de control concurrentes) para realmente conectarse a esos 5 hosts al mismo tiempo. El valor de <code>forks</code> de Ansible (y, en AWX, el campo "Forks" del Job Template, o el límite de la Execution Environment/Instance Group) debe ser igual o mayor que el tamaño del lote deseado — de lo contrario, aunque <code>serial_batch_size</code> esté en 5, Ansible seguirá limitado por un <code>forks</code> más bajo. <strong>Esto no está documentado hoy en <code>docs/AWX_SETUP.html</code></strong> (se revisó explícitamente: no hay ninguna mención de "Forks", "Instance Group" con capacidad, ni "Job Slicing" en ese documento) — habría que agregarlo si se aprueba esta propuesta.</p>
+<p>Subir <code>serial_batch_size</code> a, por ejemplo, <code>5</code> no basta por sí solo: Ansible también necesita suficientes <strong>forks</strong> (procesos de control concurrentes) para realmente conectarse a esos 5 hosts al mismo tiempo. El valor de <code>forks</code> de Ansible (y, en AWX, el campo "Forks" del Job Template, o el límite de la Execution Environment/Instance Group) debe ser igual o mayor que el tamaño del lote deseado — de lo contrario, aunque <code>serial_batch_size</code> esté en 5, Ansible seguirá limitado por un <code>forks</code> más bajo. Esto no estaba documentado en <code>docs/AWX_SETUP.html</code> al escribir esta propuesta (se revisó explícitamente: no había ninguna mención de "Forks", "Instance Group" con capacidad, ni "Job Slicing" en ese documento) — <strong>ya se agregó</strong> (sección 6 de ese documento, actualizada el 2026-11-18, junto con <code>forks = 10</code> en <code>ansible.cfg</code>).</p>
 
 <h3>2.4 Por qué quedó en "uno a la vez" — lo que dice la documentación, y lo que no dice</h3>
 <p><code>CLAUDE.md</code> lo establece como requisito: <em>"El procesamiento productivo por defecto debe ser de un host a la vez: <code>serial_batch_size: 1</code>"</em>, sin una justificación técnica adicional en ese mismo párrafo. No se encontró en ningún documento del proyecto (README, CLAUDE.md, los 3 HTML de <code>docs/</code>) una razón de capacidad documentada — por ejemplo, no hay ninguna mención de límites de descargas concurrentes contra Foreman/Katello, ni de que el lock de PackageKit (agentes de seguridad corporativos, sección 8.3 del README) sea compartido entre servidores (es un lock <strong>local a cada host</strong>, cada uno compite solo contra su propio Zypper).</p>
@@ -107,8 +123,10 @@ ol.steps li,ul.plain li{margin-bottom:9px}
 <tr><td><strong>B. Rampa escalonada</strong></td><td><code>serial: [1, 3, "25%"]</code> — Ansible soporta una lista: procesa 1 host, si va bien sigue con 3, luego el resto en lotes del 25%.</td><td>El primer host actúa como "canario": si falla, el resto del Lote ni siquiera arranca.</td><td>Un poco más de configuración que la opción A.</td></tr>
 <tr><td><strong>C. Varios Jobs de AWX simultáneos</strong></td><td>Permitir "Concurrent Jobs" en el Job Template + Instance Group con capacidad suficiente, para lanzar <strong>Lotes distintos</strong> (CRQ/Lote diferentes) en paralelo, cada uno internamente serial (u con la opción A/B adentro).</td><td>Paraleliza entre Lotes/CRQs distintos, útil si hay muchos Lotes pequeños en vez de uno grande.</td><td>No documentado hoy en <code>docs/AWX_SETUP.html</code> — habría que diseñarlo y documentarlo. No resuelve por sí solo la concurrencia dentro de un mismo Lote.</td></tr>
 </table>
-<div class="callout decision"><span class="label">Recomendación</span>
+<div class="callout decision"><span class="label">Recomendación (y lo que finalmente se implementó)</span>
 Combinar <strong>A o B</strong> (paralelismo dentro de un Lote) con un piloto controlado: un Lote de prueba pequeño, <code>serial_batch_size: 2</code> o <code>3</code>, antes de subir el número. La opción C (Lotes distintos en paralelo) puede evaluarse por separado, más adelante, si el volumen de servidores lo justifica.
+<br/><br/>
+<strong>Implementado (2026-11-18):</strong> variante de la Opción A — en vez de un valor fijo en <code>group_vars</code> o un piloto manual escalonado, <code>serial_batch_size</code> quedó como pregunta del Survey (Integer, default <code>5</code>, tope <code>10</code>), para que el operador decida el grado de paralelismo en cada ejecución según el Lote real que esté tocando, sin tener que editar código entre una corrida y la siguiente.
 </div>
 </section>
 
@@ -122,16 +140,16 @@ Combinar <strong>A o B</strong> (paralelismo dentro de un Lote) con un piloto co
 </section>
 
 <section class="main-section">
-<div class="section-head"><div class="section-num">6</div><h2>Qué habría que actualizar si se aprueba</h2></div>
+<div class="section-head"><div class="section-num">6</div><h2>Qué habría que actualizar si se aprueba (hecho el 2026-11-18)</h2></div>
 <ol class="steps">
-<li>Ajustar <code>serial_batch_size</code> (código) y documentarlo como valor probado, no solo teórico.</li>
-<li><code>CLAUDE.md</code> actualmente exige <em>"un host a la vez"</em> como comportamiento por defecto — si se cambia el default, ese texto debe actualizarse explícitamente como una nueva "decisión explícita del usuario para este ambiente", seguiendo la misma convención que el resto de decisiones de este proyecto.</li>
-<li>Documentar en <code>docs/AWX_SETUP.html</code> el campo "Forks" del Job Template/Instance Group (hoy no está documentado) y el valor mínimo recomendado según el <code>serial_batch_size</code> elegido.</li>
-<li>Probar el piloto (sección 4) en un Lote de prueba real antes de generalizar.</li>
+<li>✅ Ajustado <code>serial_batch_size</code> (código, default <code>5</code>) y expuesto como pregunta del Survey (Integer, tope <code>10</code>), con validación obligatoria del rango en <code>playbooks/select_target_hosts.yml</code>.</li>
+<li>✅ <code>CLAUDE.md</code> actualizado: la sección AWX ya no exige <em>"un host a la vez"</em> — documenta la nueva decisión explícita del usuario para este ambiente (2026-11-18), siguiendo la misma convención que el resto de decisiones del proyecto.</li>
+<li>✅ Documentado en <code>docs/AWX_SETUP.html</code> (sección 6) el campo "Forks" del Job Template y el valor mínimo recomendado (10, igual al tope de <code>serial_batch_size</code>); <code>ansible.cfg</code> subió su <code>forks</code> de <code>5</code> a <code>10</code>.</li>
+<li>Pendiente: probar el piloto (sección 4) en un Lote de prueba real antes de generalizar a Lotes grandes — esto todavía no se ha ejecutado contra un AWX/host real, solo validado estáticamente (<code>ansible-playbook --syntax-check</code>, <code>ansible-lint</code>).</li>
 </ol>
 </section>
 
-<div class="page-footer">Documento de propuesta — de solo lectura, no se modificó ningún archivo del proyecto ni infraestructura real al generarlo.</div>
+<div class="page-footer">Documento de propuesta — aprobada e implementada el 2026-11-18 (ver banner al inicio). El análisis original se conserva sin alterar como contexto de la decisión.</div>
 </div>
 </body>
 </html>

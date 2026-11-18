@@ -26,7 +26,7 @@ header.top .wrap{max-width:1280px;padding:0 40px}header.top .kicker,.cover .kick
 <div class="subtitle">Guía de despliegue y operación del Workflow de cinco etapas, los cuatro modos de upgrade, el inventario, las credenciales y las comprobaciones de lanzamiento.</div>
 </div>
 </header>
-<div class="doc-layout"><aside class="doc-sidebar"><span class="sidebar-eyebrow">CONTENIDOS</span><nav><a href="#s0">00   Antes de empezar</a><a href="#s1">01   Credential Type personalizado</a><a href="#s2">02   Credential (instancia, con los valores reales)</a><a href="#s3">03   Credential de máquina (SSH)</a><a href="#s4">04   Project</a><a href="#s5">05   Inventory + Inventory Source</a><a href="#s6">06   Survey (preguntas compartidas por las 5 etapas)</a><a href="#s7">07   Workflow Job Template — configuración por defecto</a><a href="#s8">08   Alternativa simplificada: un solo Job Template</a><a href="#s9">09   Comprobación inicial y plan de pruebas</a></nav><div class="sidebar-progress"><small>AVANCE DEL CHECKLIST</small><strong id="count-done">0 / 0</strong><div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div><small>Las marcas editables se guardan en este navegador.</small></div><div class="sidebar-progress"><small>DOCUMENTACIÓN RELACIONADA</small><a href="INFORME_VALIDACION_Y_PRUEBAS.html">Informe de pruebas y evidencias</a><a href="AWX_SETUP.html">Implementación AWX</a><a href="ARQUITECTURA_Y_DISENO_TECNICO.html">Arquitectura técnica</a></div></aside><div class="doc-main"><div class="doc-toolbar"><input aria-label="Buscar secciones" id="doc-search" placeholder="Buscar dentro del documento…" type="search"/><div class="toolbar-buttons"><button class="action-btn" onclick="window.print()" type="button">Imprimir / PDF</button> <button class="action-btn" id="reset-checks" type="button">Restablecer marcas</button></div></div><div class="overview"><h2>Implementar y operar el Workflow</h2><p>Instrucciones prácticas, configuraciones y controles necesarios para ejecutar la solución. Los incidentes históricos pertenecen al informe de pruebas.</p><div class="kpi-grid"><div class="kpi"><strong>5 nodos</strong><small>Precheck · Preparar · Aplicar · Reportar · Sincronizar</small></div><div class="kpi"><strong>4 modos</strong><small>SP4→5 · SP5→6 · SP6→7 · FULL</small></div><div class="kpi"><strong>5 datos</strong><small>Survey para autorización y alcance</small></div></div></div><div class="wrap">
+<div class="doc-layout"><aside class="doc-sidebar"><span class="sidebar-eyebrow">CONTENIDOS</span><nav><a href="#s0">00   Antes de empezar</a><a href="#s1">01   Credential Type personalizado</a><a href="#s2">02   Credential (instancia, con los valores reales)</a><a href="#s3">03   Credential de máquina (SSH)</a><a href="#s4">04   Project</a><a href="#s5">05   Inventory + Inventory Source</a><a href="#s6">06   Survey (preguntas compartidas por las 5 etapas)</a><a href="#s7">07   Workflow Job Template — configuración por defecto</a><a href="#s8">08   Alternativa simplificada: un solo Job Template</a><a href="#s9">09   Comprobación inicial y plan de pruebas</a></nav><div class="sidebar-progress"><small>AVANCE DEL CHECKLIST</small><strong id="count-done">0 / 0</strong><div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div><small>Las marcas editables se guardan en este navegador.</small></div><div class="sidebar-progress"><small>DOCUMENTACIÓN RELACIONADA</small><a href="INFORME_VALIDACION_Y_PRUEBAS.html">Informe de pruebas y evidencias</a><a href="AWX_SETUP.html">Implementación AWX</a><a href="ARQUITECTURA_Y_DISENO_TECNICO.html">Arquitectura técnica</a></div></aside><div class="doc-main"><div class="doc-toolbar"><input aria-label="Buscar secciones" id="doc-search" placeholder="Buscar dentro del documento…" type="search"/><div class="toolbar-buttons"><button class="action-btn" onclick="window.print()" type="button">Imprimir / PDF</button> <button class="action-btn" id="reset-checks" type="button">Restablecer marcas</button></div></div><div class="overview"><h2>Implementar y operar el Workflow</h2><p>Instrucciones prácticas, configuraciones y controles necesarios para ejecutar la solución. Los incidentes históricos pertenecen al informe de pruebas.</p><div class="kpi-grid"><div class="kpi"><strong>5 nodos</strong><small>Precheck · Preparar · Aplicar · Reportar · Sincronizar</small></div><div class="kpi"><strong>4 modos</strong><small>SP4→5 · SP5→6 · SP6→7 · FULL</small></div><div class="kpi"><strong>6 datos</strong><small>Survey para autorización, alcance y paralelismo</small></div></div></div><div class="wrap">
 <section class="main-section" id="s0">
 <div class="section-head"><div class="section-num">0</div><h2>Antes de empezar</h2></div>
 <div class="callout note">
@@ -164,7 +164,7 @@ ANSIBLE_INVENTORY_PLUGINS: "/runner/project/&lt;CARPETA_DEL_PROJECT&gt;/inventor
 </section>
 <section class="main-section" id="s6">
 <div class="section-head"><div class="section-num">6</div><h2>Survey (preguntas compartidas por las 5 etapas)</h2></div>
-<p>Estas 5 preguntas son las mismas en todo el proyecto. En la configuración
+<p>Estas 6 preguntas son las mismas en todo el proyecto. En la configuración
   <strong>por defecto</strong> (paso 7, Workflow) se crean <strong>una sola vez</strong>,
   en el <strong>Workflow Job Template</strong>, y se propagan a cada etapa que las
   necesite. Cada pregunta tiene un campo <strong>"Description"</strong> en AWX (texto
@@ -198,15 +198,16 @@ ANSIBLE_INVENTORY_PLUGINS: "/runner/project/&lt;CARPETA_DEL_PROJECT&gt;/inventor
     que compartan esas 3 columnas en el Excel. Si 4 filas tienen el mismo CRQ, el mismo
     Lote y el mismo Ambiente, una sola declaración del Survey alcanza a los 4 — no hace
     falta lanzar 4 ejecuciones ni escribir los hostnames en ningún campo.<br/><br/>
-    Lo que decide cuántos de esos 4 se tocan <strong>a la vez</strong> es
-    <code>serial_batch_size</code> (sección 7.1 más abajo trata <code>upgrade_phase</code>;
-    ver <code>playbooks/group_vars/all.yml</code> para este otro valor), no el tamaño del
-    Lote: con el valor por defecto (<code>1</code>), cada nodo del Workflow procesa los 4
-    hosts <strong>secuencialmente</strong>, terminando todas las tareas de la etapa en el
-    primero antes de empezar con el segundo. Si el segundo falla, el Job sigue con el
-    tercero y el cuarto igual (este proyecto no fija <code>any_errors_fatal</code>) — cada
+    Lo que decide cuántos de esos 4 se tocan <strong>a la vez</strong> es la pregunta
+    "Seleccione cantidad de Hosts en paralelo" (<code>serial_batch_size</code>, tabla de
+    arriba; sección 7.1 más abajo trata <code>upgrade_phase</code>, otro valor distinto),
+    no el tamaño del Lote: con el default (<code>5</code>), como 4 es menor que 5, cada
+    nodo del Workflow procesa los 4 hosts <strong>simultáneamente</strong> en una sola
+    pasada. Con un Lote de 10 y el operador eligiendo el tope (<code>10</code>) en el
+    Survey, los 10 también se procesarían simultáneamente. Si algún host falla, el Job
+    sigue con los demás igual (este proyecto no fija <code>any_errors_fatal</code>) — cada
     uno termina con su propio reporte y su propio estado, y el Nodo 4 (Reporting) arma un
-    único consolidado con los 4 resultados lado a lado.
+    único consolidado con todos los resultados lado a lado.
   </div>
 <table class="clean">
 <tr><th>Pregunta</th><th>Variable</th><th>Tipo</th><th>Description (pegar en AWX)</th></tr>
@@ -240,7 +241,27 @@ ANSIBLE_INVENTORY_PLUGINS: "/runner/project/&lt;CARPETA_DEL_PROJECT&gt;/inventor
 <td>Selección múltiple: Producción / Desarrollo / Laboratorio / Staging, <strong>Required</strong></td>
 <td>Debe coincidir exactamente con la columna Ambiente del inventario del host que se quiere tocar. Selecciona el/los host(s) de esta ejecución junto con CRQ y Lote. NO reemplaza ni relaja "confirm_production_upgrade": todos los servidores de este proyecto se tratan como productivos, sin importar el Ambiente seleccionado aquí.</td>
 </tr>
+<tr>
+<td>Seleccione cantidad de Hosts en paralelo</td>
+<td><code>serial_batch_size</code></td>
+<td>Integer, <strong>Minimum Value: 1, Maximum Value: 10, Default: 5</strong>, <strong>sin</strong> "Required" (decisión explícita del usuario, 2026-11-18)</td>
+<td>Cuántos hosts del Lote/CRQ/Ambiente seleccionados arriba se procesan simultáneamente en cada etapa. Si el operador no la toca, queda en 5. El tope de 10 también se valida en el código (<code>playbooks/select_target_hosts.yml</code>), no solo en este campo del Survey. Requiere que "Forks" (sección 7.2) esté en 10 o más para que el paralelismo sea real.</td>
+</tr>
 </table>
+<div class="callout risk">
+<span class="label">El otro knob necesario: "Forks" del Job Template (o de <code>ansible.cfg</code>)</span>
+    Subir <code>serial_batch_size</code> no basta por sí solo: Ansible también necesita
+    suficientes <strong>forks</strong> (procesos de control concurrentes) para
+    conectarse realmente a todos esos hosts al mismo tiempo. <code>ansible.cfg</code> de
+    este proyecto ya trae <code>forks = 10</code> (decisión 2026-11-18, antes
+    <code>5</code>) — suficiente para el tope de 10 del Survey. En AWX, si el campo
+    <strong>"Forks"</strong> de un Job Template se deja en <code>0</code> (su valor por
+    defecto), usa el de <code>ansible.cfg</code> del Project; si se fija explícitamente
+    a un número menor que 10, ese número gana y limita el paralelismo real aunque el
+    operador elija 10 en el Survey. Se documenta el campo exacto en cada Job Template
+    que procesa hosts reales (Etapas 1, 2 y 3, más abajo) y en la alternativa
+    simplificada (sección 8).
+  </div>
 <div class="callout decision">
 <span class="label">Por qué existe confirm_production_upgrade si upgrade_mode ya dice que se quiere migrar</span>
     No es redundante: es el patrón de <strong>"dos llaves"</strong>.
@@ -357,6 +378,7 @@ ANSIBLE_INVENTORY_PLUGINS: "/runner/project/&lt;CARPETA_DEL_PROJECT&gt;/inventor
 <tr><td>Project</td><td>el del paso 4</td></tr>
 <tr><td>Playbook</td><td><code>playbooks/precheck_only.yml</code></td></tr>
 <tr><td>Credentials</td><td>el del paso 3 (Machine)</td></tr>
+<tr><td>Forks</td><td><code>0</code> (usa el <code>forks = 10</code> de <code>ansible.cfg</code> del Project) o, si se fija explícito, <strong>10 o más</strong> — ver sección 6</td></tr>
 <tr><td>Limit</td><td>vacío, <strong>sin</strong> "Prompt on Launch" (ver sección 6)</td></tr>
 <tr><td>Variables</td><td>vacío</td></tr>
 <tr><td>Prompt on Launch (checkbox junto a Variables)</td><td><strong>Activar</strong> (necesita <code>upgrade_crq</code>/<code>upgrade_lote</code>/<code>upgrade_ambiente</code> del Survey del Workflow para saber qué host(s) tocar)</td></tr>
@@ -388,6 +410,7 @@ ANSIBLE_INVENTORY_PLUGINS: "/runner/project/&lt;CARPETA_DEL_PROJECT&gt;/inventor
 <tr><td>Project</td><td>el del paso 4</td></tr>
 <tr><td>Playbook</td><td><code>playbooks/upgrade.yml</code></td></tr>
 <tr><td>Credentials</td><td>el del paso 3 (Machine)</td></tr>
+<tr><td>Forks</td><td><code>0</code> (usa el <code>forks = 10</code> de <code>ansible.cfg</code> del Project) o, si se fija explícito, <strong>10 o más</strong> — ver sección 6</td></tr>
 <tr><td>Limit</td><td>vacío, <strong>sin</strong> "Prompt on Launch"</td></tr>
 <tr><td>Variables</td><td>vacío</td></tr>
 <tr><td>Prompt on Launch (checkbox junto a Variables)</td><td><strong>Activar</strong></td></tr>
@@ -415,6 +438,7 @@ ANSIBLE_INVENTORY_PLUGINS: "/runner/project/&lt;CARPETA_DEL_PROJECT&gt;/inventor
 <tr><td>Project</td><td>el del paso 4</td></tr>
 <tr><td>Playbook</td><td><code>playbooks/upgrade.yml</code></td></tr>
 <tr><td>Credentials</td><td>el del paso 3 (Machine)</td></tr>
+<tr><td>Forks</td><td><code>0</code> (usa el <code>forks = 10</code> de <code>ansible.cfg</code> del Project) o, si se fija explícito, <strong>10 o más</strong> — ver sección 6</td></tr>
 <tr><td>Limit</td><td>vacío, <strong>sin</strong> "Prompt on Launch"</td></tr>
 <tr><td>Variables</td><td>vacío</td></tr>
 <tr><td>Prompt on Launch (checkbox junto a Variables)</td><td><strong>Activar</strong></td></tr>
@@ -689,7 +713,7 @@ ANSIBLE_INVENTORY_PLUGINS: "/runner/project/&lt;CARPETA_DEL_PROJECT&gt;/inventor
   </div>
 <h3>7.4 Survey: se crea en el Workflow Job Template</h3>
 <p>En el <strong>Workflow Job Template</strong> (no en cada nodo) → pestaña
-  <strong>Survey</strong> → activar <strong>Survey Enabled</strong> → crear las 5
+  <strong>Survey</strong> → activar <strong>Survey Enabled</strong> → crear las 6
   preguntas de la sección 6. Las respuestas se propagan automáticamente, al lanzar,
   a cada nodo que tenga activado su checkbox "Prompt on Launch" junto a Variables
   (7.2) — sin necesitar ningún ajuste adicional por variable.</p>
@@ -715,9 +739,10 @@ ANSIBLE_INVENTORY_PLUGINS: "/runner/project/&lt;CARPETA_DEL_PROJECT&gt;/inventor
 <tr><td>Project</td><td>el del paso 4</td></tr>
 <tr><td>Playbook</td><td><code>playbooks/upgrade.yml</code></td></tr>
 <tr><td>Credentials</td><td>el del paso 3 (Machine)</td></tr>
+<tr><td>Forks</td><td><code>0</code> (usa el <code>forks = 10</code> de <code>ansible.cfg</code> del Project) o, si se fija explícito, <strong>10 o más</strong> — ver sección 6</td></tr>
 <tr><td>Limit</td><td>vacío, <strong>sin</strong> "Prompt on Launch" (sección 6)</td></tr>
 <tr><td>Variables</td><td>ninguna fija — <code>upgrade_phase</code> no se define, así que queda en su default <code>both</code> (ver 7.1)</td></tr>
-<tr><td>Survey propio</td><td>Sí — las cinco preguntas de la sección 6. Para <code>upgrade_mode</code>, utilizar exclusivamente los cuatro modos de upgrade: <code>sp4_to_sp5</code>, <code>sp5_to_sp6</code>, <code>sp6_to_sp7</code> y <code>full</code>. El precheck forma parte del flujo real.</td></tr>
+<tr><td>Survey propio</td><td>Sí — las seis preguntas de la sección 6. Para <code>upgrade_mode</code>, utilizar exclusivamente los cuatro modos de upgrade: <code>sp4_to_sp5</code>, <code>sp5_to_sp6</code>, <code>sp6_to_sp7</code> y <code>full</code>. El precheck forma parte del flujo real.</td></tr>
 </table>
 </section>
 <section class="main-section" id="s9">

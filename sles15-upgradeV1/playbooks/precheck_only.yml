@@ -28,7 +28,7 @@
 - name: Precheck SLES 15 para GeoPOS (Nodo 1 del Workflow)
   hosts: upgrade_target
   gather_facts: true
-  serial: "{{ serial_batch_size | default(1) }}"
+  serial: "{{ serial_batch_size | default(5) }}"
   vars:
     host_overall_status: "OK"
     geopos_validation_before:

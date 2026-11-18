@@ -59,8 +59,18 @@ upgrade_ambiente: ""
 # disparar un dup real por error.
 upgrade_phase: "both"
 
-# Procesamiento productivo por defecto: un host a la vez.
-serial_batch_size: 1
+# Cuántos hosts del Lote seleccionado se procesan en paralelo en cada
+# etapa (usado como "serial:" nativo de Ansible en playbooks/upgrade.yml y
+# playbooks/precheck_only.yml). Decisión explícita del usuario para este
+# ambiente (2026-11-18): el operador lo controla por ejecución con la
+# pregunta del Survey "Seleccione cantidad de Hosts en paralelo" (Integer,
+# min 1, max 10, no Required -- si no se especifica, queda en este default).
+# Tope operativo 10, validado de forma obligatoria en
+# playbooks/select_target_hosts.yml (falla explícito fuera de ese rango,
+# por si este valor llegara por extra-vars/API sin pasar por el Survey).
+# Requiere forks >= serial_batch_size (ver ansible.cfg) para que el
+# paralelismo sea real y no solo nominal.
+serial_batch_size: 5
 
 # Candado de seguridad: ningún modo real modifica el sistema a menos que
 # esto sea true. Se valida ANTES de tocar repositorios o paquetes.

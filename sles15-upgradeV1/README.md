@@ -1330,6 +1330,7 @@ para casos donde no se necesita el control granular por etapa.
   - `upgrade_crq` (texto, **obligatorio**): "Ingrese el CRQ/RFC"
   - `upgrade_lote` (texto u opción múltiple, **obligatorio**): "Seleccione el Lote a parchar del CRQ/RFC"
   - `upgrade_ambiente` (opción múltiple, **obligatorio**): "Seleccione el Ambiente asociado al CRQ/RFC y Lote" (ej. Producción/Desarrollo/Laboratorio/Staging)
+  - `serial_batch_size` (**Integer**, mínimo `1`, máximo `10`, default `5`, **no** obligatorio — decisión explícita del usuario, 2026-11-18): "Seleccione cantidad de Hosts en paralelo". Si el operador no la toca, queda en `5`. Determina cuántos hosts del Lote/CRQ/Ambiente seleccionados se procesan a la vez en cada etapa — ver sección "Procesamiento por defecto: ejecución en paralelo" más abajo para el detalle completo (incluye por qué requiere `forks: 10` en `ansible.cfg`).
 
   **Por qué existe `confirm_production_upgrade` si `upgrade_mode` ya dice
   que se quiere migrar — el patrón de "dos llaves".** No es redundante:
@@ -1412,35 +1413,72 @@ para casos donde no se necesita el control granular por etapa.
 No hay `dry_run` ni `reboot_after_upgrade` que agregar al Survey: no
 existen en este proyecto (sección 9).
 
-### Procesamiento por defecto
+### Procesamiento por defecto: ejecución en paralelo
 
-`serial_batch_size: 1` — un host a la vez en producción. Puede
-sobrescribirse vía extra-vars/Survey si el operador decide explícitamente
-procesar más de uno en paralelo, bajo su propio criterio de riesgo.
+**Decisión explícita del usuario para este ambiente (2026-11-18)**: el
+operador controla, **por ejecución**, cuántos hosts del Lote se procesan
+en paralelo en cada etapa, con la pregunta del Survey **"Seleccione
+cantidad de Hosts en paralelo"** (variable `serial_batch_size`, tipo
+**Integer** en AWX, **no** marcada "Required" — ver sección 13 para el
+campo exacto). Si el operador no la especifica, queda en el default:
+
+```yaml
+serial_batch_size: 5
+```
+
+Tope operativo: **10** (rango 1-10). El Survey ya lo limita con los
+atributos `min`/`max` del tipo Integer, pero además
+`playbooks/select_target_hosts.yml` lo valida de forma obligatoria y
+explícita (falla antes de tocar cualquier host si llega fuera de ese
+rango por extra-vars/API sin pasar por el Survey). Un valor de `1` sigue
+siendo válido para quien prefiera el comportamiento 100% secuencial
+anterior.
+
+Esto requiere `forks` (`ansible.cfg`) en **10** o más — de lo contrario,
+aunque `serial_batch_size` esté en 10, Ansible seguiría conectándose solo
+a `forks` hosts a la vez dentro de ese lote (ver `ansible.cfg` y
+`docs/AWX_SETUP.html`, sección 6, para el campo "Forks" del Job
+Template).
+
+Esta decisión solo fue segura una vez corregido el riesgo real de
+concurrencia de `run_summary.jsonl` (sección 11.1): antes era un único
+archivo compartido entre todos los hosts del Lote, escrito con
+`lineinfile` (lee todo el archivo, agrega una línea, reescribe todo) —
+inseguro si dos o más hosts terminaban esa tarea casi al mismo instante.
+Ahora cada host escribe su propio `run_summary.jsonl`, así que no hay
+ninguna escritura compartida que pueda chocar entre hosts en paralelo.
+Ver `docs/PROPUESTA_EJECUCION_PARALELA.html` para el análisis completo que
+motivó esta decisión (riesgos operativos no técnicos incluidos —
+disponibilidad de GeoPOS durante el reinicio, diagnóstico de varios
+incidentes a la vez, carga sobre Foreman/Katello — a validar por el
+operador según el Lote concreto que esté ejecutando).
 
 **Ejemplo concreto: un Lote con varios servidores.** El match CRQ/Lote/
-Ambiente (arriba) no limita la selección a un solo host: si 4 filas del
-Excel comparten el mismo CRQ, el mismo Lote y el mismo Ambiente, las 4
+Ambiente (arriba) no limita la selección a un solo host: si 10 filas del
+Excel comparten el mismo CRQ, el mismo Lote y el mismo Ambiente, las 10
 entran al grupo `upgrade_target` con una sola declaración del Survey — no
-hace falta lanzar la ejecución 4 veces ni listar los hostnames en ningún
-campo. Lo que decide cuántos de esos 4 se tocan **a la vez** es
+hace falta lanzar la ejecución 10 veces ni listar los hostnames en ningún
+campo. Lo que decide cuántos de esos 10 se tocan **a la vez** es
 `serial_batch_size`, no el tamaño del Lote:
 
-- Con el valor por defecto (`1`), Ansible termina **todas** las tareas de
-  la etapa en el primer host antes de empezar con el segundo, y así con
-  los 4 — nunca en paralelo.
-- Este proyecto no fija `any_errors_fatal`, así que si el segundo host
-  falla (por ejemplo, el precheck), Ansible **sigue** con el tercero y el
-  cuarto igual — un host con problemas no deja sin ejecutar a los demás
-  del mismo Lote.
-- Cada uno de los 4 termina con su propio `status` (`OK`/`WARNING`/
+- Con el default (`5`), Ansible procesa los primeros 5 host juntos (todas
+  las tareas de la etapa en los 5 a la vez) y, al terminar ese lote,
+  continúa con los 5 restantes.
+- Si el operador elige `10` en el Survey (el tope), los 10 se procesan
+  **simultáneamente** en la misma etapa — ya no hace falta un segundo
+  lote.
+- Este proyecto no fija `any_errors_fatal`, así que si alguno de los 10
+  falla (por ejemplo, el precheck), Ansible **sigue** con los demás
+  igual — un host con problemas no deja sin ejecutar a los otros del
+  mismo Lote.
+- Cada uno de los 10 termina con su propio `status` (`OK`/`WARNING`/
   `FAILED`/`NOT_CHECKED`) y su propio reporte por host; al final,
   `report_consolidado.yml` genera un único reporte consolidado del Lote
-  con el resultado real de los 4 lado a lado — nunca se marca el Lote
+  con el resultado real de los 10 lado a lado — nunca se marca el Lote
   como `OK` si alguno no lo estuvo (sección 11).
 - En el Workflow de 5 etapas (sección 13), esto se repite en cada nodo:
-  Precheck pasa por los 4 (uno a la vez), luego Preparar repos por los 4,
-  luego — tras la aprobación, si existe — Aplicar por los 4.
+  Precheck procesa el Lote según `serial_batch_size`, luego Preparar
+  repos igual, luego — tras la aprobación, si existe — Aplicar igual.
 
 ---
 

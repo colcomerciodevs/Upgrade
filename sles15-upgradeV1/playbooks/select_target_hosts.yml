@@ -32,6 +32,26 @@
           único mecanismo con el que esta ejecución decide qué host(s)
           tocar. No se seleccionó ningún host; no se modificó nada.
 
+    - name: "Verificar que serial_batch_size esté dentro del tope operativo (1-10)"
+      # serial_batch_size controla cuántos hosts se procesan EN PARALELO
+      # (serial: nativo de Ansible en upgrade.yml/precheck_only.yml). El
+      # Survey de AWX ya lo limita con un campo Integer (min 1, max 10),
+      # pero esta ejecución puede llegar también por extra-vars/API sin
+      # pasar por esa pantalla -- este assert es el gate real, no solo la
+      # UI. Se valida aquí (antes de que arranque la play con "serial:",
+      # que ya fijó su valor de lote al momento de parsear el playbook) en
+      # vez de en el precheck normal por host, que corre DESPUÉS de que
+      # Ansible ya agrupó los hosts en lotes de ese tamaño.
+      ansible.builtin.assert:
+        that:
+          - (serial_batch_size | default(5) | int) >= 1
+          - (serial_batch_size | default(5) | int) <= 10
+        fail_msg: >-
+          serial_batch_size={{ serial_batch_size | default(5) }} fuera del
+          tope operativo: debe ser un entero entre 1 y 10 (decisión
+          explícita del usuario para este ambiente, ver CLAUDE.md). No se
+          seleccionó ningún host; no se modificó nada.
+
 - name: Seleccionar los hosts cuyo CRQ/Lote/Ambiente del inventario coincide con el Survey
   hosts: all
   gather_facts: false
