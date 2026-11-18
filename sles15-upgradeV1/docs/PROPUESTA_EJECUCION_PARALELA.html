@@ -63,7 +63,7 @@ ol.steps li,ul.plain li{margin-bottom:9px}
 Se aprobó la <strong>Opción A</strong> (sección 4), pero no con un valor fijo ni con la
 rampa escalonada de la Opción B: el operador controla <code>serial_batch_size</code>
 <strong>por ejecución</strong> con una nueva pregunta del Survey de AWX, "Seleccione
-cantidad de Hosts en paralelo" (tipo Integer, default <code>5</code>, tope operativo
+cantidad de Hosts en paralelo" (Selección múltiple, opciones 1 a 10, default <code>5</code>, tope operativo
 <code>10</code>, validado también en el código, no solo en el Survey). <code>forks</code>
 se subió de <code>5</code> a <code>10</code> en <code>ansible.cfg</code> (sección 2.3)
 para que ese tope sea paralelismo real, no solo nominal. Antes de aprobar esto se corrigió
@@ -126,7 +126,7 @@ el análisis que motivó la decisión.
 <div class="callout decision"><span class="label">Recomendación (y lo que finalmente se implementó)</span>
 Combinar <strong>A o B</strong> (paralelismo dentro de un Lote) con un piloto controlado: un Lote de prueba pequeño, <code>serial_batch_size: 2</code> o <code>3</code>, antes de subir el número. La opción C (Lotes distintos en paralelo) puede evaluarse por separado, más adelante, si el volumen de servidores lo justifica.
 <br/><br/>
-<strong>Implementado (2026-11-18):</strong> variante de la Opción A — en vez de un valor fijo en <code>group_vars</code> o un piloto manual escalonado, <code>serial_batch_size</code> quedó como pregunta del Survey (Integer, default <code>5</code>, tope <code>10</code>), para que el operador decida el grado de paralelismo en cada ejecución según el Lote real que esté tocando, sin tener que editar código entre una corrida y la siguiente.
+<strong>Implementado (2026-11-18):</strong> variante de la Opción A — en vez de un valor fijo en <code>group_vars</code> o un piloto manual escalonado, <code>serial_batch_size</code> quedó como pregunta del Survey (Selección múltiple, opciones 1 a 10, default <code>5</code>), para que el operador decida el grado de paralelismo en cada ejecución según el Lote real que esté tocando, sin tener que editar código entre una corrida y la siguiente.
 </div>
 </section>
 
@@ -142,7 +142,7 @@ Combinar <strong>A o B</strong> (paralelismo dentro de un Lote) con un piloto co
 <section class="main-section">
 <div class="section-head"><div class="section-num">6</div><h2>Qué habría que actualizar si se aprueba (hecho el 2026-11-18)</h2></div>
 <ol class="steps">
-<li>✅ Ajustado <code>serial_batch_size</code> (código, default <code>5</code>) y expuesto como pregunta del Survey (Integer, tope <code>10</code>), con validación obligatoria del rango en <code>playbooks/select_target_hosts.yml</code>.</li>
+<li>✅ Ajustado <code>serial_batch_size</code> (código, default <code>5</code>) y expuesto como pregunta del Survey (Selección múltiple, opciones 1 a 10), con validación obligatoria del rango en <code>playbooks/select_target_hosts.yml</code>.</li>
 <li>✅ <code>CLAUDE.md</code> actualizado: la sección AWX ya no exige <em>"un host a la vez"</em> — documenta la nueva decisión explícita del usuario para este ambiente (2026-11-18), siguiendo la misma convención que el resto de decisiones del proyecto.</li>
 <li>✅ Documentado en <code>docs/AWX_SETUP.html</code> (sección 6) el campo "Forks" del Job Template y el valor mínimo recomendado (10, igual al tope de <code>serial_batch_size</code>); <code>ansible.cfg</code> subió su <code>forks</code> de <code>5</code> a <code>10</code>.</li>
 <li>Pendiente: probar el piloto (sección 4) en un Lote de prueba real antes de generalizar a Lotes grandes — esto todavía no se ha ejecutado contra un AWX/host real, solo validado estáticamente (<code>ansible-playbook --syntax-check</code>, <code>ansible-lint</code>).</li>

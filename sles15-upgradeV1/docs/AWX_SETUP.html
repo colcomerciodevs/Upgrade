@@ -244,7 +244,7 @@ ANSIBLE_INVENTORY_PLUGINS: "/runner/project/&lt;CARPETA_DEL_PROJECT&gt;/inventor
 <tr>
 <td>Seleccione cantidad de Hosts en paralelo</td>
 <td><code>serial_batch_size</code></td>
-<td>Integer, <strong>Minimum Value: 1, Maximum Value: 10, Default: 5</strong>, <strong>sin</strong> "Required" (decisión explícita del usuario, 2026-11-18)</td>
+<td>Selección múltiple, <strong>opciones <code>1</code> a <code>10</code>, Default: <code>5</code></strong>, <strong>sin</strong> "Required" (decisión explícita del usuario, 2026-11-18)</td>
 <td>Cuántos hosts del Lote/CRQ/Ambiente seleccionados arriba se procesan simultáneamente en cada etapa. Si el operador no la toca, queda en 5. El tope de 10 también se valida en el código (<code>playbooks/select_target_hosts.yml</code>), no solo en este campo del Survey. Requiere que "Forks" (sección 7.2) esté en 10 o más para que el paralelismo sea real.</td>
 </tr>
 </table>

@@ -1330,7 +1330,7 @@ para casos donde no se necesita el control granular por etapa.
   - `upgrade_crq` (texto, **obligatorio**): "Ingrese el CRQ/RFC"
   - `upgrade_lote` (texto u opción múltiple, **obligatorio**): "Seleccione el Lote a parchar del CRQ/RFC"
   - `upgrade_ambiente` (opción múltiple, **obligatorio**): "Seleccione el Ambiente asociado al CRQ/RFC y Lote" (ej. Producción/Desarrollo/Laboratorio/Staging)
-  - `serial_batch_size` (**Integer**, mínimo `1`, máximo `10`, default `5`, **no** obligatorio — decisión explícita del usuario, 2026-11-18): "Seleccione cantidad de Hosts en paralelo". Si el operador no la toca, queda en `5`. Determina cuántos hosts del Lote/CRQ/Ambiente seleccionados se procesan a la vez en cada etapa — ver sección "Procesamiento por defecto: ejecución en paralelo" más abajo para el detalle completo (incluye por qué requiere `forks: 10` en `ansible.cfg`).
+  - `serial_batch_size` (**Selección múltiple**, opciones `1` a `10`, default `5`, **no** obligatorio — decisión explícita del usuario, 2026-11-18): "Seleccione cantidad de Hosts en paralelo". Si el operador no la toca, queda en `5`. Determina cuántos hosts del Lote/CRQ/Ambiente seleccionados se procesan a la vez en cada etapa — ver sección "Procesamiento por defecto: ejecución en paralelo" más abajo para el detalle completo (incluye por qué requiere `forks: 10` en `ansible.cfg`).
 
   **Por qué existe `confirm_production_upgrade` si `upgrade_mode` ya dice
   que se quiere migrar — el patrón de "dos llaves".** No es redundante:
@@ -1418,16 +1418,17 @@ existen en este proyecto (sección 9).
 **Decisión explícita del usuario para este ambiente (2026-11-18)**: el
 operador controla, **por ejecución**, cuántos hosts del Lote se procesan
 en paralelo en cada etapa, con la pregunta del Survey **"Seleccione
-cantidad de Hosts en paralelo"** (variable `serial_batch_size`, tipo
-**Integer** en AWX, **no** marcada "Required" — ver sección 13 para el
-campo exacto). Si el operador no la especifica, queda en el default:
+cantidad de Hosts en paralelo"** (variable `serial_batch_size`,
+**Selección múltiple** en AWX con las opciones `1` a `10`, **no** marcada
+"Required" — ver sección 13 para el campo exacto). Si el operador no la
+especifica, queda en el default:
 
 ```yaml
 serial_batch_size: 5
 ```
 
-Tope operativo: **10** (rango 1-10). El Survey ya lo limita con los
-atributos `min`/`max` del tipo Integer, pero además
+Tope operativo: **10** (rango 1-10). El Survey ya lo limita al no ofrecer
+ninguna opción fuera de ese rango, pero además
 `playbooks/select_target_hosts.yml` lo valida de forma obligatoria y
 explícita (falla antes de tocar cualquier host si llega fuera de ese
 rango por extra-vars/API sin pasar por el Survey). Un valor de `1` sigue
