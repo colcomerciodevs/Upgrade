@@ -520,13 +520,15 @@ ANSIBLE_INVENTORY_PLUGINS: "/runner/project/&lt;CARPETA_DEL_PROJECT&gt;/inventor
     reemplazó algún archivo de unidad. Ver README sección 8.4.
   </div>
 <div class="callout note">
-<span class="label">Límite de espera del reinicio: 20 minutos</span>
-    <code>sp_migration_reboot_timeout</code> está en 1200&nbsp;s (20&nbsp;min) — bajado de
-    1800&nbsp;s el 2026-10-09, un punto medio pensado para la mayoría del parque
-    (servidores físicos, con POST/firmware/RAID más lentos que una VM). No garantiza que
-    un reinicio nunca tarde más por una causa nueva no identificada, pero si pasa, la
-    etapa falla explícito a los 20&nbsp;min en vez de esperar en silencio hasta 30.
-    Ver README sección 8.5.
+<span class="label">Límite de espera del reinicio: 10 minutos</span>
+    <code>sp_migration_reboot_timeout</code> está en 600&nbsp;s (10&nbsp;min) — bajado de
+    1800&nbsp;s a 1200&nbsp;s (20&nbsp;min) el 2026-10-09, y de nuevo a 600&nbsp;s (10&nbsp;min)
+    el 2026-11-18 (decisión explícita del usuario): con las causas reales de cuelgue ya
+    corregidas (postfix, MOK pendiente, GRUB en consola) y dos pruebas reales
+    consecutivas sin ningún cuelgue, ya no se considera necesario tanto margen. No
+    garantiza que un reinicio nunca tarde más por una causa nueva no identificada, pero
+    si pasa, la etapa falla explícito a los 10&nbsp;min en vez de esperar en silencio más
+    tiempo. Ver README sección 8.5.
   </div>
 <div class="callout note">
 <span class="label">GRUB en consola — corrección permanente del cuelgue de arranque (ya no es un diagnóstico opcional)</span>

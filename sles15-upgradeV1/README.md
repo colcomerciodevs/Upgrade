@@ -758,8 +758,17 @@ servidores físicos, con tiempos de POST/inicialización de firmware y
 controladora RAID más largos que una VM. No garantiza que un reinicio
 nunca tarde más por una causa nueva todavía no identificada (el peor caso
 real visto en laboratorio, antes de estos fixes, fue ~22min) — lo que sí
-garantiza es que, si pasa, la etapa falla explícito a los 20min en vez de
-seguir esperando en silencio hasta 30min.
+garantiza es que, si pasa, la etapa falla explícito en vez de seguir
+esperando en silencio.
+
+**Decisión explícita del usuario para este ambiente (2026-11-18)**:
+bajado otra vez, de 1200s (20min) a **600s (10min)**. Con las 3 causas
+reales de cuelgue ya corregidas (postfix, MOK, GRUB en consola —
+secciones 8.4/8.6/8.7) y dos pruebas reales consecutivas sin ningún
+cuelgue (sección 8.7), ya no se considera necesario tanto margen por "por
+si acaso" para la mayoría del parque. Si un reinicio sin causa todavía
+identificada tarda más de 10min, la etapa falla explícito en ese momento
+en vez de esperar en silencio más tiempo.
 
 Motivadas por un caso real (upgrade a SP7 exitoso, pero con el arranque
 posterior aparentemente colgado un tiempo, sin más información visible en

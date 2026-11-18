@@ -11,10 +11,14 @@ sp_migration_updatestack_delay: 5
 
 # Parámetros de reinicio tras una migración real aplicada.
 #
-# sp_migration_reboot_timeout: 20 min -- punto medio entre dar margen a
-# servidores físicos (POST/firmware/RAID más lentos que una VM) y no
-# esperar en silencio demasiado tiempo si algo nuevo cuelga el arranque.
-sp_migration_reboot_timeout: 1200
+# sp_migration_reboot_timeout: decisión explícita del usuario para este
+# ambiente (2026-11-18), bajado de 1200s (20 min, fijado el 2026-10-09) a
+# 600s (10 min) -- con las causas reales de cuelgue ya corregidas (postfix,
+# MOK pendiente, GRUB en consola; ver README sección 8.4/8.6/8.7) y dos
+# pruebas reales consecutivas sin ningún cuelgue, ya no se considera
+# necesario tanto margen. Si un reinicio nunca identificado antes tarda
+# más de 10 min, la etapa falla explícito en vez de esperar en silencio.
+sp_migration_reboot_timeout: 600
 sp_migration_reboot_connect_timeout: 30
 sp_migration_reboot_pre_reboot_delay: 5
 
