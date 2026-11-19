@@ -1490,6 +1490,47 @@ campo. Lo que decide cuántos de esos 10 se tocan **a la vez** es
   Precheck procesa el Lote según `serial_batch_size`, luego Preparar
   repos igual, luego — tras la aprobación, si existe — Aplicar igual.
 
+**Mecánica exacta en modo `full` con un batch mixto (hosts en distinto SP
+de partida).** `playbooks/upgrade.yml` ejecuta, para `upgrade_mode: full`,
+3 tasks/bloques de nivel de playbook — uno por salto (SP4→SP5, SP5→SP6,
+SP6→SP7) — cada uno con su propio `when` según el SP detectado por host
+(`_full_mode_current_sp`) y `stage_validated`. Ansible usa la estrategia
+`linear` (nunca se fija `strategy: free` en este proyecto): dentro de un
+mismo batch de `serial_batch_size`, todos los hosts ejecutan **el mismo
+task a la vez**, y el batch no avanza al siguiente task hasta que
+**todos** terminaron el actual — incluso el host para el que ese task se
+saltó por `when` falso.
+
+Ejemplo con `serial_batch_size: 2`, host A en SP4 y host B en SP5 en el
+mismo batch:
+
+1. **Task "SP4→SP5"**: A ejecuta la etapa real completa (puede tardar
+   bastante). El `when` de B es falso (B ya está en SP5) → se salta casi
+   instantáneo, pero por el barrier de `linear` **B queda esperando
+   ocioso** hasta que A termine este task.
+2. **Task "SP5→SP6"**: ahora el `when` es verdadero para los dos (A
+   porque quedó validado en SP5, B porque ya estaba en SP5) → **los dos
+   corren este salto al mismo tiempo**, en paralelo real.
+3. **Task "SP6→SP7"**: mismo caso — para A es su 3er salto, para B su
+   2do, y corren juntos.
+
+Es decir: un host que ya partió más adelante en la ruta no gana nada en
+el primer salto (espera a los demás del batch por el barrier), pero sus
+saltos reales sí terminan corriendo en paralelo con los saltos
+correspondientes de los hosts que partieron más atrás.
+
+**Si uno de los hosts del batch falla en algún salto**: el patrón
+`block/rescue` de `playbooks/tasks/run_stage.yml` (nunca se fija
+`any_errors_fatal`) captura el fallo internamente — pone
+`stage_status: FAILED` y `stage_validated: false`, genera su reporte, y
+el task de Ansible "termina" igual para ese host, sin abortar el batch.
+En el siguiente salto, el `when` de ese host exige `stage_validated` →
+como quedó en `false`, ese host se salta todos los saltos restantes de
+esta ejecución (queda con reporte `FAILED` indicando la etapa/check
+exacto). Los demás hosts del mismo batch, cuyo `when` no depende del
+`stage_validated` de otro host, continúan su propio recorrido sin verse
+afectados — ni bloqueados ni acelerados por el fallo ajeno.
+
 ---
 
 ## 14. Información pendiente (`CHANGE_ME`) antes de producción
